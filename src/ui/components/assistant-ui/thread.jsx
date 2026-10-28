@@ -280,25 +280,60 @@ function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-m
                 <div
                   className={`aic-glass-popover ${
                     modelMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
-                  } absolute left-0 bottom-[40px] w-[240px] rounded-[18px] p-2 z-40`}
+                  } absolute left-0 bottom-[40px] w-[250px] rounded-[18px] p-2 z-40`}
                 >
                   <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                     Active Model
                   </div>
+                  {/* Meta Muse Spark */}
                   <div
                     onClick={() => {
                       onSelectModel?.('meta-muse-spark');
                       setModelMenuOpen(false);
                     }}
-                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between ${
-                      selectedModel === 'meta-muse-spark' ? 'bg-white/10 text-white' : ''
+                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
+                      selectedModel === 'meta-muse-spark' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles size={14} className="text-sky-400" />
-                      <span className="text-[13px] font-medium">meta-muse-spark</span>
+                      <span className="text-[13px]">meta-muse-spark</span>
                     </div>
                     <span className="text-[10px] text-sky-400 font-mono">default</span>
+                  </div>
+
+                  {/* Gemini 3.8 Flash */}
+                  <div
+                    onClick={() => {
+                      onSelectModel?.('gemini-3.8-flash');
+                      setModelMenuOpen(false);
+                    }}
+                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
+                      selectedModel === 'gemini-3.8-flash' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap size={14} className="text-amber-400" />
+                      <span className="text-[13px]">gemini-3.8-flash</span>
+                    </div>
+                    <span className="text-[10px] text-amber-400 font-mono">fast</span>
+                  </div>
+
+                  {/* Gemini 3.1 Pro Preview */}
+                  <div
+                    onClick={() => {
+                      onSelectModel?.('gemini-3.1-pro-preview');
+                      setModelMenuOpen(false);
+                    }}
+                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
+                      selectedModel === 'gemini-3.1-pro-preview' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={14} className="text-indigo-400" />
+                      <span className="text-[13px]">gemini-3.1-pro</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-400 font-mono">deep</span>
                   </div>
                 </div>
               </div>
