@@ -129,6 +129,82 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
   return `### Page: ${title}\n**URL**: ${targetUrl}\n\n${text}`;
 });
 
+engine.registerTool({ name: 'browser_action' }, async (args) => {
+  const { action, selectorOrText, value, direction = 'down', amount = 500, pressEnter } = args || {};
+  let page = getLiveBrowserPage();
+  if (!page) {
+    const res = await initLiveBrowser(broadcast);
+    page = res.page;
+  }
+
+  try {
+    if (action === 'click') {
+      try {
+        await page.click(selectorOrText, { timeout: 8000 });
+        return `Successfully clicked "${selectorOrText}". Current URL: ${page.url()}`;
+      } catch {
+        await page.getByText(selectorOrText).first().click({ timeout: 5000 });
+        return `Successfully clicked element with text "${selectorOrText}". Current URL: ${page.url()}`;
+      }
+    } else if (action === 'type') {
+      try {
+        await page.fill(selectorOrText, value || '', { timeout: 8000 });
+        if (pressEnter) await page.press(selectorOrText, 'Enter');
+        return `Successfully typed "${value}" into "${selectorOrText}".`;
+      } catch {
+        await page.keyboard.type(value || '');
+        return `Typed text via keyboard into active focus.`;
+      }
+    } else if (action === 'scroll') {
+      const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
+      await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);
+      return `Scrolled page ${direction} by ${amount}px.`;
+    } else if (action === 'hover') {
+      await page.hover(selectorOrText, { timeout: 5000 });
+      return `Hovered over "${selectorOrText}".`;
+    }
+    return `Browser action "${action}" completed.`;
+  } catch (err) {
+    return `Browser action error: ${err.message}`;
+  }
+});
+
+engine.registerTool({ name: 'snapshot_read' }, async () => {
+  let page = getLiveBrowserPage();
+  if (!page) {
+    const res = await initLiveBrowser(broadcast);
+    page = res.page;
+  }
+  const snapshot = await page
+    .evaluate(() => ({
+      title: document.title,
+      url: window.location.href,
+      interactives: Array.from(document.querySelectorAll('a, button, input, textarea, select'))
+        .filter((el) => el.offsetParent !== null)
+        .slice(0, 30)
+        .map((el) => ({
+          tag: el.tagName.toLowerCase(),
+          text: (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || '').trim().slice(0, 50),
+          id: el.id || undefined,
+          name: el.getAttribute('name') || undefined,
+          href: el.getAttribute('href') || undefined
+        }))
+    }))
+    .catch((err) => ({ error: err.message }));
+  return JSON.stringify(snapshot, null, 2);
+});
+
+engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
+  let page = getLiveBrowserPage();
+  if (!page) {
+    const res = await initLiveBrowser(broadcast);
+    page = res.page;
+  }
+  const buffer = await page.screenshot({ fullPage: !!args?.fullPage }).catch(() => null);
+  if (!buffer) return 'Failed to capture screenshot.';
+  return `Captured live screenshot (${buffer.length} bytes). Viewport is streaming live in sidebar.`;
+});
+
 // Health check endpoints (both /health and /api/health)
 const handleHealth = (req, res) => {
   res.json({

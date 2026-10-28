@@ -155,13 +155,42 @@ export default function App() {
                   status: { type: 'running' }
                 });
 
+                // Update or create Plan trajectory
+                const stepTitle = event.args?.stepTitle || event.name;
+                const newStep = {
+                  id: event.id || `step-${Date.now()}`,
+                  title: stepTitle,
+                  description:
+                    event.args?.query ||
+                    event.args?.url ||
+                    event.args?.command ||
+                    event.args?.selectorOrText ||
+                    '',
+                  status: 'running'
+                };
+                const planIdx = contentParts.findIndex((c) => c.type === 'plan');
+                if (planIdx >= 0) {
+                  const existingSteps = contentParts[planIdx].steps || [];
+                  contentParts[planIdx] = {
+                    ...contentParts[planIdx],
+                    status: 'running',
+                    steps: [...existingSteps, newStep]
+                  };
+                } else {
+                  contentParts.unshift({
+                    type: 'plan',
+                    title: 'Agent Trajectory',
+                    status: 'running',
+                    steps: [newStep]
+                  });
+                }
+
                 // Auto-open live browser sidebar when browser tool runs
                 if (
-                  event.name === 'browser_search' ||
+                  event.name.startsWith('browser_') ||
+                  event.name.startsWith('snapshot_') ||
                   event.name === 'web_search' ||
-                  event.name === 'browser_read_page' ||
-                  event.name === 'read_page' ||
-                  event.name === 'browser_action'
+                  event.name === 'read_page'
                 ) {
                   setIsBrowserOpen(true);
                 }
@@ -174,6 +203,23 @@ export default function App() {
                     ...contentParts[tcIdx],
                     result: event.output,
                     status: { type: 'complete' }
+                  };
+                }
+
+                // Update Plan trajectory step status
+                const planIdx = contentParts.findIndex((c) => c.type === 'plan');
+                if (planIdx >= 0 && contentParts[planIdx].steps) {
+                  const updatedSteps = contentParts[planIdx].steps.map((s) => {
+                    if (s.id === event.id || s.title === (event.name || event.args?.stepTitle)) {
+                      return { ...s, status: event.status === 'error' ? 'failed' : 'done' };
+                    }
+                    return s;
+                  });
+                  const allDone = updatedSteps.every((s) => s.status === 'done');
+                  contentParts[planIdx] = {
+                    ...contentParts[planIdx],
+                    status: allDone ? 'done' : 'running',
+                    steps: updatedSteps
                   };
                 }
               }

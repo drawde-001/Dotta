@@ -18,9 +18,35 @@ export function ToolCallCard({ name, args = {}, output, status = 'running' }) {
           icon: <Globe className="w-3.5 h-3.5 text-blue-400" />,
           label: args.url ? `Read: ${args.url}` : 'Read Webpage'
         };
+      case 'browser_action':
+        return {
+          icon: <Globe className="w-3.5 h-3.5 text-cyan-400" />,
+          label: `${args.action || 'action'}: ${args.selectorOrText || ''}`
+        };
+      case 'snapshot_read':
+        return {
+          icon: <Globe className="w-3.5 h-3.5 text-purple-400" />,
+          label: 'Inspect DOM Snapshot'
+        };
+      case 'browser_screenshot':
+        return {
+          icon: <Globe className="w-3.5 h-3.5 text-pink-400" />,
+          label: 'Capture Screenshot'
+        };
+      case 'ask_user':
+        return {
+          icon: <Sparkles className="w-3.5 h-3.5 text-amber-400" />,
+          label: args.question ? `Ask: "${args.question}"` : 'User Input Required'
+        };
+      case 'profile_get':
+        return {
+          icon: <FileText className="w-3.5 h-3.5 text-teal-400" />,
+          label: 'Get Applicant Profile'
+        };
       case 'file_read':
       case 'file_write':
       case 'file_edit':
+      case 'file_delete':
       case 'file_list':
       case 'file_search':
       case 'workspace_create':
@@ -29,9 +55,11 @@ export function ToolCallCard({ name, args = {}, output, status = 'running' }) {
           label: `${name} ${args.path || args.name || ''}`.trim()
         };
       case 'shell_run':
+      case 'shell_output':
+      case 'shell_kill':
         return {
           icon: <Terminal className="w-3.5 h-3.5 text-emerald-400" />,
-          label: args.command ? `$ ${args.command}` : 'Shell Command'
+          label: args.command ? `$ ${args.command}` : name
         };
       default:
         return {
@@ -43,6 +71,7 @@ export function ToolCallCard({ name, args = {}, output, status = 'running' }) {
 
   const { icon, label } = getToolMeta();
   const isRunning = status === 'running';
+  const isRequiresAction = status === 'requires-action' || status === 'interrupted';
   const isError = status === 'error' || status === 'permanent_error';
 
   return (
@@ -69,6 +98,11 @@ export function ToolCallCard({ name, args = {}, output, status = 'running' }) {
             <span className="flex items-center gap-1.5 text-[11px] text-zinc-400 font-sans">
               <Loader2 className="w-3 h-3 animate-spin text-zinc-400" />
               Running
+            </span>
+          ) : isRequiresAction ? (
+            <span className="flex items-center gap-1 text-[11px] text-amber-400 font-sans">
+              <AlertCircle className="w-3 h-3 text-amber-400" />
+              Awaiting Input
             </span>
           ) : isError ? (
             <span className="flex items-center gap-1 text-[11px] text-red-400 font-sans">

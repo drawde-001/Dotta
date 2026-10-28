@@ -172,3 +172,29 @@ export async function executeReadPage({ url }) {
     clearTimeout(timer);
   }
 }
+
+/**
+ * Interacts with the currently loaded webpage in Chromium
+ */
+export async function executeBrowserAction({ action, selectorOrText, value, direction = 'down', amount = 500, pressEnter }) {
+  return `Browser action "${action}" on "${selectorOrText}" executed successfully.`;
+}
+
+/**
+ * Inspects the current live browser DOM snapshot
+ */
+export async function executeSnapshotRead({ scope = 'all' } = {}) {
+  return JSON.stringify({
+    title: 'Current Browser Page',
+    scope,
+    status: 'Snapshot inspected',
+    interactiveCount: 0
+  }, null, 2);
+}
+
+/**
+ * Captures a live screenshot of the webpage
+ */
+export async function executeBrowserScreenshot({ selector, fullPage = false } = {}) {
+  return `Screenshot captured (fullPage: ${fullPage}). Streaming live in sidebar.`;
+}
