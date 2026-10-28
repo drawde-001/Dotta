@@ -51,7 +51,7 @@ export default function App() {
       {
         id: assistantMsgId,
         role: 'assistant',
-        content: []
+        content: [{ type: 'text', text: '' }]
       }
     ];
 
@@ -149,13 +149,13 @@ export default function App() {
               } else if (event.type === 'TOOL_CALL') {
                 contentParts.push({
                   type: 'tool-call',
-                  toolCallId: event.id,
+                  toolCallId: event.id || `call-${Date.now()}`,
                   toolName: event.name,
-                  args: event.args,
-                  status: { type: 'running' }
+                  args: event.args || {},
+                  argsText: JSON.stringify(event.args || {})
                 });
 
-                // Update or create Plan trajectory
+                // Update or create Plan trajectory as DataMessagePart
                 const stepTitle = event.args?.stepTitle || event.name;
                 const newStep = {
                   id: event.id || `step-${Date.now()}`,
@@ -168,20 +168,27 @@ export default function App() {
                     '',
                   status: 'running'
                 };
-                const planIdx = contentParts.findIndex((c) => c.type === 'plan');
+                const planIdx = contentParts.findIndex((c) => c.type === 'data' && c.name === 'plan');
                 if (planIdx >= 0) {
-                  const existingSteps = contentParts[planIdx].steps || [];
+                  const existingSteps = contentParts[planIdx].data?.steps || [];
                   contentParts[planIdx] = {
-                    ...contentParts[planIdx],
-                    status: 'running',
-                    steps: [...existingSteps, newStep]
+                    type: 'data',
+                    name: 'plan',
+                    data: {
+                      title: 'Agent Trajectory',
+                      status: 'running',
+                      steps: [...existingSteps, newStep]
+                    }
                   };
                 } else {
                   contentParts.unshift({
-                    type: 'plan',
-                    title: 'Agent Trajectory',
-                    status: 'running',
-                    steps: [newStep]
+                    type: 'data',
+                    name: 'plan',
+                    data: {
+                      title: 'Agent Trajectory',
+                      status: 'running',
+                      steps: [newStep]
+                    }
                   });
                 }
 
@@ -207,9 +214,9 @@ export default function App() {
                 }
 
                 // Update Plan trajectory step status
-                const planIdx = contentParts.findIndex((c) => c.type === 'plan');
-                if (planIdx >= 0 && contentParts[planIdx].steps) {
-                  const updatedSteps = contentParts[planIdx].steps.map((s) => {
+                const planIdx = contentParts.findIndex((c) => c.type === 'data' && c.name === 'plan');
+                if (planIdx >= 0 && contentParts[planIdx].data?.steps) {
+                  const updatedSteps = contentParts[planIdx].data.steps.map((s) => {
                     if (s.id === event.id || s.title === (event.name || event.args?.stepTitle)) {
                       return { ...s, status: event.status === 'error' ? 'failed' : 'done' };
                     }
@@ -217,9 +224,13 @@ export default function App() {
                   });
                   const allDone = updatedSteps.every((s) => s.status === 'done');
                   contentParts[planIdx] = {
-                    ...contentParts[planIdx],
-                    status: allDone ? 'done' : 'running',
-                    steps: updatedSteps
+                    type: 'data',
+                    name: 'plan',
+                    data: {
+                      title: 'Agent Trajectory',
+                      status: allDone ? 'done' : 'running',
+                      steps: updatedSteps
+                    }
                   };
                 }
               }
