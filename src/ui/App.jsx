@@ -5,29 +5,25 @@ import {
   useExternalMessageConverter
 } from '@assistant-ui/react';
 import { Thread } from '@/components/assistant-ui/thread';
-import { LiveBrowserSidebar } from '@/components/LiveBrowserSidebar';
-import { Sparkles, Globe, Plus, PanelRight } from 'lucide-react';
+import { LiveBrowserStream } from '@/components/LiveBrowserStream';
+import { Sparkles, Globe, Plus } from 'lucide-react';
 
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isBrowserOpen, setIsBrowserOpen] = useState(false);
-  const [browserState, setBrowserState] = useState({
-    url: '',
-    title: '',
-    results: [],
-    content: ''
-  });
+  const [activeInterrupt, setActiveInterrupt] = useState(null);
+  const [selectedModel, setSelectedModel] = useState('meta-muse-spark');
 
   const abortControllerRef = useRef(null);
 
   const handleNewChat = () => {
     if (isRunning) return;
     setMessages([]);
-    setBrowserState({ url: '', title: '', results: [], content: '' });
+    setActiveInterrupt(null);
   };
 
-  const handleSendMessage = async (userMessage) => {
+  const handleSendMessage = async (userMessage, options = {}) => {
     let userText = '';
     if (typeof userMessage === 'string') {
       userText = userMessage;
@@ -78,7 +74,8 @@ export default function App() {
               .map((c) => c.text)
               .join('')
           })),
-          model: 'meta-muse-spark'
+          model: selectedModel,
+          resume: options.resume || null
         }),
         signal: controller.signal
       });
@@ -107,6 +104,22 @@ export default function App() {
 
           try {
             const event = JSON.parse(jsonStr);
+
+            if (event.type === 'INTERRUPT') {
+              setActiveInterrupt({
+                id: event.id || `interrupt-${Date.now()}`,
+                reason: event.reason,
+                message: event.question || event.message || 'Permission or input required to proceed:',
+                metadata: {
+                  toolName: event.tool || event.pendingTool,
+                  toolArgs: event.args || {},
+                  options: event.options,
+                  context: event.context,
+                  questions: event.questions
+                }
+              });
+              continue;
+            }
 
             setMessages((prev) => {
               const updated = [...prev];
@@ -142,21 +155,15 @@ export default function App() {
                   status: { type: 'running' }
                 });
 
-                // Update browser sidebar if browser tool
-                if (event.name === 'browser_search' || event.name === 'web_search') {
+                // Auto-open live browser sidebar when browser tool runs
+                if (
+                  event.name === 'browser_search' ||
+                  event.name === 'web_search' ||
+                  event.name === 'browser_read_page' ||
+                  event.name === 'read_page' ||
+                  event.name === 'browser_action'
+                ) {
                   setIsBrowserOpen(true);
-                  setBrowserState((bs) => ({
-                    ...bs,
-                    url: `https://duckduckgo.com/?q=${encodeURIComponent(event.args?.query || '')}`,
-                    title: `Search: "${event.args?.query || ''}"`
-                  }));
-                } else if (event.name === 'browser_read_page' || event.name === 'read_page') {
-                  setIsBrowserOpen(true);
-                  setBrowserState((bs) => ({
-                    ...bs,
-                    url: event.args?.url || bs.url,
-                    title: `Navigating: ${event.args?.url || ''}`
-                  }));
                 }
               } else if (event.type === 'TOOL_RESULT') {
                 const tcIdx = contentParts.findIndex(
@@ -168,14 +175,6 @@ export default function App() {
                     result: event.output,
                     status: { type: 'complete' }
                   };
-                }
-
-                // Update browser sidebar with discovered output
-                if (event.name === 'browser_search' || event.name === 'web_search') {
-                  setBrowserState((bs) => ({
-                    ...bs,
-                    content: event.output
-                  }));
                 }
               }
 
@@ -193,6 +192,23 @@ export default function App() {
     } finally {
       setIsRunning(false);
     }
+  };
+
+  const handleResolveInterrupt = async (payload) => {
+    const interrupt = activeInterrupt;
+    setActiveInterrupt(null);
+    if (!interrupt) return;
+
+    const answerText = payload.answer || (payload.approved ? 'Approved' : 'Denied');
+    await handleSendMessage(answerText, {
+      resume: {
+        toolName: interrupt.metadata?.toolName,
+        approved: payload.approved,
+        answer: payload.answer,
+        customText: payload.customText,
+        chosenOptions: payload.chosenOptions
+      }
+    });
   };
 
   const handleCancel = () => {
@@ -235,7 +251,7 @@ export default function App() {
             </div>
             <span className="font-medium text-sm text-foreground tracking-tight">Omni Agent</span>
             <span className="text-[11px] font-mono text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-md">
-              meta-muse-spark
+              {selectedModel}
             </span>
           </div>
 
@@ -244,7 +260,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setIsBrowserOpen(!isBrowserOpen)}
-              className={`flex items-center gap-1.5 text-xs border px-2.5 py-1.5 rounded-lg transition ${
+              className={`flex items-center gap-1.5 text-xs border px-2.5 py-1.5 rounded-lg transition cursor-pointer ${
                 isBrowserOpen
                   ? 'bg-zinc-800 text-zinc-100 border-zinc-700'
                   : 'bg-muted text-muted-foreground hover:text-foreground border-border hover:bg-zinc-800'
@@ -259,7 +275,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleNewChat}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted hover:bg-zinc-800 border border-border px-2.5 py-1.5 rounded-lg transition"
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground bg-muted hover:bg-zinc-800 border border-border px-2.5 py-1.5 rounded-lg transition cursor-pointer"
               title="New Chat"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -271,19 +287,21 @@ export default function App() {
         {/* Assistant-UI Thread Viewport */}
         <div className="flex-1 overflow-hidden relative">
           <AssistantRuntimeProvider runtime={runtime}>
-            <Thread />
+            <Thread
+              activeInterrupt={activeInterrupt}
+              onResolveInterrupt={handleResolveInterrupt}
+              selectedModel={selectedModel}
+              onSelectModel={setSelectedModel}
+            />
           </AssistantRuntimeProvider>
         </div>
       </div>
 
-      {/* Right Browser Sidebar */}
-      <LiveBrowserSidebar
+      {/* Right Browser Sidebar: Streams live 60fps CDP frames from Chromium */}
+      <LiveBrowserStream
         isOpen={isBrowserOpen}
         onClose={() => setIsBrowserOpen(false)}
-        browserState={browserState}
-        onNavigate={(url) => {
-          setBrowserState((bs) => ({ ...bs, url }));
-        }}
+        onOpen={() => setIsBrowserOpen(true)}
       />
     </div>
   );

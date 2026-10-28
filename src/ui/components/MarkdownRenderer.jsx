@@ -1,9 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 
-/**
- * Lightweight, zero-dependency Markdown renderer for Assistant UI
- * Handles headings, bold, italics, inline code, code blocks, bullet lists, and clickable links.
- */
 export function MarkdownRenderer({ content = '' }) {
   if (!content) return null;
 
@@ -20,18 +17,7 @@ export function MarkdownRenderer({ content = '' }) {
           const lang = isLang ? firstLine : '';
           const code = isLang ? lines.slice(1).join('\n') : lines.join('\n');
 
-          return (
-            <div key={pIdx} className="my-3 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-900/80 font-mono text-xs">
-              {lang && (
-                <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-zinc-800 text-zinc-400 text-[11px] font-sans">
-                  {lang}
-                </div>
-              )}
-              <pre className="p-3 overflow-x-auto text-zinc-300">
-                <code>{code}</code>
-              </pre>
-            </div>
-          );
+          return <CodeBlock key={pIdx} code={code} lang={lang} />;
         }
 
         // Render regular markdown paragraphs, lists, and headers
@@ -39,7 +25,69 @@ export function MarkdownRenderer({ content = '' }) {
         return (
           <React.Fragment key={pIdx}>
             {paragraphs.map((para, paraIdx) => {
-              const lines = para.split('\n');
+              const trimmed = para.trim();
+              if (!trimmed) return null;
+
+              // Check if blockquote
+              if (trimmed.startsWith('>')) {
+                const quoteLines = trimmed.split('\n').map((l) => l.replace(/^>\s?/, '')).join(' ');
+                return (
+                  <blockquote
+                    key={paraIdx}
+                    className="border-l-2 border-zinc-600 pl-3.5 my-2 text-zinc-400 italic text-[13.5px]"
+                  >
+                    {renderInline(quoteLines)}
+                  </blockquote>
+                );
+              }
+
+              // Check if table
+              if (trimmed.includes('|') && trimmed.split('\n').length >= 2) {
+                const lines = trimmed.split('\n').filter((l) => l.trim().startsWith('|'));
+                if (lines.length >= 2) {
+                  const headers = lines[0]
+                    .split('|')
+                    .map((h) => h.trim())
+                    .filter((h) => h.length > 0);
+                  const isSeparator = /^\|?[\s-:]+\|?/.test(lines[1]);
+                  const rowStart = isSeparator ? 2 : 1;
+                  const rows = lines.slice(rowStart).map((l) =>
+                    l
+                      .split('|')
+                      .map((c) => c.trim())
+                      .filter((c, idx, arr) => !(idx === 0 && c === '') && !(idx === arr.length - 1 && c === ''))
+                  );
+
+                  return (
+                    <div key={paraIdx} className="my-3 overflow-x-auto rounded-lg border border-zinc-800">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead className="bg-zinc-900/80 border-b border-zinc-800 text-zinc-300 font-medium">
+                          <tr>
+                            {headers.map((h, hIdx) => (
+                              <th key={hIdx} className="px-3 py-2">
+                                {renderInline(h)}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-800/60 bg-zinc-950/40">
+                          {rows.map((row, rIdx) => (
+                            <tr key={rIdx} className="hover:bg-zinc-900/30">
+                              {row.map((cell, cIdx) => (
+                                <td key={cIdx} className="px-3 py-2 text-zinc-300">
+                                  {renderInline(cell)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+              }
+
+              const lines = trimmed.split('\n');
 
               // Check if bullet list
               const isList = lines.every((l) => /^\s*[-*•]\s+/.test(l) || /^\s*\d+\.\s+/.test(l) || l.trim() === '');
@@ -56,26 +104,77 @@ export function MarkdownRenderer({ content = '' }) {
                 );
               }
 
-              // Check header
-              if (para.startsWith('### ')) {
-                return <h3 key={paraIdx} className="text-base font-semibold text-zinc-100 mt-4 mb-2">{renderInline(para.slice(4))}</h3>;
+              // Check headers
+              if (trimmed.startsWith('### ')) {
+                return (
+                  <h3 key={paraIdx} className="text-[15px] font-semibold text-zinc-100 mt-4 mb-1.5 tracking-tight">
+                    {renderInline(trimmed.slice(4))}
+                  </h3>
+                );
               }
-              if (para.startsWith('## ')) {
-                return <h2 key={paraIdx} className="text-lg font-bold text-zinc-100 mt-5 mb-2">{renderInline(para.slice(3))}</h2>;
+              if (trimmed.startsWith('## ')) {
+                return (
+                  <h2 key={paraIdx} className="text-base font-semibold text-zinc-100 mt-5 mb-2 tracking-tight">
+                    {renderInline(trimmed.slice(3))}
+                  </h2>
+                );
               }
-              if (para.startsWith('# ')) {
-                return <h1 key={paraIdx} className="text-xl font-bold text-zinc-100 mt-6 mb-3">{renderInline(para.slice(2))}</h1>;
+              if (trimmed.startsWith('# ')) {
+                return (
+                  <h1 key={paraIdx} className="text-lg font-bold text-zinc-100 mt-6 mb-2.5 tracking-tight">
+                    {renderInline(trimmed.slice(2))}
+                  </h1>
+                );
               }
 
               return (
-                <p key={paraIdx} className="whitespace-pre-wrap">
-                  {renderInline(para)}
+                <p key={paraIdx} className="whitespace-pre-wrap leading-relaxed text-[13.5px]">
+                  {renderInline(trimmed)}
                 </p>
               );
             })}
           </React.Fragment>
         );
       })}
+    </div>
+  );
+}
+
+function CodeBlock({ code, lang }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard?.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="my-3 rounded-xl overflow-hidden border border-zinc-800 bg-[#121215] font-mono text-xs shadow-md">
+      <div className="px-3.5 py-2 bg-zinc-900/70 border-b border-zinc-800/80 flex items-center justify-between text-zinc-400 text-[11px] font-sans">
+        <span className="font-mono text-zinc-400 font-medium">{lang || 'text'}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="flex items-center gap-1.5 text-zinc-400 hover:text-zinc-200 transition px-2 py-0.5 rounded hover:bg-zinc-800 cursor-pointer"
+          title="Copy code"
+        >
+          {copied ? (
+            <>
+              <Check size={12} className="text-emerald-400" />
+              <span className="text-[11px] text-emerald-400">Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              <span className="text-[11px]">Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+      <pre className="p-4 overflow-x-auto text-zinc-300 leading-relaxed font-mono text-[12.5px] select-text">
+        <code>{code}</code>
+      </pre>
     </div>
   );
 }
@@ -95,7 +194,7 @@ function renderInline(text) {
             href={match[2]}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 hover:text-blue-300 underline underline-offset-2 font-medium"
+            className="text-sky-400 hover:text-sky-300 underline underline-offset-2 font-medium transition-colors"
           >
             {match[1]}
           </a>
@@ -111,7 +210,7 @@ function renderInline(text) {
     }
     if (seg.startsWith('`') && seg.endsWith('`') && seg.length >= 2) {
       return (
-        <code key={sIdx} className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 font-mono text-[13px]">
+        <code key={sIdx} className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-mono text-[12px] border border-zinc-700/50">
           {seg.slice(1, -1)}
         </code>
       );
