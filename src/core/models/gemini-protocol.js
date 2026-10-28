@@ -126,9 +126,23 @@ export function normalizeGeminiContents(promptOrContents) {
 
   const normalized = [];
   for (const item of promptOrContents) {
-    if (!item || !Array.isArray(item.parts)) continue;
+    if (!item) continue;
     const role = item.role === 'model' || item.role === 'assistant' ? 'model' : 'user';
-    const cleanParts = consolidateGeminiParts(item.parts);
+
+    let rawParts = [];
+    if (Array.isArray(item.parts)) {
+      rawParts = item.parts;
+    } else if (typeof item.content === 'string' && item.content.trim()) {
+      rawParts = [{ text: item.content }];
+    } else if (Array.isArray(item.content)) {
+      rawParts = item.content
+        .map((c) => (typeof c === 'string' ? { text: c } : c.text ? { text: c.text } : null))
+        .filter(Boolean);
+    } else if (typeof item.text === 'string' && item.text.trim()) {
+      rawParts = [{ text: item.text }];
+    }
+
+    const cleanParts = consolidateGeminiParts(rawParts);
     if (cleanParts.length === 0) continue;
 
     const prev = normalized[normalized.length - 1];
