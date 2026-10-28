@@ -1,18 +1,29 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  ArrowUp,
   CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  ChevronDown,
+  ChevronRight,
   CopyIcon,
   DownloadIcon,
   LoaderIcon,
   PencilIcon,
   RefreshCwIcon,
   SquareIcon,
+  Square,
   ThumbsDownIcon,
   ThumbsUpIcon,
+  Plus,
+  Paperclip,
+  ScrollText,
+  LayoutGrid,
+  Puzzle,
+  Sparkles,
+  Zap
 } from "lucide-react";
 import {
   ActionBarPrimitive,
@@ -39,19 +50,21 @@ import {
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { Reasoning, ReasoningRoot, ReasoningTrigger, ReasoningContent, ReasoningText } from "@/components/assistant-ui/elements/reasoning.aui";
 import { Sources } from "@/components/assistant-ui/elements/sources.aui";
+import { Plan } from "@/components/assistant-ui/elements/plan.aui";
+import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
 import { cn } from "@/lib/utils";
 
-export function Thread() {
+export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
     <ThreadPrimitive.Root
       className="flex h-full flex-col bg-background text-foreground text-sm"
       style={{
-        "--thread-max-width": "44rem",
-        "--composer-radius": "1rem",
+        "--thread-max-width": "46rem",
+        "--composer-radius": "1.25rem",
         "--composer-padding": "8px",
-        "--composer-bg": "color-mix(in oklab, var(--muted) 30%, transparent)",
+        "--composer-bg": "transparent",
         "--accent-color": "var(--aui-accent)",
         "--accent-foreground": "var(--aui-accent-foreground)",
       }}
@@ -87,7 +100,12 @@ export function Thread() {
             )}
           >
             <ThreadScrollToBottom />
-            <Composer />
+            <Composer
+              activeInterrupt={activeInterrupt}
+              onResolveInterrupt={onResolveInterrupt}
+              selectedModel={selectedModel}
+              onSelectModel={onSelectModel}
+            />
             <AuiIf condition={(s) => s.thread.isEmpty && s.composer.isEmpty}>
               <ThreadSuggestions />
             </AuiIf>
@@ -112,7 +130,7 @@ function ThreadSuggestions() {
   return (
     <div className="flex w-full flex-col">
       <ThreadPrimitive.Suggestion prompt="Check online for engineering jobs" send asChild>
-        <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none">
+        <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none cursor-pointer">
           <span aria-hidden className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none">{">"}</span>
           <span className="min-w-0 flex-1 truncate">
             <span className="text-foreground">Check online for</span>{" "}
@@ -121,7 +139,7 @@ function ThreadSuggestions() {
         </button>
       </ThreadPrimitive.Suggestion>
       <ThreadPrimitive.Suggestion prompt="Search for latest tech news" send asChild>
-        <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none">
+        <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none cursor-pointer">
           <span aria-hidden className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none">{">"}</span>
           <span className="min-w-0 flex-1 truncate">
             <span className="text-foreground">Search for</span>{" "}
@@ -133,70 +151,218 @@ function ThreadSuggestions() {
   );
 }
 
-function Composer() {
+function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel }) {
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
+  const [turboMenuOpen, setTurboMenuOpen] = useState(false);
+  const fileInputRef = useRef(null);
+
+  if (activeInterrupt) {
+    return (
+      <div className="w-full">
+        <AskUserInterruptCard
+          interrupt={activeInterrupt}
+          onResolve={onResolveInterrupt}
+        />
+      </div>
+    );
+  }
+
   return (
     <ComposerPrimitive.Root className="relative flex w-full flex-col">
       <ComposerPrimitive.AttachmentDropzone asChild>
-        <div className="border-foreground/10 focus-within:border-foreground/25 flex w-full cursor-text flex-col gap-2 rounded-[var(--composer-radius)] border bg-[var(--composer-bg)] p-[var(--composer-padding)] transition-[border-color] data-[dragging=true]:border-dashed">
+        <section className="aic-composer-card">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              // File input handler
+            }}
+          />
           <ComposerAttachments />
           <ComposerPrimitive.Input
-            placeholder="Send a message..."
-            className="max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-1 text-base leading-6 outline-none placeholder:text-muted-foreground"
+            placeholder="What would you like to do today?"
+            className="aic-prompt-input"
             rows={1}
             autoFocus
             enterKeyHint="send"
-            aria-label="Message input"
+            aria-label="Prompt input"
           />
-          <ComposerAction />
-        </div>
+
+          <div className="flex items-center justify-between gap-2 relative w-full min-w-0">
+            {/* Left Controls: Plus Button + Model Trigger */}
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              {/* Plus Popover */}
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setPlusMenuOpen((prev) => !prev)}
+                  className="aic-icon-btn"
+                  title="Add files and extensions (Ctrl+U)"
+                >
+                  <Plus size={16} />
+                </button>
+
+                <div
+                  className={`aic-glass-popover ${
+                    plusMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
+                  } absolute left-0 bottom-[40px] w-[210px] rounded-[18px] p-1.5 z-40`}
+                >
+                  <div
+                    onClick={() => {
+                      fileInputRef.current?.click();
+                      setPlusMenuOpen(false);
+                    }}
+                    className="aic-mode-menu-item flex items-center justify-between !h-9 px-3 cursor-pointer hover:bg-white/[0.08]"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Paperclip size={15} className="text-zinc-300 shrink-0" />
+                      <span className="text-[13px] font-medium text-zinc-100">Upload or add files</span>
+                    </div>
+                    <span className="text-[11px] font-mono text-zinc-400">Ctrl+U</span>
+                  </div>
+
+                  <div className="my-1 border-t border-white/[0.08]" />
+
+                  <div
+                    className="aic-mode-menu-item flex items-center justify-between !h-9 px-3 opacity-40 cursor-not-allowed select-none pointer-events-none"
+                    title="Skills (coming soon)"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <ScrollText size={15} className="text-zinc-400 shrink-0" />
+                      <span className="text-[13px] font-medium text-zinc-300">Skills</span>
+                    </div>
+                    <ChevronRight size={14} className="text-zinc-500" />
+                  </div>
+
+                  <div
+                    className="aic-mode-menu-item flex items-center justify-between !h-9 px-3 opacity-40 cursor-not-allowed select-none pointer-events-none"
+                    title="Connectors (coming soon)"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <LayoutGrid size={15} className="text-zinc-400 shrink-0" />
+                      <span className="text-[13px] font-medium text-zinc-300">Connectors</span>
+                    </div>
+                    <ChevronRight size={14} className="text-zinc-500" />
+                  </div>
+
+                  <div
+                    className="aic-mode-menu-item flex items-center justify-between !h-9 px-3 opacity-40 cursor-not-allowed select-none pointer-events-none"
+                    title="Plugins (coming soon)"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Puzzle size={15} className="text-zinc-400 shrink-0" />
+                      <span className="text-[13px] font-medium text-zinc-300">Plugins</span>
+                    </div>
+                    <ChevronRight size={14} className="text-zinc-500" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Model Trigger */}
+              <div className="relative inline-flex items-center min-w-0 flex-shrink">
+                <button
+                  type="button"
+                  onClick={() => setModelMenuOpen((prev) => !prev)}
+                  className="aic-model-trigger-btn"
+                >
+                  <span className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 border border-white/10">
+                    <Sparkles size={11} className="text-zinc-200" />
+                  </span>
+                  <span className="font-medium truncate text-[13.5px] text-zinc-100">
+                    {selectedModel}
+                  </span>
+                  <ChevronDown size={14} className="text-zinc-400 shrink-0" />
+                </button>
+
+                <div
+                  className={`aic-glass-popover ${
+                    modelMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
+                  } absolute left-0 bottom-[40px] w-[240px] rounded-[18px] p-2 z-40`}
+                >
+                  <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                    Active Model
+                  </div>
+                  <div
+                    onClick={() => {
+                      onSelectModel?.('meta-muse-spark');
+                      setModelMenuOpen(false);
+                    }}
+                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between ${
+                      selectedModel === 'meta-muse-spark' ? 'bg-white/10 text-white' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles size={14} className="text-sky-400" />
+                      <span className="text-[13px] font-medium">meta-muse-spark</span>
+                    </div>
+                    <span className="text-[10px] text-sky-400 font-mono">default</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Controls: Turbo Mode + Submit / Stop */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <div className="relative flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setTurboMenuOpen((prev) => !prev)}
+                  className="aic-decluttered-turbo-btn"
+                  title="Execution autonomy mode"
+                >
+                  <Zap size={13} className="text-amber-400" />
+                  <span>Turbo</span>
+                </button>
+
+                <div
+                  className={`aic-glass-popover ${
+                    turboMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
+                  } absolute right-0 bottom-[40px] w-[210px] rounded-[18px] p-2.5 z-40`}
+                >
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-100 mb-1">
+                    <Zap size={13} className="text-amber-400" />
+                    <span>Turbo Autonomy</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-normal">
+                    Autonomous self-healing browser stream & agentic execution active.
+                  </p>
+                </div>
+              </div>
+
+              {/* Submit / Stop Circular Button */}
+              <AuiIf condition={(s) => !s.thread.isRunning}>
+                <ComposerPrimitive.Send asChild>
+                  <button
+                    type="submit"
+                    className="aic-submit-circle-btn ready"
+                    title="Send prompt"
+                    aria-label="Send prompt"
+                  >
+                    <ArrowUp size={15} strokeWidth={2.3} />
+                  </button>
+                </ComposerPrimitive.Send>
+              </AuiIf>
+
+              <AuiIf condition={(s) => s.thread.isRunning}>
+                <ComposerPrimitive.Cancel asChild>
+                  <button
+                    type="button"
+                    className="aic-submit-circle-btn ready"
+                    title="Stop generation"
+                    aria-label="Stop generation"
+                  >
+                    <Square size={11} fill="currentColor" />
+                  </button>
+                </ComposerPrimitive.Cancel>
+              </AuiIf>
+            </div>
+          </div>
+        </section>
       </ComposerPrimitive.AttachmentDropzone>
     </ComposerPrimitive.Root>
-  );
-}
-
-function ComposerAction() {
-  return (
-    <div className="relative flex items-center justify-between">
-      <ComposerAddAttachment />
-
-      <AuiIf condition={(s) => !s.thread.isRunning}>
-        <ComposerPrimitive.Send asChild>
-          <TooltipIconButton
-            tooltip="Send message"
-            side="bottom"
-            type="submit"
-            variant="default"
-            size="icon"
-            className="size-7 rounded-full"
-            style={{
-              backgroundColor: "var(--accent-color)",
-              color: "var(--accent-foreground)",
-            }}
-            aria-label="Send message"
-          >
-            <ArrowUpIcon className="size-4" />
-          </TooltipIconButton>
-        </ComposerPrimitive.Send>
-      </AuiIf>
-
-      <AuiIf condition={(s) => s.thread.isRunning}>
-        <ComposerPrimitive.Cancel asChild>
-          <Button
-            type="button"
-            variant="default"
-            size="icon"
-            className="size-7 rounded-full"
-            style={{
-              backgroundColor: "var(--accent-color)",
-              color: "var(--accent-foreground)",
-            }}
-            aria-label="Stop generating"
-          >
-            <SquareIcon className="size-3.5 fill-current" />
-          </Button>
-        </ComposerPrimitive.Cancel>
-      </AuiIf>
-    </div>
   );
 }
 
@@ -311,8 +477,10 @@ function AssistantMessage() {
                 return <MessagePartPrimitive.Image />;
               case "tool-call":
                 return part.toolUI ?? <ToolFallback {...part} />;
+              case "plan":
+                return <Plan {...part} />;
               case "data":
-                return part.dataRendererUI;
+                return part.name === 'plan' || part.data?.steps ? <Plan {...(part.data || part)} /> : part.dataRendererUI;
               case "indicator":
                 return <span style={{ fontFamily: "revert" }}>{" \u25CF"}</span>;
               default:

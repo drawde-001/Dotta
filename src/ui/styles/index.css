@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-:root {
+:root, .dark {
   color-scheme: dark;
   --aui-accent: #0ea5e9;
   --aui-accent-foreground: #000000;
@@ -11,18 +11,26 @@
   --border: #27272a;
   --input: #27272a;
   --destructive: #ef4444;
-}
 
-.dark {
-  --aui-accent: #ffffff;
-  --aui-accent-foreground: #000000;
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --muted: #18181b;
-  --muted-foreground: #71717a;
-  --border: #27272a;
-  --input: #27272a;
-  --destructive: #ef4444;
+  --bg-app: #09090b;
+  --bg-surface: #141416;
+  --bg-surface-hover: #1c1c20;
+  --card-bg: rgba(22, 22, 25, 0.9);
+  --card-border: rgba(255, 255, 255, 0.08);
+  --card-focus-border: rgba(255, 255, 255, 0.2);
+  --card-shadow: 0 16px 40px -10px rgba(0, 0, 0, 0.5), 0 1px 0 0 rgba(255, 255, 255, 0.06) inset;
+
+  --popover-bg-start: #26262d;
+  --popover-bg-end: #1a1a20;
+  --popover-border: rgba(255, 255, 255, 0.12);
+  --popover-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.65), 0 1px 0 0 rgba(255, 255, 255, 0.08) inset;
+
+  --text-primary: #ededed;
+  --text-secondary: #8e8d95;
+  --text-muted: #52525b;
+  --placeholder-color: #63636b;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.14);
 }
 
 body {
@@ -33,3 +41,235 @@ body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   overflow: hidden;
 }
+
+/* Omni Chatbox Composer Card Styles */
+.aic-composer-card {
+  position: relative;
+  width: 100%;
+  background: var(--card-bg);
+  border-radius: 20px;
+  border: 1px solid var(--card-border);
+  box-shadow: var(--card-shadow);
+  padding: 14px 16px 12px 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: background-color 0.25s ease, border-color 0.2s ease, box-shadow 0.25s ease;
+}
+
+.aic-composer-card:focus-within {
+  border-color: var(--card-focus-border);
+}
+
+.aic-prompt-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 400;
+  letter-spacing: -0.011em;
+  min-height: 28px;
+  max-height: 180px;
+  overflow-y: hidden;
+  padding: 0 2px;
+  margin-bottom: 12px;
+  user-select: text;
+  transition: color 0.2s ease;
+}
+
+.aic-prompt-input::placeholder {
+  color: var(--placeholder-color);
+  opacity: 1;
+}
+
+.aic-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+  flex-shrink: 0;
+}
+
+.aic-icon-btn:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.aic-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.aic-decluttered-turbo-btn {
+  height: 32px;
+  border-radius: 8px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  flex-shrink: 0;
+}
+
+.aic-decluttered-turbo-btn:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.aic-model-trigger-btn {
+  height: 32px;
+  border-radius: 8px;
+  padding: 0 8px 0 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.aic-model-trigger-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.aic-submit-circle-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 9999px;
+  background: #323238;
+  border: none;
+  color: #a1a1aa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+}
+
+.aic-submit-circle-btn:hover {
+  background: #44444c;
+  color: #f4f4f6;
+}
+
+.aic-submit-circle-btn.ready {
+  background: #ffffff;
+  color: #09090b;
+}
+
+.aic-submit-circle-btn.ready:hover {
+  background: #ffffff;
+  transform: scale(1.05);
+}
+
+.aic-submit-circle-btn:active {
+  transform: scale(0.95);
+}
+
+.aic-glass-popover {
+  background: linear-gradient(160deg, var(--popover-bg-start) 0%, var(--popover-bg-end) 100%);
+  border: 1px solid var(--popover-border);
+  box-shadow: var(--popover-shadow);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transform-origin: bottom left;
+  transition:
+    opacity 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.aic-popover-hidden {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  pointer-events: none;
+}
+
+.aic-popover-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.aic-mode-menu-item {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.011em;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.aic-mode-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Assistant UI Streaming Token Animations */
+@keyframes aui-token-fade {
+  0% {
+    opacity: 0.3;
+    transform: translateY(1.5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.aui-token-stream {
+  animation: aui-token-fade 0.12s ease-out forwards;
+}
+
+@keyframes aui-pulse-subtle {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.aui-indicator-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--aui-accent);
+  animation: aui-pulse-subtle 1.2s infinite ease-in-out;
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+

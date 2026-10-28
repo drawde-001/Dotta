@@ -154,7 +154,14 @@ export class OmniEngine extends EventEmitter {
       timestamp: Date.now()
     });
 
-    const activeTools = getScopedTools({ phase: 'all' });
+    if (resume) {
+      if (resume.approved && (resume.toolName || resume.pendingToolName)) {
+        addThreadApproval(threadId, resume.toolName || resume.pendingToolName);
+      }
+      clearInterrupt(threadId);
+    }
+
+    const activeTools = getScopedTools({ phase: 'all', includeAskUser: true });
     let contents = normalizeGeminiContents(
       messages.length > 0
         ? messages
@@ -260,7 +267,7 @@ export class OmniEngine extends EventEmitter {
               continue;
             }
 
-            if (perm.decision === 'ask') {
+            if (toolName === 'ask_user' || perm.decision === 'ask') {
               saveInterrupt(threadId, {
                 runId,
                 pendingToolName: toolName,
@@ -272,9 +279,12 @@ export class OmniEngine extends EventEmitter {
                 runId,
                 tool: toolName,
                 args: toolArgs,
-                reason: perm.reason
+                question: toolArgs.question || perm.reason,
+                options: toolArgs.options || [],
+                context: toolArgs.context,
+                reason: perm.reason || 'user_confirmation'
               });
-              return { status: 'interrupted', threadId, runId, pendingTool: toolName };
+              return { status: 'interrupted', threadId, runId, pendingTool: toolName, args: toolArgs };
             }
 
             // 3. Execution with retry
