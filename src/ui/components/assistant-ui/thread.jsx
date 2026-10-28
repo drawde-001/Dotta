@@ -488,38 +488,43 @@ function AssistantMessage() {
           })}
         >
           {({ part, children }) => {
-            switch (part.type) {
-              case "group-reasoning": {
-                const running = part.status.type === "running";
-                return (
-                  <ReasoningRoot variant="muted" className="mb-0" streaming={running}>
-                    <ReasoningTrigger active={running} />
-                    <ReasoningContent aria-busy={running}>
-                      <ReasoningText>{children}</ReasoningText>
-                    </ReasoningContent>
-                  </ReasoningRoot>
-                );
+            try {
+              switch (part.type) {
+                case "group-reasoning": {
+                  const running = part.status?.type === "running";
+                  return (
+                    <ReasoningRoot variant="muted" className="mb-0" streaming={running}>
+                      <ReasoningTrigger active={running} />
+                      <ReasoningContent aria-busy={running}>
+                        <ReasoningText>{children}</ReasoningText>
+                      </ReasoningContent>
+                    </ReasoningRoot>
+                  );
+                }
+                case "reasoning":
+                  return <Reasoning {...part} />;
+                case "group-source":
+                  return <div className="mt-2 flex flex-wrap gap-1.5">{children}</div>;
+                case "source":
+                  return <Sources {...part} />;
+                case "text":
+                  return <MarkdownText />;
+                case "image":
+                  return <MessagePartPrimitive.Image />;
+                case "tool-call":
+                  return part.toolUI ?? <ToolFallback {...part} />;
+                case "plan":
+                  return <Plan {...part} />;
+                case "data":
+                  return part.name === 'plan' || part.data?.steps ? <Plan {...(part.data || part)} /> : part.dataRendererUI;
+                case "indicator":
+                  return <span style={{ fontFamily: "revert" }}>{" \u25CF"}</span>;
+                default:
+                  return null;
               }
-              case "reasoning":
-                return <Reasoning {...part} />;
-              case "group-source":
-                return <div className="mt-2 flex flex-wrap gap-1.5">{children}</div>;
-              case "source":
-                return <Sources {...part} />;
-              case "text":
-                return <MarkdownText />;
-              case "image":
-                return <MessagePartPrimitive.Image />;
-              case "tool-call":
-                return part.toolUI ?? <ToolFallback {...part} />;
-              case "plan":
-                return <Plan {...part} />;
-              case "data":
-                return part.name === 'plan' || part.data?.steps ? <Plan {...(part.data || part)} /> : part.dataRendererUI;
-              case "indicator":
-                return <span style={{ fontFamily: "revert" }}>{" \u25CF"}</span>;
-              default:
-                return null;
+            } catch (err) {
+              console.error("Error rendering message part:", part, err);
+              return null;
             }
           }}
         </MessagePrimitive.GroupedParts>
