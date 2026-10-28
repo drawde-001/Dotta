@@ -1,0 +1,31 @@
+# ==============================================================================
+# Caddy Reverse Proxy Configuration for Omni Agent
+# Automatically provisions and renews SSL/TLS certificates via Let's Encrypt
+# ==============================================================================
+
+{$PUBLIC_DOMAIN:localhost} {
+    # Forward all traffic to the Omni Agent Express backend on port 3001
+    reverse_proxy {$UPSTREAM:app:3001} {
+        flush_interval -1
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Enable Gzip and Zstandard compression for static assets
+    encode gzip zstd
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/omni-agent.access.log
+        format json
+    }
+}
