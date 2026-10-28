@@ -202,16 +202,19 @@ export default function App() {
     }
   };
 
+  const threadMessages = useExternalMessageConverter({
+    messages,
+    isRunning,
+    callback: (msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content
+    })
+  });
+
   const runtime = useExternalStoreRuntime({
     isRunning,
-    messages,
-    convertMessage: useExternalMessageConverter({
-      callback: (msg) => ({
-        id: msg.id,
-        role: msg.role,
-        content: msg.content
-      })
-    }),
+    messages: threadMessages,
     onNew: async (msg) => {
       await handleSendMessage(msg);
     },
