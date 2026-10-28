@@ -24,11 +24,29 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
     const runId = body.runId || `run-${Date.now()}`;
     const model = body.model || process.env.DEFAULT_MODEL || 'meta-muse-spark';
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    const instruction = body.instruction || (messages.find((m) => m.role === 'user')?.content) || '';
+    const latestUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    const instruction =
+      body.instruction ||
+      (typeof latestUserMsg?.content === 'string'
+        ? latestUserMsg.content
+        : Array.isArray(latestUserMsg?.parts)
+        ? latestUserMsg.parts.map((p) => p.text).join('')
+        : '');
     const resume = body.resume || null;
     const mode = body.mode || 'turbo';
 
+    console.log(
+      `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | prompt: "${instruction.slice(0, 100)}"`
+    );
+
     const eventListener = (evt) => {
+      if (evt.type === 'TOOL_CALL') {
+        console.log(`[Omni Server] Tool call -> ${evt.name}(${JSON.stringify(evt.args || {})})`);
+      } else if (evt.type === 'TOOL_RESULT') {
+        console.log(`[Omni Server] Tool result -> ${evt.name} (${evt.status})`);
+      } else if (evt.type === 'RUN_FINISHED') {
+        console.log(`[Omni Server] Run finished -> stopReason: ${evt.stopReason}`);
+      }
       writeAgUiEvent(res, evt);
     };
 

@@ -30,10 +30,25 @@ import {
   getSandboxCommandOutput,
   killSandboxCommand
 } from './execution/sandbox.js';
+import {
+  executeWebSearch,
+  executeReadPage
+} from './execution/browser.js';
 
-export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, an autonomous problem-solving agent with direct tool execution capabilities.
-You plan tasks, use tools sequentially, evaluate tool outputs, verify results, and produce concise final answers.
-Always verify that tools execute successfully before moving to subsequent steps.`;
+export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent powered by Meta Muse.
+You possess direct, real-world execution tools to fulfill user instructions:
+1. Web Discovery & Browsing:
+- "browser_search" (or "web_search"): Live search the web for fresh facts, news, documentation, and real-time job openings. Query should be concise keywords. ALWAYS invoke this tool immediately whenever the user asks to look up, search, find online, or check anything on the web.
+- "browser_read_page" (or "read_page"): Read and extract readable text from any destination URL.
+2. Workspace & Files:
+- "workspace_create", "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
+3. Sandboxed Execution:
+- "shell_run", "shell_output", "shell_kill".
+
+CRITICAL EXECUTION RULES:
+- DECISIVE TOOL USE: Never give conversational excuses or pretend you cannot access the web or run tools. When asked to check online, search, or read files, invoke the respective tool immediately on turn 1.
+- DO NOT CHATTER BEFORE CALLING TOOLS: When calling tools, emit ONLY the function call without conversational preambles.
+- SYNTHESIZE AFTER RESULTS: Once tool results are returned, synthesize a thorough, well-formatted Markdown response with links, citations, and summaries.`;
 
 export class OmniEngine extends EventEmitter {
   constructor(options = {}) {
@@ -60,6 +75,21 @@ export class OmniEngine extends EventEmitter {
     const { workspaceRoot, runId } = context;
 
     switch (toolName) {
+      case 'browser_search':
+      case 'web_search':
+        return await executeWebSearch(toolArgs);
+
+      case 'browser_read_page':
+      case 'read_page':
+        return await executeReadPage(toolArgs);
+
+      case 'profile_get':
+        return JSON.stringify({
+          fullName: 'Edward',
+          role: 'Full Stack Engineer & AI Architect',
+          skills: ['TypeScript', 'React', 'Node.js', 'Playwright', 'Python', 'DevOps']
+        });
+
       case 'workspace_create':
         return createWorkspace(runId || toolArgs.name, toolArgs.name);
 
