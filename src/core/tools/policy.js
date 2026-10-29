@@ -231,7 +231,11 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     'browser_screenshot',
     'shell_run',
     'shell_output',
-    'shell_kill'
+    'shell_kill',
+    'segment_image',
+    'generate_image',
+    'edit_image',
+    'describe_image'
   ];
 
   if (KNOWN_ALLOWED.includes(normTool)) {
@@ -243,6 +247,24 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     decision: 'deny',
     reason: `Unknown or untrusted tool "${normTool}". Tool policy fails closed.`
   };
+}
+
+export const COST_BEARING_TOOL_CAPS = {
+  segment_image: 10,
+  generate_image: 10,
+  edit_image: 10,
+  describe_image: 20
+};
+
+export function checkToolRunCap(toolName, currentCount) {
+  const cap = COST_BEARING_TOOL_CAPS[toolName];
+  if (cap !== undefined && currentCount >= cap) {
+    return {
+      allowed: false,
+      reason: `Tool "${toolName}" exceeded per-run cap of ${cap} calls.`
+    };
+  }
+  return { allowed: true };
 }
 
 export function capToolOutput(text, maxChars = 4000) {
