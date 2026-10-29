@@ -527,8 +527,16 @@ function extractThinkingStepLabel(text) {
   return "Thinking";
 }
 
+const PROMOTED_VISUAL_TOOLS = new Set([
+  "generate_image",
+  "image_generation",
+  "create_image",
+  "edit_image",
+]);
+
 function AssistantMessageBody() {
-  const [open, setOpen] = useState(true);
+  const [userOpen, setUserOpen] = useState(null);
+  const [manualEntryId, setManualEntryId] = useState(null);
   const custom = useAuiState((s) => s.message.metadata?.custom);
   const content = useAuiState((s) => s.message.content);
   const isLast = useAuiState((s) => s.message.isLast);
@@ -542,6 +550,49 @@ function AssistantMessageBody() {
     ? custom.rawParts
     : (content || []).filter((p) => !(p.type === "text" && !p.text));
 
+  // Find last non-text activity part (tool-call, reasoning, plan, data)
+  let lastActivityIdx = -1;
+  let activityCount = 0;
+  let hasFinalAnswerText = false;
+  for (let i = 0; i < rawParts.length; i++) {
+    const p = rawParts[i];
+    if (p && p.type !== "text" && p.type !== "source") {
+      lastActivityIdx = i;
+      activityCount++;
+    }
+  }
+  for (let i = Math.max(0, lastActivityIdx + 1); i < rawParts.length; i++) {
+    if (rawParts[i]?.type === "text" && String(rawParts[i]?.text || "").trim()) {
+      hasFinalAnswerText = true;
+      break;
+    }
+  }
+
+  // Group is actively running intermediate steps only while isRunning and before final response text starts
+  const isGroupActive = Boolean(isRunning && !hasFinalAnswerText);
+
+  const prevActivityCountRef = React.useRef(activityCount);
+  const prevGroupActiveRef = React.useRef(isGroupActive);
+
+  React.useEffect(() => {
+    // When a new collapsible is added to the group, auto-collapse any manually opened previous collapsible
+    if (activityCount > prevActivityCountRef.current) {
+      setManualEntryId(null);
+    }
+    prevActivityCountRef.current = activityCount;
+  }, [activityCount]);
+
+  React.useEffect(() => {
+    // When the group reaches its final output or finishes, auto-collapse both inner collapsibles and outer group
+    if (prevGroupActiveRef.current && !isGroupActive) {
+      setManualEntryId(null);
+      setUserOpen(false);
+    } else if (!prevGroupActiveRef.current && isGroupActive) {
+      setUserOpen(null);
+    }
+    prevGroupActiveRef.current = isGroupActive;
+  }, [isGroupActive]);
+
   if (rawParts.length === 0) {
     if (isRunning) {
       return (
@@ -553,33 +604,65 @@ function AssistantMessageBody() {
     return null;
   }
 
-  // Find last non-text activity part (tool-call, reasoning, plan, data)
-  let lastActivityIdx = -1;
-  for (let i = rawParts.length - 1; i >= 0; i--) {
-    if (rawParts[i].type !== "text") {
-      lastActivityIdx = i;
-      break;
-    }
-  }
-
   const entries = [];
+  const promotedVisualNodes = [];
   const finalAnswerParts = [];
   const sourceParts = [];
 
   rawParts.forEach((part, idx) => {
     if (!part) return;
+    const isLatestStep = isGroupActive && idx === lastActivityIdx;
 
     if (part.type === "tool-call") {
-      entries.push({
-        id: part.toolCallId || `tool-${idx}`,
-        kind: "tool",
-        label: getToolActivityLabel(part),
-        content: renderToolCallPart(part),
-      });
+      const entryId = part.toolCallId || `tool-${idx}`;
+      const lowerTool = String(part.toolName || part.name || "").toLowerCase();
+      const isOpen =
+        manualEntryId !== null
+          ? manualEntryId === entryId
+          : false;
+
+      if (PROMOTED_VISUAL_TOOLS.has(lowerTool)) {
+        promotedVisualNodes.push(
+          <div key={`promoted-${entryId}`} className="my-2">
+            {renderToolCallPart(part)}
+          </div>
+        );
+        entries.push({
+          id: entryId,
+          kind: "tool",
+          label: getToolActivityLabel(part),
+          content: renderToolCallPart(part, {
+            forceFallback: true,
+            active: isLatestStep,
+            open: isOpen,
+            onOpenChange: (next) => setManualEntryId(next ? entryId : null),
+          }),
+        });
+      } else {
+        entries.push({
+          id: entryId,
+          kind: "tool",
+          label: getToolActivityLabel(part),
+          content: renderToolCallPart(part, {
+            active: isLatestStep,
+            open: isOpen,
+            onOpenChange: (next) => setManualEntryId(next ? entryId : null),
+          }),
+        });
+      }
     } else if (part.type === "reasoning") {
+      const entryId = part.id || `reasoning-${idx}`;
       const stepLabel = extractThinkingStepLabel(part.text);
+      const isStreamingReasoning = Boolean(
+        isLatestStep && (part.status?.type === "running" || idx === rawParts.length - 1)
+      );
+      const isOpen =
+        manualEntryId !== null
+          ? manualEntryId === entryId
+          : isStreamingReasoning;
+
       entries.push({
-        id: part.id || `reasoning-${idx}`,
+        id: entryId,
         kind: "commentary",
         label: stepLabel,
         content: (
@@ -587,7 +670,9 @@ function AssistantMessageBody() {
             text={part.text}
             status={part.status}
             label={stepLabel}
-            streaming={isRunning && (part.status?.type === "running" || idx === rawParts.length - 1)}
+            streaming={isStreamingReasoning}
+            open={isOpen}
+            onOpenChange={(next) => setManualEntryId(next ? entryId : null)}
           />
         ),
       });
@@ -675,11 +760,17 @@ function AssistantMessageBody() {
               : "Completed";
 
   const finalAnswerNode =
-    finalAnswerParts.length > 0 ? (
+    promotedVisualNodes.length > 0 || finalAnswerParts.length > 0 ? (
       <div className="flex flex-col gap-3 text-foreground leading-relaxed">
-        {finalAnswerParts.map((part, idx) => (
-          <MarkdownText key={part.id || `ans-${idx}`} text={part.text} />
-        ))}
+        {promotedVisualNodes}
+        {finalAnswerParts.map((part, idx) => {
+          const cleanText =
+            promotedVisualNodes.length > 0
+              ? String(part.text || "").replace(/!\[[^\]]*\]\(\/api\/images\/[^)]+\)/g, "").trim()
+              : part.text;
+          if (!cleanText) return null;
+          return <MarkdownText key={part.id || `ans-${idx}`} text={cleanText} />;
+        })}
         {sourceParts.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             {sourceParts.map((sp, i) => (
@@ -690,6 +781,8 @@ function AssistantMessageBody() {
       </div>
     ) : null;
 
+  const groupOpen = userOpen !== null ? userOpen : isGroupActive;
+
   if (entries.length > 0) {
     return (
       <RunActivity
@@ -697,8 +790,11 @@ function AssistantMessageBody() {
         statusLabel={statusLabel}
         durationLabel={durationLabel}
         entries={entries}
-        open={open}
-        onOpenChange={setOpen}
+        open={groupOpen}
+        onOpenChange={(next) => {
+          setUserOpen(next);
+          if (!next) setManualEntryId(null);
+        }}
       >
         {finalAnswerNode}
       </RunActivity>

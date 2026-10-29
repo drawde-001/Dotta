@@ -420,6 +420,32 @@ export const AGENT_TOOLS_CATALOG = {
       },
       required: ['image_path', 'prompt']
     }
+  },
+
+  generate_image: {
+    name: 'generate_image',
+    readOnly: true,
+    description:
+      'Generates a high-resolution image, photo, portrait, illustration, or artwork from a text prompt using Meta Muse Image 1.0 (muse-image-1.0) and renders it directly in the UI ImageGeneration component. ALWAYS use this tool whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or use shell scripts/code to fake image generation.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        prompt: {
+          type: 'STRING',
+          description: 'Detailed visual description of the image to generate (subject, lighting, style, composition).'
+        },
+        size: {
+          type: 'STRING',
+          enum: ['1024x1024', '1024x1536', '1536x1024'],
+          description: 'Image dimensions (defaults to "1024x1024").'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Concise human-readable step title (e.g., "Generating portrait with Muse Image 1.0")'
+        }
+      },
+      required: ['prompt', 'stepTitle']
+    }
   }
 };
 
@@ -427,21 +453,21 @@ export const ASK_USER_TOOL = {
   name: 'ask_user',
   readOnly: true,
   description:
-    'Pauses execution to present a structured question or choice to the user. Use this tool when you genuinely need clarification, confirmation, or missing requirements from the user to proceed, rather than guessing or stopping prematurely. Parameter "question" is the concise question to ask; "context" is the optional target URL, command, or parameter being asked about; "options" is a list of 2 to 3 concise choices for the user; "stepTitle" describes why you are asking.',
+    'Pauses execution to present a brief question or recommendation with 2 to 3 concise selectable options. Use this tool when you genuinely need a decision or confirmation from the user. Keep "question" to a single brief sentence (under 18 words) and ALWAYS provide 2 to 3 short options (2-6 words each), placing your recommended option first prefixed with "(Recommended)".',
   parameters: {
     type: 'OBJECT',
     properties: {
       question: {
         type: 'STRING',
-        description: 'The concise question to ask the user'
+        description: 'A brief, direct 1-sentence question or recommendation (max 18 words).'
       },
       context: {
         type: 'STRING',
-        description: 'Optional URL, command, or file context relevant to the question'
+        description: 'Optional 1-line brief rationale or recommendation note.'
       },
       options: {
         type: 'ARRAY',
-        description: 'List of 2 to 4 concrete, relevant choices matching the question.',
+        description: 'REQUIRED: 2 to 3 short selectable options (2-6 words each). Prefix the first option with "(Recommended)" when suggesting a preferred path.',
         items: { type: 'STRING' }
       },
       is_multi_select: {
@@ -450,16 +476,18 @@ export const ASK_USER_TOOL = {
       },
       stepTitle: {
         type: 'STRING',
-        description: 'Concise human-readable step title (e.g., "Ask for target deployment URL")'
+        description: 'Concise human-readable step title (e.g., "Ask user preference")'
       }
     },
-    required: ['question', 'stepTitle']
+    required: ['question', 'options', 'stepTitle']
   }
 };
 
 export const TOOL_ALIASES = {
   web_search: 'browser_search',
-  read_page: 'browser_read_page'
+  read_page: 'browser_read_page',
+  image_generation: 'generate_image',
+  create_image: 'generate_image'
 };
 
 export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser = false } = {}) {
@@ -515,7 +543,8 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
       AGENT_TOOLS_CATALOG.profile_get,
-      AGENT_TOOLS_CATALOG.segment_image
+      AGENT_TOOLS_CATALOG.segment_image,
+      AGENT_TOOLS_CATALOG.generate_image
     ];
   }
 

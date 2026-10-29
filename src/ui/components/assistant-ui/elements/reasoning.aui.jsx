@@ -64,7 +64,11 @@ const ReasoningRoot = forwardRef(function ReasoningRoot(
   const prevStreamingRef = useRef(streaming);
   useIsomorphicLayoutEffect(() => {
     if (prevStreamingRef.current === streaming) return;
+    const wasStreaming = prevStreamingRef.current;
     prevStreamingRef.current = streaming;
+    if (wasStreaming && !streaming && !isControlled) {
+      setUserOpen(null);
+    }
     if (!isControlled && userOpen === null && !initialOpen) {
       onAnimationStart?.();
     }
@@ -301,6 +305,8 @@ export function Reasoning({
   streaming: propStreaming,
   duration,
   label,
+  open,
+  onOpenChange,
   variant = "ghost",
   children,
   className,
@@ -311,6 +317,8 @@ export function Reasoning({
     <ReasoningRoot
       variant={variant}
       streaming={streaming}
+      open={open}
+      onOpenChange={onOpenChange}
       className={className}
     >
       <ReasoningTrigger

@@ -177,12 +177,66 @@ export function getToolActivityLabel(part) {
   if (lower.includes('subagent') || lower === 'invoke_subagent') {
     return 'Delegating to subagent';
   }
+  if (
+    lower === 'generate_image' ||
+    lower === 'image_generation' ||
+    lower === 'create_image' ||
+    lower === 'edit_image'
+  ) {
+    return args?.prompt
+      ? `Generating image: "${String(args.prompt).slice(0, 42)}"`
+      : 'Generating image with Muse Image 1.0';
+  }
+  if (lower === 'ask_user' || lower === 'ask_question') {
+    return args?.question
+      ? `Asking: "${String(args.question).slice(0, 42)}"`
+      : 'Waiting for your input';
+  }
   return `Running ${toolName}`;
 }
 
 // ==========================================
 // Explicit Specialized Element Tool Renderers
 // ==========================================
+
+registerToolComponent(
+  ['generate_image', 'image_generation', 'create_image', 'edit_image'],
+  ({ args, result, status }) => {
+    const parsedResult =
+      typeof result === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(result);
+            } catch {
+              return {};
+            }
+          })()
+        : result || {};
+    const prompt =
+      args?.prompt ||
+      parsedResult?.prompt ||
+      args?.description ||
+      'Generated image';
+    const generating = status?.type === 'running';
+    const imageUrl =
+      parsedResult?.imageUrl ||
+      parsedResult?.url ||
+      args?.imageUrl ||
+      args?.url;
+    const sizeLabel = parsedResult?.size || args?.size || '1024x1024';
+
+    return (
+      <div className="my-1.5">
+        <ImageGeneration
+          prompt={String(prompt)}
+          generating={generating}
+          imageUrl={imageUrl}
+          sizeLabel={sizeLabel}
+        />
+      </div>
+    );
+  }
+);
 
 registerToolComponent(['code_diff', 'patch_preview'], ({ args }) => {
   const filename = args?.path || args?.filename || 'file';
@@ -424,10 +478,10 @@ for (const [key, Comp] of Object.entries(DIRECT_DATA_MAP)) {
 /**
  * Render any tool-call part using the registered specialized component or official ToolFallback
  */
-export function renderToolCallPart(part) {
+export function renderToolCallPart(part, options = {}) {
   const toolName = (part.toolName || part.name || 'tool').toLowerCase();
   const args = part.args || part.arguments;
-  const renderer = toolRenderers.get(toolName);
+  const renderer = options.forceFallback ? null : toolRenderers.get(toolName);
 
   if (renderer) {
     try {
@@ -436,7 +490,8 @@ export function renderToolCallPart(part) {
         args,
         result: part.result,
         status: part.status,
-        part
+        part,
+        ...options
       });
       if (rendered) return rendered;
     } catch (err) {
@@ -452,6 +507,9 @@ export function renderToolCallPart(part) {
       result={part.result}
       status={part.status}
       elapsedMs={part.elapsedMs}
+      active={options.active}
+      open={options.open}
+      onOpenChange={options.onOpenChange}
     />
   );
 }

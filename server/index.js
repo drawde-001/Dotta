@@ -7,7 +7,12 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import { OmniEngine, calculateMediaSegments, transcribeAudioSequentially } from '../src/core/index.js';
+import {
+  OmniEngine,
+  calculateMediaSegments,
+  transcribeAudioSequentially,
+  getGeneratedImage
+} from '../src/core/index.js';
 import { createAgUiHandler } from './ag-ui-bridge.js';
 import {
   initLiveBrowser,
@@ -256,6 +261,17 @@ app.post('/api/transcribe', async (req, res) => {
     console.error('[API /api/transcribe error]', err);
     res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+// Serve generated images from Meta muse-image-1.0
+app.get('/api/images/:filename', (req, res) => {
+  const item = getGeneratedImage(req.params.filename);
+  if (!item || !item.buffer) {
+    return res.status(404).json({ ok: false, error: 'Image not found' });
+  }
+  res.setHeader('Content-Type', item.mimeType || 'image/webp');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.send(item.buffer);
 });
 
 // Static frontend in production
