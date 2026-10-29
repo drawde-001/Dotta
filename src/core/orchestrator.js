@@ -12,7 +12,7 @@ import {
   recordInterruptHistory,
   getInterruptAnswer
 } from './state/store.js';
-import { checkPermission, executeToolWithRetry, appendAuditLog } from './tools/policy.js';
+import { checkPermission, executeToolWithRetry, appendAuditLog, checkToolRunCap } from './tools/policy.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
 import { buildFunctionResponseParts, normalizeGeminiContents } from './models/gemini-protocol.js';
@@ -37,6 +37,7 @@ import {
   executeSnapshotRead,
   executeBrowserScreenshot
 } from './execution/browser.js';
+import { executeSegmentImage } from './tools/sam-tool.js';
 
 export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent.
 You possess direct, real-world execution tools to fulfill user instructions:
@@ -140,6 +141,9 @@ export class OmniEngine extends EventEmitter {
 
       case 'shell_kill':
         return await killSandboxCommand(toolArgs.id);
+
+      case 'segment_image':
+        return await executeSegmentImage(toolArgs, { workspaceRoot, runId, threadId: context.threadId });
 
       default:
         throw new Error(`No local executor registered for tool "${toolName}".`);
@@ -275,6 +279,25 @@ export class OmniEngine extends EventEmitter {
                 summary: budgetTracker.getSummary()
               });
               return { success: false, stopReason: 'repeated_calls', summary: budgetTracker.getSummary() };
+            }
+
+            // 1.5. Cost-bearing tool per-run cap check
+            const toolUsageCount = budgetTracker.callHistory.filter((c) => c.toolName === toolName).length;
+            const capCheck = checkToolRunCap(toolName, toolUsageCount);
+            if (!capCheck.allowed) {
+              toolResults.push({
+                name: toolName,
+                id: fc.id,
+                result: `Per-run cap reached: ${capCheck.reason}`
+              });
+              appendAuditLog({
+                tool: toolName,
+                input: toolArgs,
+                result: { status: 'permanent_error', error: capCheck.reason },
+                decision: 'deny',
+                durationMs: 0
+              });
+              continue;
             }
 
             // 2. Policy permission check

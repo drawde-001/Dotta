@@ -396,6 +396,30 @@ export const AGENT_TOOLS_CATALOG = {
       },
       required: ['id', 'stepTitle']
     }
+  },
+  segment_image: {
+    name: 'segment_image',
+    readOnly: false,
+    description:
+      'Finds and outlines objects in an image from a short concrete noun prompt using Meta Segment Anything Model (SAM 3.1). Use this tool when you need pixel-accurate bounding boxes and masks for visual elements (e.g. "glasses", "yellow school bus", "cup") in an image located in your workspace. Do NOT use this tool for full image captioning or questions; use vision understanding for that. The "image_path" parameter specifies the relative image file in the user workspace; "prompt" is a short concrete noun phrase; "max_matches" optionally caps the returned detections.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        image_path: {
+          type: 'STRING',
+          description: 'Relative path to the image file within the workspace (e.g. "inputs/photo.png")'
+        },
+        prompt: {
+          type: 'STRING',
+          description: 'Short concrete noun phrase naming one object type to segment (e.g. "yellow bus", "glasses")'
+        },
+        max_matches: {
+          type: 'INTEGER',
+          description: 'Optional maximum number of matching objects to return'
+        }
+      },
+      required: ['image_path', 'prompt']
+    }
   }
 };
 
@@ -490,7 +514,8 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
-      AGENT_TOOLS_CATALOG.profile_get
+      AGENT_TOOLS_CATALOG.profile_get,
+      AGENT_TOOLS_CATALOG.segment_image
     ];
   }
 
