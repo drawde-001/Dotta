@@ -23,7 +23,9 @@ import {
   workspaceFileWrite,
   workspaceFileEdit,
   workspaceFileDelete,
-  createWorkspace
+  createWorkspace,
+  getLatestFileArtifact,
+  sanitizeRelativeDisplayPath
 } from './execution/workspace.js';
 import {
   runSandboxCommand,
@@ -52,17 +54,19 @@ You possess direct, real-world execution tools to fulfill user instructions:
 2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
 - "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text.
 - "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
-3. Workspace & Files:
+3. Workspace & Files (Strict Root Directory Isolation):
 - "workspace_create": Initialize a dedicated run workspace directory.
 - "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
+- STRICT ROOT PRIVACY RULE: Neither you nor the user has access to the root directory. Never attempt to access, list, or reveal the name or location of the root directory or parent directories. Always use relative interior paths (e.g. "src/...", "app.js").
 4. Sandboxed Execution:
 - "shell_run": Execute terminal/bash commands in the isolated workspace sandbox.
 - "shell_output": Check output or logs of running background commands.
 - "shell_kill": Terminate running processes.
 5. User Interaction (HITL):
-- "ask_user": When you genuinely need a decision, preference, or confirmation from the user, invoke "ask_user" with:
+- "ask_user": When you need a decision, preference, or confirmation from the user, invoke "ask_user" with:
   * "question": A brief 1-sentence question or recommendation (max 15-18 words).
   * "options": REQUIRED array of 2 to 3 short, concrete choices (2-6 words each). Put your top recommendation FIRST prefixed with "(Recommended)".
+  * "questions": If the user asks for multiple questions at once (e.g. 3 questions), pass all of them in the "questions" array: [{ question: "...", options: ["..."] }, ...] in a SINGLE "ask_user" call.
 
 CRITICAL EXECUTION RULES:
 - DECISIVE TOOL USE: Never give conversational excuses or pretend you cannot access the web, generate images, or run tools. Invoke the appropriate tool immediately on turn 1.
@@ -271,7 +275,10 @@ export class OmniEngine extends EventEmitter {
 
           for (const fc of callsToExecute) {
             const toolName = fc.name;
-            const toolArgs = fc.args || {};
+            const toolArgs = { ...(fc.args || {}) };
+            if (typeof toolArgs.path === 'string') {
+              toolArgs.path = sanitizeRelativeDisplayPath(toolArgs.path);
+            }
 
             this.emit('event', {
               type: 'TOOL_CALL',
@@ -325,7 +332,33 @@ export class OmniEngine extends EventEmitter {
             }
 
             if (toolName === 'ask_user' || perm.decision === 'ask') {
+              const normalizeOptArray = (arr) => {
+                const list = Array.isArray(arr) ? arr : [];
+                let cleaned = list
+                  .map((opt) => (typeof opt === 'string' ? opt.trim() : String(opt?.label || opt?.value || '').trim()))
+                  .filter(Boolean)
+                  .slice(0, 3);
+                if (cleaned.length === 0) {
+                  cleaned =
+                    toolName === 'ask_user'
+                      ? ['(Recommended) Proceed with recommended defaults', 'Specify custom details']
+                      : ['(Recommended) Allow and proceed', 'Skip this action'];
+                } else if (!cleaned.some((o) => /recommended/i.test(o))) {
+                  cleaned[0] = `(Recommended) ${cleaned[0]}`;
+                }
+                return cleaned;
+              };
+
+              const rawQuestionsList = Array.isArray(toolArgs.questions) ? toolArgs.questions : [];
+              const normalizedQuestions = rawQuestionsList
+                .filter((q) => q && (q.question || q.title))
+                .map((q) => ({
+                  question: String(q.question || q.title).trim(),
+                  options: normalizeOptArray(q.options || q.choices)
+                }));
+
               const rawQuestion =
+                normalizedQuestions[0]?.question ||
                 toolArgs.question ||
                 toolArgs.prompt ||
                 toolArgs.message ||
@@ -335,30 +368,15 @@ export class OmniEngine extends EventEmitter {
                   ? 'How would you like to proceed?'
                   : `Approve ${toolName.replace(/_/g, ' ')}?`);
 
-              const rawList = Array.isArray(toolArgs.options)
-                ? toolArgs.options
-                : Array.isArray(toolArgs.choices)
-                  ? toolArgs.choices
-                  : [];
-
-              let normalizedOptions = rawList
-                .map((opt) => (typeof opt === 'string' ? opt.trim() : String(opt?.label || opt?.value || '').trim()))
-                .filter(Boolean)
-                .slice(0, 3);
-
-              if (normalizedOptions.length === 0) {
-                normalizedOptions =
-                  toolName === 'ask_user'
-                    ? ['(Recommended) Proceed with recommended defaults', 'Specify custom details']
-                    : ['(Recommended) Allow and proceed', 'Skip this action'];
-              } else if (!normalizedOptions.some((o) => /recommended/i.test(o))) {
-                normalizedOptions[0] = `(Recommended) ${normalizedOptions[0]}`;
-              }
+              const normalizedOptions =
+                normalizedQuestions[0]?.options ||
+                normalizeOptArray(toolArgs.options || toolArgs.choices);
 
               const enrichedArgs = {
                 ...toolArgs,
                 question: rawQuestion,
-                options: normalizedOptions
+                options: normalizedOptions,
+                ...(normalizedQuestions.length > 0 ? { questions: normalizedQuestions } : {})
               };
 
               saveInterrupt(threadId, {
@@ -374,6 +392,7 @@ export class OmniEngine extends EventEmitter {
                 args: enrichedArgs,
                 question: rawQuestion,
                 options: normalizedOptions,
+                questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined,
                 context: toolArgs.context || (toolName !== 'ask_user' ? perm.reason : undefined),
                 reason: toolName === 'ask_user' ? 'user_question' : perm.reason || 'user_confirmation'
               });
@@ -384,7 +403,8 @@ export class OmniEngine extends EventEmitter {
                 pendingTool: toolName,
                 args: enrichedArgs,
                 question: rawQuestion,
-                options: normalizedOptions
+                options: normalizedOptions,
+                questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined
               };
             }
 
@@ -406,10 +426,18 @@ export class OmniEngine extends EventEmitter {
               durationMs: Date.now() - startTime
             });
 
+            const isFileOperation =
+              toolName === 'file_read' ||
+              toolName === 'file_write' ||
+              toolName === 'file_edit' ||
+              toolName === 'file_delete';
+            const fileArtifact = isFileOperation ? getLatestFileArtifact(runId || 'default') : null;
+
             this.emit('event', {
               type: 'TOOL_RESULT',
               name: toolName,
               output: execResult.output,
+              fileArtifact: fileArtifact || undefined,
               id: fc.id,
               status: execResult.status,
               timestamp: Date.now()

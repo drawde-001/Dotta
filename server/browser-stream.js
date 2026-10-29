@@ -11,8 +11,53 @@ let browser = null;
 let page = null;
 let cdp = null;
 let isStarting = false;
+let terminationTimer = null;
+
+export function cancelBrowserTermination() {
+  if (terminationTimer) {
+    clearTimeout(terminationTimer);
+    terminationTimer = null;
+  }
+}
+
+export function scheduleBrowserTermination(broadcast, delayMs = 30000) {
+  cancelBrowserTermination();
+  terminationTimer = setTimeout(async () => {
+    console.log(`[BrowserStream] Inactivity timeout (${delayMs / 1000}s) reached. Auto-terminating Chromium...`);
+    await closeLiveBrowser(broadcast);
+  }, delayMs);
+}
+
+export async function closeLiveBrowser(broadcast) {
+  cancelBrowserTermination();
+  if (cdp) {
+    try {
+      await cdp.send('Page.stopScreencast').catch(() => {});
+      await cdp.detach().catch(() => {});
+    } catch {}
+    cdp = null;
+  }
+  if (page) {
+    try {
+      await page.close().catch(() => {});
+    } catch {}
+    page = null;
+  }
+  if (browser) {
+    try {
+      await browser.close().catch(() => {});
+    } catch {}
+    browser = null;
+  }
+  isStarting = false;
+  console.log('[BrowserStream] Chromium process closed and resources cleaned up.');
+  if (typeof broadcast === 'function') {
+    broadcast({ type: 'browser_closed', timestamp: Date.now() });
+  }
+}
 
 export async function initLiveBrowser(broadcast) {
+  cancelBrowserTermination();
   if (browser && page) return { browser, page };
   if (isStarting) {
     while (isStarting) {
@@ -92,6 +137,13 @@ export function getLiveBrowserPage() {
 }
 
 export async function handleBrowserWsMessage(data, broadcast) {
+  if (data?.type === 'close_browser') {
+    await closeLiveBrowser(broadcast);
+    return;
+  }
+
+  cancelBrowserTermination();
+
   if (!page) {
     try {
       await initLiveBrowser(broadcast);
@@ -187,5 +239,8 @@ export async function handleBrowserWsMessage(data, broadcast) {
     }
   } catch (err) {
     console.error('[BrowserStream] Error executing action:', err.message);
+  } finally {
+    scheduleBrowserTermination(broadcast, 30000);
   }
 }
+

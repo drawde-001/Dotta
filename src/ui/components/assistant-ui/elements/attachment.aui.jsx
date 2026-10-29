@@ -1,9 +1,23 @@
 import React from 'react';
-import { Paperclip, FileImage, FileAudio, FileVideo, FileText, File, X } from 'lucide-react';
+import {
+  Paperclip,
+  FileImage,
+  FileAudio,
+  FileVideo,
+  FileArchive,
+  FileText,
+  File,
+  Loader2,
+  Check,
+  X
+} from 'lucide-react';
 import { TooltipIconButton } from './tooltip-icon-button';
 
 export function formatFileSize(bytes) {
-  if (typeof bytes === 'string' && (bytes.endsWith('B') || bytes.endsWith('KB') || bytes.endsWith('MB') || bytes.endsWith('GB'))) {
+  if (
+    typeof bytes === 'string' &&
+    (bytes.endsWith('B') || bytes.endsWith('KB') || bytes.endsWith('MB') || bytes.endsWith('GB'))
+  ) {
     return bytes;
   }
   const num = Number(bytes) || 0;
@@ -26,21 +40,27 @@ export function getFileCategoryIcon(mimeType = '', filename = '') {
   if (type.startsWith('video/') || ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) {
     return <FileVideo className="lucide lucide-file-video size-4" aria-hidden="true" />;
   }
-  if (['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'py', 'md', 'txt'].includes(ext)) {
+  if (['zip', 'tar', 'gz', 'tgz', 'rar', '7z'].includes(ext)) {
+    return <FileArchive className="lucide lucide-file-archive size-4" aria-hidden="true" />;
+  }
+  if (['ts', 'tsx', 'js', 'jsx', 'json', 'html', 'css', 'py', 'md', 'txt', 'csv', 'log', 'pdf', 'sql', 'yaml', 'yml'].includes(ext)) {
     return <FileText className="lucide lucide-file-text size-4" aria-hidden="true" />;
   }
   return <File className="lucide lucide-file size-4" aria-hidden="true" />;
 }
 
 export function ComposerAttachmentItem({ attachment, onRemove }) {
-  const { name, size, type, previewUrl } = attachment;
-  const isImage = (type && type.startsWith('image/')) || /\.(png|jpe?g|gif|webp|ico|bmp|svg)$/i.test(name || '');
+  const { name, size, type, previewUrl, state = 'done', progress = 100 } = attachment || {};
+  const isImage =
+    (type && type.startsWith('image/')) ||
+    /\.(png|jpe?g|gif|webp|ico|bmp|svg)$/i.test(name || '');
 
+  // Note: attachment.order is intentionally kept internal and NEVER rendered in the visible UI.
   return (
     <div
       data-slot="composer-attachment"
-      data-state="done"
-      className="bg-foreground/[0.04] forced-colors:border dark:bg-foreground/[0.06] relative flex items-center gap-2.5 overflow-hidden rounded-[14px] py-1.5 ps-1.5 pe-2.5 border border-zinc-200/50 dark:border-white/10 shadow-xs"
+      data-state={state}
+      className="bg-foreground/[0.04] forced-colors:border dark:bg-foreground/[0.06] relative flex items-center gap-2.5 overflow-hidden rounded-[14px] py-1.5 ps-1.5 pe-2.5 border border-white/[0.07]"
     >
       <span className="bg-background text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-[10px] dark:bg-white/10 overflow-hidden">
         {isImage && previewUrl ? (
@@ -49,26 +69,50 @@ export function ComposerAttachmentItem({ attachment, onRemove }) {
           getFileCategoryIcon(type, name)
         )}
       </span>
-      <span className="flex flex-col min-w-0 pr-4">
+      <span className="flex flex-col min-w-0">
         <span className="max-w-36 truncate text-xs font-medium text-zinc-900 dark:text-zinc-100">
           {name}
         </span>
-        <span className="text-[11px] text-muted-foreground">
-          {formatFileSize(size)}
+        <span
+          className={`text-[11px] ${
+            state === 'error'
+              ? 'text-red-600/80 dark:text-red-400/80'
+              : 'text-muted-foreground'
+          }`}
+        >
+          {state === 'uploading' ? 'uploading' : formatFileSize(size)}
         </span>
       </span>
-      {onRemove && (
-        <button
-          type="button"
-          aria-label={`Remove ${name}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRemove(attachment);
-          }}
-          className="text-muted-foreground hover:text-foreground absolute end-1.5 top-1.5 p-0.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-        >
-          <X className="lucide lucide-x size-3" aria-hidden="true" />
-        </button>
+      {(state === 'uploading' || onRemove) && (
+        <span className="ms-1 flex w-5 items-center justify-end">
+          {state === 'uploading' ? (
+            <Loader2
+              className="lucide lucide-loader-2 text-muted-foreground size-3.5 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+          ) : onRemove ? (
+            <button
+              type="button"
+              aria-label={`Remove ${name}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove(attachment);
+              }}
+              className="flex items-center justify-center rounded-full text-muted-foreground outline-hidden transition-[background-color,color,scale] duration-150 hover:bg-foreground/[0.06] hover:text-foreground/90 active:scale-[0.96] focus-visible:ring-1 focus-visible:ring-foreground/20 motion-reduce:transition-none dark:hover:bg-foreground/[0.09] size-5 [&_svg]:size-3 cursor-pointer"
+            >
+              <X className="lucide lucide-x" aria-hidden="true" />
+            </button>
+          ) : (
+            <Check className="size-3.5 text-emerald-500" />
+          )}
+        </span>
+      )}
+      {state === 'uploading' && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-500/70 transition-[width] duration-300 dark:bg-blue-400/70"
+          style={{ width: `${Math.max(5, Math.min(100, Number(progress) || 20))}%` }}
+        />
       )}
     </div>
   );
@@ -78,12 +122,12 @@ export function ComposerAttachments({ attachments = [], onRemove }) {
   if (!attachments || attachments.length === 0) return null;
 
   return (
-    <div data-slot="composer-attachments" className="flex flex-wrap gap-2 mb-2 w-full">
+    <div data-slot="composer-attachments" className="flex flex-wrap gap-2 mb-2.5 w-full">
       {attachments.map((att, idx) => (
         <ComposerAttachmentItem
           key={att.id || `${att.name}-${idx}`}
           attachment={att}
-          onRemove={() => onRemove && onRemove(idx, att)}
+          onRemove={onRemove ? () => onRemove(idx, att) : undefined}
         />
       ))}
     </div>
@@ -105,9 +149,15 @@ export function ComposerAddAttachment({ onClick }) {
 export function UserMessageAttachments({ attachments = [] }) {
   if (!attachments || attachments.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-2 mt-2">
+    <div
+      data-slot="user-message-attachments"
+      className="flex flex-wrap justify-end gap-2 mb-1 max-w-[85%]"
+    >
       {attachments.map((att, idx) => (
-        <ComposerAttachmentItem key={att.id || `${att.name}-${idx}`} attachment={att} />
+        <ComposerAttachmentItem
+          key={att.id || `${att.name}-${idx}`}
+          attachment={{ ...att, state: 'done' }}
+        />
       ))}
     </div>
   );

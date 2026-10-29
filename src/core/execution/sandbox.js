@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { spawn, spawnSync, execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { capToolOutput } from '../tools/policy.js';
-import { getWorkspaceRoot } from './workspace.js';
+import { getWorkspaceRoot, redactRootPaths } from './workspace.js';
 
 export const DEFAULT_DISTRO_NAME = process.env.OMNI_SANDBOX_DISTRO || 'omni-agent-sandbox';
 export const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
@@ -38,7 +38,23 @@ export async function runSandboxCommand({
     throw new Error('Command must be a non-empty string');
   }
 
-  const effectiveWorkspaceRoot = workspaceRoot || (runId ? getWorkspaceRoot(runId) : process.cwd());
+  // Block commands that attempt to inspect or escape to the root directory or parent directories
+  if (/(?:^|\s|;|&&|\|)(?:cd\s+(?:\/|\.\.|~|[a-zA-Z]:)|ls\s+\/|dir\s+[a-zA-Z]:\\|pwd\b)/i.test(command.trim())) {
+    return {
+      id: 'exec_blocked',
+      stdout: '',
+      stderr: 'Access to the root directory or parent directory is strictly prohibited.',
+      exitCode: 1,
+      timedOut: false,
+      durationMs: 0,
+      output: 'Access to the root directory or parent directory is strictly prohibited.'
+    };
+  }
+
+  const effectiveWorkspaceRoot = workspaceRoot || getWorkspaceRoot(runId || 'default-run');
+  if (!fs.existsSync(effectiveWorkspaceRoot)) {
+    fs.mkdirSync(effectiveWorkspaceRoot, { recursive: true });
+  }
   const execId = 'exec_' + crypto.randomUUID().slice(0, 8);
   const startTime = Date.now();
 
@@ -88,10 +104,14 @@ export async function runSandboxCommand({
         startedAt: startTime
       };
       child.stdout.on('data', (d) => {
-        if (execRecord.stdout.length < MAX_OUTPUT_CHARS * 2) execRecord.stdout += d.toString();
+        if (execRecord.stdout.length < MAX_OUTPUT_CHARS * 2) {
+          execRecord.stdout += redactRootPaths(d.toString(), effectiveWorkspaceRoot);
+        }
       });
       child.stderr.on('data', (d) => {
-        if (execRecord.stderr.length < MAX_OUTPUT_CHARS * 2) execRecord.stderr += d.toString();
+        if (execRecord.stderr.length < MAX_OUTPUT_CHARS * 2) {
+          execRecord.stderr += redactRootPaths(d.toString(), effectiveWorkspaceRoot);
+        }
       });
       child.on('close', (code) => {
         execRecord.status = 'completed';
@@ -117,10 +137,14 @@ export async function runSandboxCommand({
       }, timeoutMs);
 
       child.stdout.on('data', (data) => {
-        if (stdout.length < MAX_OUTPUT_CHARS * 2) stdout += data.toString();
+        if (stdout.length < MAX_OUTPUT_CHARS * 2) {
+          stdout += redactRootPaths(data.toString(), effectiveWorkspaceRoot);
+        }
       });
       child.stderr.on('data', (data) => {
-        if (stderr.length < MAX_OUTPUT_CHARS * 2) stderr += data.toString();
+        if (stderr.length < MAX_OUTPUT_CHARS * 2) {
+          stderr += redactRootPaths(data.toString(), effectiveWorkspaceRoot);
+        }
       });
 
       child.on('close', (exitCode) => {
@@ -144,20 +168,21 @@ export async function runSandboxCommand({
 
       child.on('error', (err) => {
         clearTimeout(timer);
+        const cleanErr = redactRootPaths(err.message, effectiveWorkspaceRoot);
         resolve({
           id: execId,
           stdout: '',
-          stderr: err.message,
+          stderr: cleanErr,
           exitCode: 1,
           timedOut: false,
           durationMs: Date.now() - startTime,
-          output: `Error executing command: ${err.message}`
+          output: `Error executing command: ${cleanErr}`
         });
       });
     });
   }
 
-  // Fallback to local subprocess execution if WSL sandbox is not configured
+  // Fallback to local subprocess execution inside isolated run workspace
   const isWin = process.platform === 'win32';
   const shell = isWin ? 'cmd.exe' : '/bin/sh';
   const shellArgs = isWin ? ['/d', '/s', '/c', command] : ['-c', command];
@@ -180,10 +205,14 @@ export async function runSandboxCommand({
       startedAt: startTime
     };
     child.stdout.on('data', (d) => {
-      if (execRecord.stdout.length < MAX_OUTPUT_CHARS * 2) execRecord.stdout += d.toString();
+      if (execRecord.stdout.length < MAX_OUTPUT_CHARS * 2) {
+        execRecord.stdout += redactRootPaths(d.toString(), effectiveWorkspaceRoot);
+      }
     });
     child.stderr.on('data', (d) => {
-      if (execRecord.stderr.length < MAX_OUTPUT_CHARS * 2) execRecord.stderr += d.toString();
+      if (execRecord.stderr.length < MAX_OUTPUT_CHARS * 2) {
+        execRecord.stderr += redactRootPaths(d.toString(), effectiveWorkspaceRoot);
+      }
     });
     child.on('close', (code) => {
       execRecord.status = 'completed';
@@ -209,10 +238,14 @@ export async function runSandboxCommand({
     }, timeoutMs);
 
     child.stdout.on('data', (data) => {
-      if (stdout.length < MAX_OUTPUT_CHARS * 2) stdout += data.toString();
+      if (stdout.length < MAX_OUTPUT_CHARS * 2) {
+        stdout += redactRootPaths(data.toString(), effectiveWorkspaceRoot);
+      }
     });
     child.stderr.on('data', (data) => {
-      if (stderr.length < MAX_OUTPUT_CHARS * 2) stderr += data.toString();
+      if (stderr.length < MAX_OUTPUT_CHARS * 2) {
+        stderr += redactRootPaths(data.toString(), effectiveWorkspaceRoot);
+      }
     });
 
     child.on('close', (exitCode) => {
@@ -236,14 +269,15 @@ export async function runSandboxCommand({
 
     child.on('error', (err) => {
       clearTimeout(timer);
+      const cleanErr = redactRootPaths(err.message, effectiveWorkspaceRoot);
       resolve({
         id: execId,
         stdout: '',
-        stderr: err.message,
+        stderr: cleanErr,
         exitCode: 1,
         timedOut: false,
         durationMs: Date.now() - startTime,
-        output: `Error executing command: ${err.message}`
+        output: `Error executing command: ${cleanErr}`
       });
     });
   });

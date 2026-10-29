@@ -7,6 +7,7 @@ import {
 import { Thread } from '@/components/assistant-ui/thread';
 import { InputDock } from '@/components/InputDock';
 import { LiveBrowserStream } from '@/components/LiveBrowserStream';
+import { FileViewerSidebar } from '@/components/FileViewerSidebar';
 import {
   Globe,
   PenLine,
@@ -28,6 +29,7 @@ export default function App() {
   const [activeInterrupt, setActiveInterrupt] = useState(null);
   const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
+  const [activeViewingFile, setActiveViewingFile] = useState(null);
 
   // Dynamic rotating subtitles for Hero screen
   const heroSubtitles = [
@@ -56,6 +58,18 @@ export default function App() {
 
   const abortControllerRef = useRef(null);
   const wsRef = useRef(null);
+  const browserIdleTimerRef = useRef(null);
+
+  // Listen for open file events from FileSystemArtifact in chat
+  useEffect(() => {
+    const handleOpenFile = (event) => {
+      if (event.detail) {
+        setActiveViewingFile(event.detail);
+      }
+    };
+    window.addEventListener('omni:open-file', handleOpenFile);
+    return () => window.removeEventListener('omni:open-file', handleOpenFile);
+  }, []);
 
   // Connect WebSocket to backend stream
   useEffect(() => {
@@ -89,6 +103,9 @@ export default function App() {
                 url: data.url,
                 title: data.title || prev.title
               }));
+            } else if (data.type === 'browser_closed') {
+              console.log('[App] Headless browser closed on server. Resetting workspace to chat.');
+              setWorkspaceMode('chat');
             }
           } catch {}
         };
@@ -172,28 +189,72 @@ export default function App() {
       userText = userMessage.content;
     }
 
-    if (!userText.trim() || isRunning) return;
+    const rawAttachments = options.attachments || [];
+    const orderedAttachments = rawAttachments.map((att, idx) => ({
+      ...att,
+      order: att.order || idx + 1
+    }));
+
+    if ((!userText.trim() && orderedAttachments.length === 0) || isRunning) return;
+
+    // Reset browser idle timer when user initiates new generation
+    if (browserIdleTimerRef.current) {
+      clearTimeout(browserIdleTimerRef.current);
+      browserIdleTimerRef.current = null;
+    }
+
+    // Process attachments sequentially in the background if attachments are present
+    let attachmentSystemContext = '';
+    if (orderedAttachments.length > 0) {
+      try {
+        const attRes = await fetch('/api/attachments/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attachments: orderedAttachments })
+        });
+        if (attRes.ok) {
+          const attData = await attRes.json();
+          attachmentSystemContext = attData.contextPrompt || '';
+        }
+      } catch (err) {
+        console.warn('[Attachments] Background sequential processing error:', err);
+      }
+    }
 
     const now = Date.now();
     const userMsgId = `user-${now}`;
     const assistantMsgId = `asst-${now}`;
 
-    const newMessages = [
-      ...messages,
-      {
-        id: userMsgId,
-        role: 'user',
-        content: [{ type: 'text', text: userText }]
-      },
-      {
-        id: assistantMsgId,
-        role: 'assistant',
-        content: [],
-        runStartedAt: now,
-        runCompletedAt: null,
-        runStatus: 'running'
-      }
-    ];
+    let newMessages;
+    if (options.isResume) {
+      newMessages = messages.map((m, idx) => {
+        if (idx === messages.length - 1 && m.role === 'assistant') {
+          return {
+            ...m,
+            runStatus: 'running'
+          };
+        }
+        return m;
+      });
+    } else {
+      newMessages = [
+        ...messages,
+        {
+          id: userMsgId,
+          role: 'user',
+          content: [{ type: 'text', text: userText || (orderedAttachments.length ? `[${orderedAttachments.length} attachments]` : '') }],
+          attachments: orderedAttachments
+        },
+        {
+          id: assistantMsgId,
+          role: 'assistant',
+          content: [],
+          runStartedAt: now,
+          runCompletedAt: null,
+          runStatus: 'running'
+        }
+      ];
+    }
 
     setMessages(newMessages);
     setIsRunning(true);
@@ -207,12 +268,16 @@ export default function App() {
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
+    const chatInstruction = attachmentSystemContext
+      ? `${userText ? userText + '\n\n' : ''}[System: ${attachmentSystemContext}]`
+      : userText;
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          instruction: userText,
+          instruction: chatInstruction,
           messages: newMessages
             .filter((m) => m.id !== assistantMsgId)
             .map((m) => ({
@@ -391,6 +456,7 @@ export default function App() {
                   contentParts[tcIdx] = {
                     ...contentParts[tcIdx],
                     result: event.output,
+                    fileArtifact: event.fileArtifact || contentParts[tcIdx].fileArtifact,
                     elapsedMs: startedAt ? Date.now() - startedAt : undefined,
                     status: {
                       type: event.status === 'error' ? 'incomplete' : 'complete',
@@ -402,6 +468,16 @@ export default function App() {
                 settleReasoning();
                 last.runCompletedAt = Date.now();
                 last.runStatus = 'complete';
+
+                // Auto-terminate browser and hide workspace panel after 30s of inactivity when done
+                if (browserIdleTimerRef.current) {
+                  clearTimeout(browserIdleTimerRef.current);
+                }
+                browserIdleTimerRef.current = setTimeout(() => {
+                  console.log('[App] 30s inactivity reached after run. Auto-closing workspace panel...');
+                  setWorkspaceMode('chat');
+                  handleSendWsMessage({ type: 'close_browser' });
+                }, 30000);
               } else if (event.type === 'RUN_ERROR') {
                 settleReasoning();
                 last.runCompletedAt = Date.now();
@@ -477,13 +553,38 @@ export default function App() {
     if (!interrupt) return;
 
     const answerText = payload?.answer || (payload?.approved ? 'Approved' : 'Denied');
+    const questionsAndAnswers = payload?.questionsAndAnswers || [
+      {
+        question: interrupt.message || 'Question',
+        answer: answerText
+      }
+    ];
+
+    // Prepend the Submitted QA Card directly into the assistant message in thread (Screenshot 1)
+    setMessages((prev) => {
+      const updated = [...prev];
+      const last = { ...updated[updated.length - 1] };
+      const contentParts = [...(last.content || [])];
+      contentParts.push({
+        type: 'submitted-ask-user',
+        id: `submitted-qa-${Date.now()}`,
+        questions: questionsAndAnswers
+      });
+      last.content = contentParts;
+      last.runStatus = 'running';
+      updated[updated.length - 1] = last;
+      return updated;
+    });
+
     await handleSendMessage(answerText, {
+      isResume: true,
       resume: {
         toolName: interrupt.metadata?.toolName,
         approved: payload?.approved,
         answer: payload?.answer,
         customText: payload?.customText,
-        chosenOptions: payload?.chosenOptions
+        chosenOptions: payload?.chosenOptions,
+        questionsAndAnswers
       }
     });
   };
@@ -505,12 +606,14 @@ export default function App() {
         Array.isArray(msg.content) && msg.content.length > 0
           ? msg.content
           : [{ type: 'text', text: '' }],
+      attachments: msg.attachments || [],
       metadata: {
         custom: {
           runStartedAt: msg.runStartedAt,
           runCompletedAt: msg.runCompletedAt,
           runStatus: msg.runStatus,
-          rawParts: msg.content || []
+          rawParts: msg.content || [],
+          attachments: msg.attachments || []
         }
       }
     })
@@ -527,6 +630,16 @@ export default function App() {
     }
   });
 
+  const handleCloseWorkspace = () => {
+    setWorkspaceMode('chat');
+    if (browserIdleTimerRef.current) {
+      clearTimeout(browserIdleTimerRef.current);
+      browserIdleTimerRef.current = null;
+    }
+    handleSendWsMessage({ type: 'close_browser' });
+    fetch('/api/browser/close', { method: 'POST' }).catch(() => {});
+  };
+
   return (
     <div className="flex flex-col h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Top Header Bar */}
@@ -540,7 +653,7 @@ export default function App() {
         <div className="flex items-center bg-[#18181E] border border-[#2C2C35] rounded-full p-0.5 gap-1">
           <button
             type="button"
-            onClick={() => setWorkspaceMode('chat')}
+            onClick={handleCloseWorkspace}
             className={`px-3.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
               workspaceMode === 'chat'
                 ? 'bg-white/12 text-white font-semibold'
@@ -574,7 +687,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setWorkspaceMode(workspaceMode === 'chat' ? 'work' : 'chat')}
+            onClick={() => (workspaceMode === 'chat' ? setWorkspaceMode('work') : handleCloseWorkspace())}
             className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
             title={workspaceMode === 'chat' ? 'Open workspace panel' : 'Hide workspace panel'}
           >
@@ -585,10 +698,18 @@ export default function App() {
 
       {/* Main Split Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Chat Panel (Left / Full) */}
+        {/* Left: File Viewer Sidebar (Matching Screenshot 2) */}
+        {activeViewingFile && (
+          <FileViewerSidebar
+            file={activeViewingFile}
+            onClose={() => setActiveViewingFile(null)}
+          />
+        )}
+
+        {/* Chat Panel (Center / Flex-1) */}
         <div
           className={`flex flex-col h-full overflow-hidden relative transition-all duration-200 ${
-            workspaceMode === 'work' ? 'flex-1 border-r border-[#1F1F26]' : 'w-full'
+            workspaceMode === 'work' ? 'flex-1 border-r border-[#1F1F26]' : 'flex-1'
           }`}
         >
           {messages.length === 0 ? (
@@ -682,7 +803,7 @@ export default function App() {
             <div className="h-10 px-3.5 flex items-center justify-end shrink-0 bg-[#08080A]">
               <button
                 type="button"
-                onClick={() => setWorkspaceMode('chat')}
+                onClick={handleCloseWorkspace}
                 title="Hide workspace panel"
                 className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
               >
