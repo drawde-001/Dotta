@@ -26,7 +26,7 @@ export default function App() {
   const [workspaceMode, setWorkspaceMode] = useState('chat');
   const [agentMode, setAgentMode] = useState('turbo');
   const [activeInterrupt, setActiveInterrupt] = useState(null);
-  const [selectedModel, setSelectedModel] = useState('meta-muse-spark');
+  const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
 
   // Dynamic rotating subtitles for Hero screen
