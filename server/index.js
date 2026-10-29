@@ -7,7 +7,7 @@ import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import { OmniEngine } from '../src/core/index.js';
+import { OmniEngine, calculateMediaSegments, transcribeAudioSequentially } from '../src/core/index.js';
 import { createAgUiHandler } from './ag-ui-bridge.js';
 import {
   initLiveBrowser,
@@ -220,6 +220,39 @@ app.get('/api/health', handleHealth);
 
 // AG-UI 1.0 Chat endpoint
 app.post('/api/chat', createAgUiHandler({ engine }));
+
+// Audio & Video Transcription endpoint with 10-minute segmentation support
+app.post('/api/transcribe', async (req, res) => {
+  try {
+    const { audio, durationSec, mimeType, filename, mockText } = req.body || {};
+    const totalDuration = Number(durationSec) || 0;
+
+    // Segment based on 10-minute (600s) threshold
+    const segments = calculateMediaSegments(totalDuration, 600);
+
+    let buffer = null;
+    if (audio) {
+      const base64Data = String(audio).replace(/^data:audio\/\w+;base64,/, '');
+      buffer = Buffer.from(base64Data, 'base64');
+    }
+
+    const transcriptionResult = await transcribeAudioSequentially(
+      segments,
+      { buffer, mimeType: mimeType || 'audio/wav', filename },
+      { mockText }
+    );
+
+    res.json({
+      ok: true,
+      transcript: transcriptionResult.transcript,
+      segmentsProcessed: transcriptionResult.segmentsProcessed,
+      durationSec: totalDuration
+    });
+  } catch (err) {
+    console.error('[API /api/transcribe error]', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 
 // Static frontend in production
 const distPath = path.resolve(__dirname, '../dist');
