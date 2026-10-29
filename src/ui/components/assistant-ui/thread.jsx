@@ -23,7 +23,13 @@ import {
   LayoutGrid,
   Puzzle,
   Sparkles,
-  Zap
+  Zap,
+  GlobeIcon,
+  SearchIcon,
+  MousePointerClickIcon,
+  FileIcon,
+  TerminalIcon,
+  WrenchIcon,
 } from "lucide-react";
 import {
   ActionBarPrimitive,
@@ -64,6 +70,7 @@ import {
   ConfidenceMarker,
   ReasoningEffort,
   ErrorState,
+  ToolTimeline,
 } from "@/components/assistant-ui/elements";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
 import { SubmittedAskUserCard } from "@/components/SubmittedAskUserCard";
@@ -539,6 +546,141 @@ const PROMOTED_VISUAL_TOOLS = new Set([
   "edit_image",
 ]);
 
+function generateToolGroupTitle(tools) {
+  if (!tools || tools.length === 0) return "Tool execution";
+  const names = tools.map((t) => String(t.toolName || t.name || "").toLowerCase());
+  const count = tools.length;
+
+  const isAll = (prefix) => names.every((n) => n.startsWith(prefix) || n.includes(prefix));
+  const hasAny = (prefix) => names.some((n) => n.startsWith(prefix) || n.includes(prefix));
+
+  if (isAll("browser_read_page") || isAll("read_page")) {
+    return count === 1 ? "Read 1 web page" : `Read ${count} web pages`;
+  }
+  if (isAll("browser_navigate") || isAll("navigate")) {
+    return count === 1 ? "Navigated to web page" : `Navigated to ${count} web pages`;
+  }
+  if (isAll("browser")) {
+    return `Browsed the web (${count} steps)`;
+  }
+  if (isAll("search")) {
+    return count === 1 ? "Searched the web" : `Searched the web (${count} queries)`;
+  }
+  if (isAll("view_file") || isAll("read_file")) {
+    return count === 1 ? "Read 1 file" : `Read ${count} files`;
+  }
+  if (isAll("replace_file") || isAll("write_to_file") || isAll("edit")) {
+    return count === 1 ? "Edited 1 file" : `Edited ${count} files`;
+  }
+  if (isAll("bash") || isAll("command") || isAll("exec")) {
+    return count === 1 ? "Ran terminal command" : `Ran ${count} terminal commands`;
+  }
+  if (isAll("fetch") || isAll("read_url")) {
+    return count === 1 ? "Fetched 1 URL" : `Fetched ${count} URLs`;
+  }
+
+  // Mixed tool combinations
+  if (hasAny("browser") && hasAny("search")) {
+    return `Web search & browsing (${count} steps)`;
+  }
+  if (hasAny("file") && (hasAny("bash") || hasAny("command"))) {
+    return `File & terminal operations (${count} steps)`;
+  }
+  if (hasAny("view_file") && hasAny("edit")) {
+    return `Inspected & modified code (${count} steps)`;
+  }
+
+  const distinctNames = Array.from(
+    new Set(names.map((n) => n.replace(/^(browser_|tools?_)/, "").replace(/_/g, " ")))
+  );
+  if (distinctNames.length === 1) {
+    const formatted = distinctNames[0].charAt(0).toUpperCase() + distinctNames[0].slice(1);
+    return `${formatted} (${count} steps)`;
+  }
+  return `Executed ${count} tools`;
+}
+
+const safeHost = (value) => {
+  try {
+    return new URL(value).hostname.replace(/^www\./, "");
+  } catch {
+    return String(value).slice(0, 40);
+  }
+};
+
+const baseName = (value) => String(value || "").split(/[/\\]/).pop() || "";
+
+// Maps a tool-call part onto the gathered ToolTimeline step shape ({ verb, chip, icon })
+function toTimelineStep(part, idx) {
+  const name = String(part?.toolName || part?.name || "tool");
+  const lower = name.toLowerCase();
+  const args = part?.args || part?.arguments || {};
+  const id = part?.toolCallId || part?.id || `step-${idx}`;
+
+  if (lower.includes("read_page") || lower === "read_url_content") {
+    return { id, verb: "Read page", chip: args.url ? safeHost(args.url) : "webpage", icon: GlobeIcon };
+  }
+  if (lower.includes("search")) {
+    return { id, verb: "Searched", chip: String(args.query || args.Query || "the web").slice(0, 36), icon: SearchIcon };
+  }
+  if (lower.startsWith("browser")) {
+    return { id, verb: "Browser", chip: String(args.action || args.url || "action").slice(0, 36), icon: MousePointerClickIcon };
+  }
+  if (/(read|view)_?file|file_read/.test(lower)) {
+    return { id, verb: "Read", chip: baseName(args.path || args.AbsolutePath || args.file || args.filename) || "file", icon: FileIcon };
+  }
+  if (/(write|edit|replace)/.test(lower) && lower.includes("file")) {
+    return { id, verb: "Edited", chip: baseName(args.path || args.TargetFile || args.file || args.filename) || "file", icon: FileIcon };
+  }
+  if (lower === "shell_run" || lower === "run_command" || lower === "bash") {
+    return { id, verb: "Ran", chip: String(args.command || args.CommandLine || args.cmd || "command").slice(0, 36), icon: TerminalIcon };
+  }
+  const readable = lower.replace(/_/g, " ");
+  return {
+    id,
+    verb: readable.charAt(0).toUpperCase() + readable.slice(1),
+    chip: "done",
+    icon: WrenchIcon,
+  };
+}
+
+// Logic-only wrapper: drives the gathered ToolTimeline (auto-open while running, auto-collapse when done)
+function ToolTimelineGroup({ tools = [], isLatestBatch = false, isRunning = false }) {
+  const isAnyRunning = tools.some(
+    (t) => t.status?.type === "running" || t.status === "running"
+  );
+  const isGroupActive = Boolean(isRunning && (isAnyRunning || isLatestBatch));
+
+  const [userOpen, setUserOpen] = React.useState(null);
+  const prevActiveRef = React.useRef(isGroupActive);
+
+  React.useEffect(() => {
+    if (prevActiveRef.current && !isGroupActive) {
+      setUserOpen(false);
+    } else if (!prevActiveRef.current && isGroupActive) {
+      setUserOpen(null);
+    }
+    prevActiveRef.current = isGroupActive;
+  }, [isGroupActive]);
+
+  const open = userOpen !== null ? userOpen : isGroupActive;
+  const steps = tools.map((tool, idx) => toTimelineStep(tool, idx));
+  const latestTool = tools[tools.length - 1];
+
+  return (
+    <ToolTimeline
+      steps={steps}
+      visibleSteps={steps.length}
+      streaming={isGroupActive}
+      open={open}
+      onOpenChange={(next) => setUserOpen(next)}
+      restingLabel={generateToolGroupTitle(tools)}
+      activeLabel={getToolActivityLabel(latestTool) || generateToolGroupTitle(tools)}
+      stats={[]}
+    />
+  );
+}
+
 function AssistantMessageBody() {
   const [userOpen, setUserOpen] = useState(null);
   const [manualEntryId, setManualEntryId] = useState(null);
@@ -609,13 +751,68 @@ function AssistantMessageBody() {
     return null;
   }
 
+  // Batch contiguous non-promoted tool-calls into parent groups when length >= 2
+  const batchedParts = [];
+  let currentToolBatch = [];
+
+  const flushToolBatch = () => {
+    if (currentToolBatch.length === 0) return;
+    if (currentToolBatch.length === 1) {
+      batchedParts.push(currentToolBatch[0]);
+    } else {
+      batchedParts.push({
+        type: "tool-group",
+        id: `tool-group-${currentToolBatch[0].part.toolCallId || currentToolBatch[0].idx}`,
+        tools: currentToolBatch.map((item) => item.part),
+        indices: currentToolBatch.map((item) => item.idx),
+      });
+    }
+    currentToolBatch = [];
+  };
+
+  rawParts.forEach((part, idx) => {
+    if (!part) return;
+    const lowerTool = String(part.toolName || part.name || "").toLowerCase();
+    const isPromoted = part.type === "tool-call" && PROMOTED_VISUAL_TOOLS.has(lowerTool);
+
+    if (part.type === "tool-call" && !isPromoted) {
+      currentToolBatch.push({ part, idx });
+    } else {
+      flushToolBatch();
+      batchedParts.push({ part, idx });
+    }
+  });
+  flushToolBatch();
+
   const entries = [];
   const promotedVisualNodes = [];
   const finalAnswerParts = [];
   const sourceParts = [];
 
-  rawParts.forEach((part, idx) => {
-    if (!part) return;
+  batchedParts.forEach((item) => {
+    if (item.type === "tool-group") {
+      const tools = item.tools;
+      const indices = item.indices;
+      const isLatestBatch = isGroupActive && indices.includes(lastActivityIdx);
+      const groupLabel = generateToolGroupTitle(tools);
+
+      entries.push({
+        id: item.id,
+        kind: "tool",
+        label: groupLabel,
+        content: (
+          <ToolTimelineGroup
+            key={item.id}
+            tools={tools}
+            isLatestBatch={isLatestBatch}
+            isRunning={isRunning}
+          />
+        ),
+      });
+      return;
+    }
+
+    const { part, idx } = item;
     const isLatestStep = isGroupActive && idx === lastActivityIdx;
 
     if (part.type === "tool-call") {
