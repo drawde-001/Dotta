@@ -33,6 +33,7 @@ export { FileTree } from './file-tree.aui.jsx';
 export { ElicitationForm } from './elicitation-form.aui.jsx';
 export { McpServerPanel } from './mcp-server-panel.aui.jsx';
 export { ToolError } from './tool-error.aui.jsx';
+export { ToolFallback } from './tool-fallback.aui.jsx';
 export { PermissionGrant } from './permission-grant.aui.jsx';
 export { ComputerUse } from './computer-use.aui.jsx';
 export { CodeRunner } from './code-runner.aui.jsx';

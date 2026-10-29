@@ -1002,7 +1002,7 @@ export const InputDock: React.FC<InputDockProps> = ({
 
           if (response.ok) {
             const data = await response.json();
-            if (data.ok && data.transcript) {
+            if (data.ok && data.transcript && !data.transcript.startsWith('[Transcribed audio segment')) {
               setPromptText((prev) => (prev ? `${prev} ${data.transcript}` : data.transcript));
               promptInputRef.current?.focus();
             }
