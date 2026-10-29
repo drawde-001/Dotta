@@ -1,82 +1,122 @@
-import React, { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+"use client";
+
+import React, { useState } from "react";
+import { CheckIcon, ChevronRightIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
+import {
+  CollapsibleRoot as Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "./collapsible-root";
+import {
+  collapsePanel,
+  field,
+  mono,
+  ShimmerLabel,
+  SwapLabel,
+} from "./surfaces";
 
 export function ToolCall({
-  toolName = 'Searching the docs',
-  completedName = 'Searched the docs',
-  argument = 'draft persistence',
-  result,
-  isComplete = false,
-  className = '',
-  ...props
+  label: propLabel,
+  activeLabel: propActiveLabel,
+  toolName,
+  completedName,
+  query: propQuery,
+  argument,
+  request: propRequest,
+  argsText,
+  result: propResult,
+  running: propRunning,
+  isComplete,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  defaultOpen = false,
+  className,
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const onOpenChange = (next) => {
+    if (!isControlled) setUncontrolledOpen(next);
+    controlledOnOpenChange?.(next);
+  };
+
+  const running =
+    propRunning !== undefined
+      ? Boolean(propRunning)
+      : isComplete !== undefined
+        ? !isComplete
+        : false;
+
+  const label = propLabel || completedName || toolName || "Tool";
+  const activeLabel = propActiveLabel || toolName || label;
+  const query = propQuery ?? argument ?? "";
+  const request =
+    propRequest ??
+    argsText ??
+    (typeof argument === "string" && argument ? argument : "{}");
+  const result =
+    typeof propResult === "string"
+      ? propResult
+      : propResult !== undefined && propResult !== null
+        ? JSON.stringify(propResult, null, 2)
+        : running
+          ? "Running..."
+          : "Done";
 
   return (
-    <div
+    <Collapsible
       data-slot="tool-call"
-      data-state={open ? 'open' : 'closed'}
-      className={`w-full max-w-sm ${className}`}
-      {...props}
+      open={open}
+      onOpenChange={onOpenChange}
+      className={cn("w-full max-w-sm", className)}
     >
-      <button
-        type="button"
-        tabIndex={0}
-        aria-expanded={open}
-        data-slot="collapsible-trigger"
-        onClick={() => setOpen((prev) => !prev)}
-        className="group/trigger text-muted-foreground hover:text-foreground/90 flex w-full items-center gap-2 rounded-md py-1 text-[13.5px] transition-colors outline-none text-start cursor-pointer"
-      >
-        <ChevronRight
-          className={`size-3.5 shrink-0 opacity-60 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none ${
-            open ? 'rotate-90' : ''
-          }`}
-          aria-hidden="true"
-        />
-        <span className="grid overflow-x-clip transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none shrink-0 text-start whitespace-nowrap">
-          {!isComplete ? (
-            <span
-              aria-hidden="false"
-              className="col-start-1 row-start-1 flex w-max items-center gap-1.5 leading-none transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none opacity-100 blur-none"
-            >
-              <span className="shimmer motion-reduce:animate-none relative inline-block leading-none">
-                {toolName}
-              </span>
-            </span>
-          ) : (
-            <span
-              aria-hidden="false"
-              className="col-start-1 row-start-1 flex w-max items-center gap-1.5 leading-none transition-[opacity,filter] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] motion-reduce:transition-none opacity-100 blur-none"
-            >
-              <span>{completedName}</span>
-            </span>
-          )}
-        </span>
-        {argument && (
-          <span className="font-mono text-[11px] tracking-tight bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5">
-            {argument}
+      <CollapsibleTrigger className="group/trigger text-muted-foreground hover:text-foreground/90 flex w-full items-center gap-2 rounded-md py-1 text-[13.5px] transition-colors outline-none cursor-pointer">
+        <ChevronRightIcon className="size-3.5 shrink-0 opacity-60 transition-transform duration-200 ease-[cubic-bezier(0.32,0.72,0,1)] group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none" />
+        <SwapLabel
+          active={running ? 0 : 1}
+          className="shrink-0 text-start whitespace-nowrap"
+        >
+          <ShimmerLabel
+            active={running}
+            className="relative inline-block leading-none"
+          >
+            {activeLabel}
+          </ShimmerLabel>
+          <>{label}</>
+        </SwapLabel>
+        {query && (
+          <span
+            className={cn(
+              mono,
+              "bg-foreground/[0.06] text-foreground/70 min-w-0 truncate rounded-md px-1.5 py-0.5"
+            )}
+          >
+            {query}
           </span>
         )}
-        <span className="ms-auto flex w-4 shrink-0 items-center justify-end" />
-      </button>
-
-      {open && (
-        <div
-          data-slot="tool-call-content"
-          className="bg-foreground/[0.025] border border-border/50 rounded-xl p-3 mt-1.5 font-mono text-[12px] leading-relaxed overflow-x-auto text-foreground/80 fade-in animate-in duration-200"
-        >
-          {result ? (
-            typeof result === 'object' ? (
-              <pre>{JSON.stringify(result, null, 2)}</pre>
-            ) : (
-              <span>{String(result)}</span>
-            )
-          ) : (
-            <span className="text-muted-foreground">Running...</span>
+        <span className="ms-auto flex w-4 shrink-0 items-center justify-end">
+          {!running && (
+            <CheckIcon className="fade-in zoom-in-90 animate-in size-3.5 text-emerald-500 duration-200" />
           )}
+        </span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className={cn(collapsePanel, "outline-none")}>
+        <div className={cn(field, "mt-2 overflow-hidden rounded-2xl text-xs")}>
+          <div className="px-3.5 pt-2.5 pb-2">
+            <p className={cn(mono, "text-muted-foreground mb-1 m-0")}>Request</p>
+            <p className="text-muted-foreground font-mono break-words m-0">
+              {request}
+            </p>
+          </div>
+          <div className="bg-foreground/[0.06] mx-3.5 h-px" />
+          <div className="px-3.5 pt-2 pb-2.5">
+            <p className={cn(mono, "text-muted-foreground mb-1 m-0")}>Result</p>
+            <p className="text-foreground/90 break-words m-0">{result}</p>
+          </div>
         </div>
-      )}
-    </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 

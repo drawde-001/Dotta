@@ -99,35 +99,46 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     blob = new Blob([new Uint8Array(audioPayload.bytes || [])], { type: 'audio/wav' });
   }
 
-  // --- Attempt 1: Meta Muse Voice Transcribe ---
+  // --- Attempt 1: Meta Muse Voice Transcribe (and OpenAI-compatible /audio/transcriptions) ---
   const metaKey = options.apiKey || getApiKey('META_MUSE_API_KEY') || getApiKey('MODEL_API_KEY');
-  const metaBaseUrl = options.baseUrl || process.env.META_MUSE_BASE_URL || process.env.META_BASE_URL || 'https://api.meta.ai/v1';
+  const metaBaseUrl = (options.baseUrl || process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || process.env.META_BASE_URL || 'https://api.meta.ai/v1').replace(/\/$/, '');
 
   if (metaKey) {
-    try {
-      const endpoint = `${metaBaseUrl.replace(/\/$/, '')}/asr/transcribe`;
-      const formData = new FormData();
-      formData.append('file', blob, audioPayload.filename || 'audio.wav');
-      formData.append('model', 'muse-voice-transcribe-1.0');
+    const endpointsToTry = [
+      { url: `${metaBaseUrl}/asr/transcribe`, model: 'muse-voice-transcribe-1.0' },
+      { url: `${metaBaseUrl}/audio/transcriptions`, model: 'whisper-1' }
+    ];
+    for (const ep of endpointsToTry) {
+      try {
+        const formData = new FormData();
+        formData.append('file', blob, audioPayload.filename || 'audio.webm');
+        formData.append('model', ep.model);
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${metaKey}` },
-        body: formData,
-        signal: AbortSignal.timeout(30000)
-      });
+        const res = await fetch(ep.url, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${metaKey}` },
+          body: formData,
+          signal: AbortSignal.timeout(25000)
+        });
 
-      if (res.ok) {
-        const json = await res.json();
-        const text = json.text || json.transcript || '';
-        if (text.trim()) {
-          return { ok: true, text, source: 'meta_muse', data: json };
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || '';
+          if (contentType.includes('application/json')) {
+            const json = await res.json();
+            const text = json.text || json.transcript || '';
+            if (text.trim()) {
+              return { ok: true, text: text.trim(), source: 'meta_muse', data: json };
+            }
+          } else {
+            const text = await res.text();
+            if (text.trim() && !text.trim().startsWith('<')) {
+              return { ok: true, text: text.trim(), source: 'meta_muse' };
+            }
+          }
         }
+      } catch (err) {
+        console.warn(`[MediaProcessor] Meta transcription error (${ep.url}):`, err.message);
       }
-      // If Meta fails, fall through to OpenAI Whisper
-      console.warn('[MediaProcessor] Meta voice transcribe failed or empty, trying OpenAI Whisper...');
-    } catch (err) {
-      console.warn('[MediaProcessor] Meta transcription error, falling back to Whisper:', err.message);
     }
   }
 
@@ -136,7 +147,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   if (openaiKey) {
     try {
       const formData = new FormData();
-      formData.append('file', blob, audioPayload.filename || 'audio.wav');
+      formData.append('file', blob, audioPayload.filename || 'audio.webm');
       formData.append('model', 'whisper-1');
       formData.append('response_format', 'text');
 
@@ -166,8 +177,8 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     try {
       let base64 = '';
       if (audioPayload.buffer) {
-        base64 = Buffer.isBuffer(audioPayload.buffer) 
-          ? audioPayload.buffer.toString('base64') 
+        base64 = Buffer.isBuffer(audioPayload.buffer)
+          ? audioPayload.buffer.toString('base64')
           : Buffer.from(audioPayload.buffer).toString('base64');
       } else if (blob) {
         const arrayBuf = await blob.arrayBuffer();
@@ -177,36 +188,54 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
       if (base64) {
         // Strip codec parameters like audio/webm;codecs=opus -> audio/webm
         const geminiMime = (audioPayload.mimeType || 'audio/webm').split(';')[0].trim();
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: geminiMime,
-                    data: base64
-                  }
-                },
-                {
-                  text: 'Transcribe this audio verbatim. Output only the transcription text, nothing else. Do not add quotes, notes, or timestamps.'
-                }
-              ]
-            }]
-          }),
-          signal: AbortSignal.timeout(30000)
-        });
+        const geminiBaseUrl = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
+        const geminiModels = [
+          'gemini-2.5-flash',
+          'gemini-2.0-flash',
+          'gemini-1.5-flash',
+          'gemini-2.5-pro'
+        ];
 
-        if (res.ok) {
-          const json = await res.json();
-          const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (candidateText && candidateText.trim()) {
-            return { ok: true, text: candidateText.trim(), source: 'gemini_audio', data: json };
+        for (const gModel of geminiModels) {
+          try {
+            const res = await fetch(`${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{
+                  parts: [
+                    {
+                      inlineData: {
+                        mimeType: geminiMime,
+                        data: base64
+                      }
+                    },
+                    {
+                      text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else. Do not add quotes, notes, or timestamps. If no speech is audible, output an empty string.'
+                    }
+                  ]
+                }]
+              }),
+              signal: AbortSignal.timeout(25000)
+            });
+
+            if (res.ok) {
+              const json = await res.json();
+              const candidateText = json.candidates?.[0]?.content?.parts
+                ?.filter((p) => !p.thought && typeof p.text === 'string')
+                .map((p) => p.text)
+                .join('')
+                .trim();
+              if (candidateText) {
+                return { ok: true, text: candidateText, source: `gemini_audio:${gModel}`, data: json };
+              }
+            } else {
+              const errText = await res.text().catch(() => '');
+              console.warn(`[MediaProcessor] Gemini audio (${gModel}) failed:`, res.status, errText.slice(0, 200));
+            }
+          } catch (gErr) {
+            console.warn(`[MediaProcessor] Gemini audio (${gModel}) error:`, gErr.message);
           }
-        } else {
-          const errText = await res.text().catch(() => '');
-          console.warn('[MediaProcessor] Gemini audio transcription failed:', res.status, errText);
         }
       }
     } catch (err) {

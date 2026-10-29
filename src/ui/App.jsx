@@ -174,8 +174,9 @@ export default function App() {
 
     if (!userText.trim() || isRunning) return;
 
-    const userMsgId = `user-${Date.now()}`;
-    const assistantMsgId = `asst-${Date.now()}`;
+    const now = Date.now();
+    const userMsgId = `user-${now}`;
+    const assistantMsgId = `asst-${now}`;
 
     const newMessages = [
       ...messages,
@@ -187,7 +188,10 @@ export default function App() {
       {
         id: assistantMsgId,
         role: 'assistant',
-        content: [{ type: 'text', text: '' }]
+        content: [],
+        runStartedAt: now,
+        runCompletedAt: null,
+        runStatus: 'running'
       }
     ];
 
@@ -209,13 +213,15 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           instruction: userText,
-          messages: newMessages.map((m) => ({
-            role: m.role,
-            content: m.content
-              .filter((c) => c.type === 'text')
-              .map((c) => c.text)
-              .join('')
-          })),
+          messages: newMessages
+            .filter((m) => m.id !== assistantMsgId)
+            .map((m) => ({
+              role: m.role,
+              content: (m.content || [])
+                .filter((c) => c.type === 'text')
+                .map((c) => c.text)
+                .join('\n')
+            })),
           model: selectedModel,
           mode: agentMode,
           resume: options.resume || null
@@ -261,6 +267,13 @@ export default function App() {
                   questions: event.questions
                 }
               });
+              setMessages((prev) => {
+                const updated = [...prev];
+                const last = { ...updated[updated.length - 1] };
+                last.runStatus = 'requires-action';
+                updated[updated.length - 1] = last;
+                return updated;
+              });
               continue;
             }
 
@@ -269,34 +282,58 @@ export default function App() {
               const last = { ...updated[updated.length - 1] };
               const contentParts = [...(last.content || [])];
 
+              const settleReasoning = () => {
+                for (let i = 0; i < contentParts.length; i++) {
+                  if (contentParts[i].type === 'reasoning' && contentParts[i].status?.type === 'running') {
+                    contentParts[i] = {
+                      ...contentParts[i],
+                      status: { type: 'complete' }
+                    };
+                  }
+                }
+              };
+
               if (event.type === 'TEXT_CHUNK' && event.chunk) {
-                const textPartIdx = contentParts.findIndex((c) => c.type === 'text');
-                if (textPartIdx >= 0) {
-                  contentParts[textPartIdx] = {
-                    ...contentParts[textPartIdx],
-                    text: contentParts[textPartIdx].text + event.chunk
+                settleReasoning();
+                const lastPart = contentParts[contentParts.length - 1];
+                if (lastPart && lastPart.type === 'text') {
+                  contentParts[contentParts.length - 1] = {
+                    ...lastPart,
+                    text: lastPart.text + event.chunk
                   };
                 } else {
-                  contentParts.push({ type: 'text', text: event.chunk });
+                  contentParts.push({
+                    type: 'text',
+                    id: `text-${contentParts.length}`,
+                    text: event.chunk
+                  });
                 }
               } else if (event.type === 'THOUGHT_CHUNK' && event.chunk) {
-                const rPartIdx = contentParts.findIndex((c) => c.type === 'reasoning');
-                if (rPartIdx >= 0) {
-                  contentParts[rPartIdx] = {
-                    ...contentParts[rPartIdx],
-                    text: contentParts[rPartIdx].text + event.chunk
+                const lastPart = contentParts[contentParts.length - 1];
+                if (lastPart && lastPart.type === 'reasoning') {
+                  contentParts[contentParts.length - 1] = {
+                    ...lastPart,
+                    text: lastPart.text + event.chunk,
+                    status: { type: 'running' }
                   };
                 } else {
-                  contentParts.unshift({ type: 'reasoning', text: event.chunk });
+                  contentParts.push({
+                    type: 'reasoning',
+                    id: `reasoning-${contentParts.length}`,
+                    text: event.chunk,
+                    status: { type: 'running' }
+                  });
                 }
               } else if (event.type === 'TOOL_CALL') {
+                settleReasoning();
                 contentParts.push({
                   type: 'tool-call',
-                  toolCallId: event.id || `call-${Date.now()}`,
+                  toolCallId: event.id || `call-${Date.now()}-${contentParts.length}`,
                   toolName: event.name,
                   args: event.args || {},
                   argsText: JSON.stringify(event.args || {}),
-                  status: { type: 'running' }
+                  status: { type: 'running' },
+                  startedAt: Date.now()
                 });
 
                 // Auto-open live browser when browser tool runs
@@ -309,16 +346,45 @@ export default function App() {
                   setWorkspaceMode('work');
                 }
               } else if (event.type === 'TOOL_RESULT') {
-                const tcIdx = contentParts.findIndex(
-                  (c) => c.type === 'tool-call' && (c.toolCallId === event.id || c.toolName === event.name)
-                );
+                let tcIdx = -1;
+                for (let i = contentParts.length - 1; i >= 0; i--) {
+                  const c = contentParts[i];
+                  if (
+                    c.type === 'tool-call' &&
+                    (c.toolCallId === event.id ||
+                      (c.toolName === event.name && c.status?.type === 'running'))
+                  ) {
+                    tcIdx = i;
+                    break;
+                  }
+                }
+                if (tcIdx === -1) {
+                  tcIdx = contentParts.findIndex(
+                    (c) =>
+                      c.type === 'tool-call' &&
+                      (c.toolCallId === event.id || c.toolName === event.name)
+                  );
+                }
                 if (tcIdx >= 0) {
+                  const startedAt = contentParts[tcIdx].startedAt;
                   contentParts[tcIdx] = {
                     ...contentParts[tcIdx],
                     result: event.output,
-                    status: { type: event.status === 'error' ? 'error' : 'complete' }
+                    elapsedMs: startedAt ? Date.now() - startedAt : undefined,
+                    status: {
+                      type: event.status === 'error' ? 'incomplete' : 'complete',
+                      reason: event.status === 'error' ? 'error' : undefined
+                    }
                   };
                 }
+              } else if (event.type === 'RUN_FINISHED') {
+                settleReasoning();
+                last.runCompletedAt = Date.now();
+                last.runStatus = 'complete';
+              } else if (event.type === 'RUN_ERROR') {
+                settleReasoning();
+                last.runCompletedAt = Date.now();
+                last.runStatus = 'error';
               }
 
               last.content = contentParts;
@@ -329,10 +395,58 @@ export default function App() {
         }
       }
     } catch (err) {
-      if (err.name !== 'AbortError') {
+      if (err.name === 'AbortError') {
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = { ...updated[updated.length - 1] };
+          if (last && last.role === 'assistant') {
+            last.runCompletedAt = last.runCompletedAt || Date.now();
+            last.runStatus = 'cancelled';
+            updated[updated.length - 1] = last;
+          }
+          return updated;
+        });
+      } else {
         console.error('Chat stream error:', err);
+        setMessages((prev) => {
+          const updated = [...prev];
+          const last = { ...updated[updated.length - 1] };
+          if (last && last.role === 'assistant') {
+            last.runCompletedAt = last.runCompletedAt || Date.now();
+            last.runStatus = 'error';
+            updated[updated.length - 1] = last;
+          }
+          return updated;
+        });
       }
     } finally {
+      setMessages((prev) => {
+        const updated = [...prev];
+        const last = { ...updated[updated.length - 1] };
+        if (last && last.role === 'assistant') {
+          last.runCompletedAt = last.runCompletedAt || Date.now();
+          if (last.runStatus === 'running') {
+            last.runStatus = 'complete';
+          }
+          last.content = (last.content || []).map((p) => {
+            if (p.type === 'reasoning' && p.status?.type === 'running') {
+              return { ...p, status: { type: 'complete' } };
+            }
+            if (p.type === 'tool-call' && p.status?.type === 'running') {
+              return {
+                ...p,
+                status: {
+                  type: last.runStatus === 'cancelled' ? 'incomplete' : 'complete',
+                  reason: last.runStatus === 'cancelled' ? 'cancelled' : undefined
+                }
+              };
+            }
+            return p;
+          });
+          updated[updated.length - 1] = last;
+        }
+        return updated;
+      });
       setIsRunning(false);
     }
   };
@@ -366,7 +480,18 @@ export default function App() {
     callback: (msg) => ({
       id: msg.id,
       role: msg.role,
-      content: msg.content
+      content:
+        Array.isArray(msg.content) && msg.content.length > 0
+          ? msg.content
+          : [{ type: 'text', text: '' }],
+      metadata: {
+        custom: {
+          runStartedAt: msg.runStartedAt,
+          runCompletedAt: msg.runCompletedAt,
+          runStatus: msg.runStatus,
+          rawParts: msg.content || []
+        }
+      }
     })
   });
 

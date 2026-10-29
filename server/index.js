@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3001;
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -232,7 +232,11 @@ app.post('/api/transcribe', async (req, res) => {
 
     let buffer = null;
     if (audio) {
-      const base64Data = String(audio).replace(/^data:audio\/\w+;base64,/, '');
+      const strAudio = String(audio);
+      const commaIdx = strAudio.indexOf(',');
+      const base64Data = strAudio.startsWith('data:') && commaIdx !== -1
+        ? strAudio.slice(commaIdx + 1)
+        : strAudio.replace(/^data:[^,]+,/, '');
       buffer = Buffer.from(base64Data, 'base64');
     }
 
