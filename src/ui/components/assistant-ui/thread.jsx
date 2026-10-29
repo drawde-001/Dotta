@@ -54,7 +54,7 @@ import { Plan } from "@/components/assistant-ui/elements/plan.aui";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
 import { cn } from "@/lib/utils";
 
-export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel }) {
+export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel, showComposer = false }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
@@ -83,7 +83,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
             <ThreadWelcome />
           </AuiIf>
 
-          <div className="mb-14 flex flex-col gap-y-6 empty:hidden">
+          <div className="mb-6 flex flex-col gap-y-6 empty:hidden">
             <ThreadPrimitive.Messages
               components={{
                 UserMessage,
@@ -93,23 +93,25 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
             />
           </div>
 
-          <ThreadPrimitive.ViewportFooter
-            className={cn(
-              "flex w-full flex-col gap-4 overflow-visible bg-background pb-4",
-              !isEmpty && "sticky bottom-0 mt-auto rounded-t-[var(--composer-radius)]",
-            )}
-          >
-            <ThreadScrollToBottom />
-            <Composer
-              activeInterrupt={activeInterrupt}
-              onResolveInterrupt={onResolveInterrupt}
-              selectedModel={selectedModel}
-              onSelectModel={onSelectModel}
-            />
-            <AuiIf condition={(s) => s.thread.isEmpty && s.composer.isEmpty}>
-              <ThreadSuggestions />
-            </AuiIf>
-          </ThreadPrimitive.ViewportFooter>
+          {showComposer && (
+            <ThreadPrimitive.ViewportFooter
+              className={cn(
+                "flex w-full flex-col gap-4 overflow-visible bg-background pb-4",
+                !isEmpty && "sticky bottom-0 mt-auto rounded-t-[var(--composer-radius)]",
+              )}
+            >
+              <ThreadScrollToBottom />
+              <Composer
+                activeInterrupt={activeInterrupt}
+                onResolveInterrupt={onResolveInterrupt}
+                selectedModel={selectedModel}
+                onSelectModel={onSelectModel}
+              />
+              <AuiIf condition={(s) => s.thread.isEmpty && s.composer.isEmpty}>
+                <ThreadSuggestions />
+              </AuiIf>
+            </ThreadPrimitive.ViewportFooter>
+          )}
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
