@@ -16,6 +16,8 @@ import {
   Puzzle,
 } from 'lucide-react';
 import { AskUserInterruptCard } from './AskUserInterruptCard';
+import { ComposerAttachments } from './assistant-ui/elements/attachment.aui';
+import { ComposerVoiceDictation } from './assistant-ui/elements/composer-voice.aui';
 
 export type ComposerMode = 'Plan' | 'Ask' | 'Build';
 export type EffortLevel = 'Low' | 'Medium' | 'High' | 'Max';
@@ -37,6 +39,15 @@ export interface ModelOption {
 interface ContextTagOption {
   tag: string;
   category: string;
+}
+
+export interface StagedAttachment {
+  id: string;
+  name: string;
+  size: number;
+  type: string;
+  previewUrl?: string;
+  file?: File;
 }
 
 export const AVAILABLE_MODELS: ModelOption[] = [
@@ -506,11 +517,18 @@ export const InputDock: React.FC<InputDockProps> = ({
   const [modelMenuPointerReady, setModelMenuPointerReady] = useState<boolean>(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState<boolean>(false);
 
+  const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
   const [attachedFiles, setAttachedFiles] = useState<string[]>([]);
   const [, setSelectedFiles] = useState<File[]>([]);
   const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
+  const [transcribingStatus, setTranscribingStatus] = useState<string>('Transcribing audio...');
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
   const [contextMenuOpen, setContextMenuOpen] = useState<boolean>(false);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const plusMenuTimerRef = useRef<number | null>(null);
@@ -786,15 +804,228 @@ export const InputDock: React.FC<InputDockProps> = ({
     promptInputRef.current?.focus();
   };
 
-  const handleRecordClick = () => {
-    if (!isRecording) {
+  const processImageFile = async (file: File): Promise<File> => {
+    const supportedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/x-icon'
+    ];
+    if (supportedTypes.includes(file.type.toLowerCase())) {
+      return file;
+    }
+
+    // Convert unsupported format (e.g. BMP, SVG, TIFF) to PNG via canvas
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 800;
+          canvas.height = img.naturalHeight || 600;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((blob) => {
+              URL.revokeObjectURL(url);
+              if (blob) {
+                const baseName = file.name.replace(/\.[^/.]+$/, '');
+                resolve(new File([blob], `${baseName}.png`, { type: 'image/png' }));
+                return;
+              }
+              resolve(file);
+            }, 'image/png');
+            return;
+          }
+        } catch {
+          // Fallback
+        }
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  };
+
+  const processIncomingFiles = async (rawFiles: File[]) => {
+    const newStaged: StagedAttachment[] = [];
+    const maxSizeBytes = 50 * 1024 * 1024; // 50 MB limit
+
+    for (const file of rawFiles) {
+      if (file.size > maxSizeBytes) {
+        alert(`File "${file.name}" exceeds the 50 MB limit and cannot be attached.`);
+        continue;
+      }
+
+      let finalFile = file;
+      if (file.type.startsWith('image/') || /\.(bmp|tiff|svg|webp|png|jpe?g)$/i.test(file.name)) {
+        finalFile = await processImageFile(file);
+      }
+
+      const isImage = finalFile.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|ico)$/i.test(finalFile.name);
+      const previewUrl = isImage ? URL.createObjectURL(finalFile) : undefined;
+
+      newStaged.push({
+        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        name: finalFile.name,
+        size: finalFile.size,
+        type: finalFile.type,
+        previewUrl,
+        file: finalFile
+      });
+    }
+
+    if (newStaged.length > 0) {
+      setStagedAttachments((prev) => [...prev, ...newStaged]);
+      setAttachedFiles((prev) => [...prev, ...newStaged.map((f) => f.name)]);
+      setSelectedFiles((prev) => [...prev, ...newStaged.map((f) => f.file!).filter(Boolean)]);
+    }
+  };
+
+  const handleRemoveAttachment = (idxToRemove: number) => {
+    setStagedAttachments((prev) => {
+      const target = prev[idxToRemove];
+      if (target?.previewUrl) {
+        URL.revokeObjectURL(target.previewUrl);
+      }
+      return prev.filter((_, i) => i !== idxToRemove);
+    });
+    setAttachedFiles((prev) => prev.filter((_, i) => i !== idxToRemove));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== idxToRemove));
+  };
+
+  const startVoiceRecording = async () => {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Microphone access is not supported by your browser.');
+        return;
+      }
+
+      // Explicitly requests browser microphone permission
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioStreamRef.current = stream;
+      audioChunksRef.current = [];
+
+      const options = { mimeType: 'audio/webm;codecs=opus' };
+      let recorder: MediaRecorder;
+      try {
+        recorder = new MediaRecorder(stream, options);
+      } catch {
+        recorder = new MediaRecorder(stream);
+      }
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm'
+        });
+        stream.getTracks().forEach((track) => track.stop());
+        audioStreamRef.current = null;
+        mediaRecorderRef.current = null;
+
+        await handleAudioTranscription(audioBlob);
+      };
+
+      recorder.start(250);
       setRecordingSeconds(0);
       setIsRecording(true);
-    } else {
-      setIsRecording(false);
-      if (!promptText.trim()) {
-        setPromptText('Refactor @codebase authentication middleware and add unit tests');
+    } catch (err: any) {
+      console.error('Microphone access error:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        alert('Microphone permission was denied. Please allow microphone access in your browser to record audio.');
+      } else {
+        alert(`Could not access microphone: ${err.message || 'Unknown error'}`);
       }
+      setIsRecording(false);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecording(false);
+  };
+
+  const cancelVoiceRecording = () => {
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach((track) => track.stop());
+      audioStreamRef.current = null;
+    }
+    mediaRecorderRef.current = null;
+    audioChunksRef.current = [];
+    setIsRecording(false);
+    setIsTranscribing(false);
+    setRecordingSeconds(0);
+  };
+
+  const handleAudioTranscription = async (blob: Blob) => {
+    try {
+      setIsTranscribing(true);
+      const duration = recordingSeconds || 5;
+
+      // 10-minute (600s) segmentation check
+      if (duration > 600) {
+        const segCount = Math.ceil(duration / 600);
+        setTranscribingStatus(`Processing ${segCount} audio segments (10m threshold)...`);
+      } else {
+        setTranscribingStatus('Transcribing audio...');
+      }
+
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+      reader.onloadend = async () => {
+        try {
+          const base64Audio = reader.result as string;
+          const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              audio: base64Audio,
+              durationSec: duration,
+              mimeType: blob.type
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.ok && data.transcript) {
+              setPromptText((prev) => (prev ? `${prev} ${data.transcript}` : data.transcript));
+              promptInputRef.current?.focus();
+            }
+          }
+        } catch (e) {
+          console.error('Failed to transcribe audio:', e);
+        } finally {
+          setIsTranscribing(false);
+          setRecordingSeconds(0);
+        }
+      };
+    } catch (err) {
+      console.error('Transcription handler error:', err);
+      setIsTranscribing(false);
+      setRecordingSeconds(0);
+    }
+  };
+
+  const handleRecordClick = () => {
+    if (!isRecording) {
+      startVoiceRecording();
+    } else {
+      stopVoiceRecording();
     }
   };
 
@@ -803,7 +1034,7 @@ export const InputDock: React.FC<InputDockProps> = ({
       onStopWorking();
       return;
     }
-    if (isRecording) setIsRecording(false);
+    if (isRecording) stopVoiceRecording();
 
     const trimmed = promptText.trim();
     if (!trimmed && attachedFiles.length === 0) {
@@ -816,6 +1047,10 @@ export const InputDock: React.FC<InputDockProps> = ({
 
     onSendMessage(finalMessage);
     setPromptText('');
+    stagedAttachments.forEach((att) => {
+      if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+    });
+    setStagedAttachments([]);
     setAttachedFiles([]);
     setSelectedFiles([]);
     setContextMenuOpen(false);
@@ -1391,12 +1626,11 @@ export const InputDock: React.FC<InputDockProps> = ({
         type="file"
         className="hidden"
         multiple
-        accept="image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,text/csv,text/html,.json,.js,.ts,.tsx,.jsx,.py,.sh,.yaml,.yml,.sql,.css"
+        accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/bmp,image/svg+xml,audio/*,video/*,application/pdf,text/plain,text/markdown,text/csv,text/html,.json,.js,.ts,.tsx,.jsx,.py,.sh,.yaml,.yml,.sql,.css"
         onChange={(e) => {
           const files = Array.from(e.target.files || []);
           if (files.length > 0) {
-            setAttachedFiles((prev) => [...prev, ...files.map((f) => f.name)]);
-            setSelectedFiles((prev) => [...prev, ...files]);
+            processIncomingFiles(files);
           }
           e.target.value = '';
         }}
@@ -1410,46 +1644,24 @@ export const InputDock: React.FC<InputDockProps> = ({
           transition: 'max-width 0.22s ease',
         }}
       >
-        {/* Attached Context File Chips */}
-        {attachedFiles.length > 0 && (
-          <div className="w-full mb-2.5 flex flex-wrap gap-2">
-            {attachedFiles.map((fileName, idx) => (
-              <div
-                key={`${fileName}-${idx}`}
-                className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs shadow-sm"
-                style={{
-                  background: 'var(--chip-bg)',
-                  border: '1px solid var(--chip-border)',
-                  color: 'var(--text-primary)',
-                }}
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  <path
-                    d="M9.5 2H4.5C3.67 2 3 2.67 3 3.5V12.5C3 13.33 3.67 14 4.5 14H11.5C12.33 14 13 13.33 13 12.5V5.5L9.5 2Z"
-                    stroke="currentColor"
-                    strokeWidth="1.4"
-                  />
-                </svg>
-                <span className="max-w-[160px] truncate">{fileName}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAttachedFiles((prev) => prev.filter((_, i) => i !== idx));
-                    setSelectedFiles((prev) => prev.filter((_, i) => i !== idx));
-                  }}
-                  className="opacity-70 hover:opacity-100 ml-0.5"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
+        {/* Attached Context File Cards matching assistant-ui elements/composer-attachments */}
+        {stagedAttachments.length > 0 && (
+          <ComposerAttachments
+            attachments={stagedAttachments}
+            onRemove={handleRemoveAttachment}
+          />
+        )}
+
+        {/* Live Voice Recording & Transcribing Component matching assistant-ui elements/composer-voice */}
+        {(isRecording || isTranscribing) && (
+          <ComposerVoiceDictation
+            isRecording={isRecording}
+            isTranscribing={isTranscribing}
+            recordingTime={formattedRecordingTime}
+            transcribingStatus={transcribingStatus}
+            onStop={stopVoiceRecording}
+            onCancel={cancelVoiceRecording}
+          />
         )}
 
         {/* If the agent has a question/interrupt, the composer box transitions to Ask User state */}
@@ -2087,14 +2299,17 @@ export const InputDock: React.FC<InputDockProps> = ({
               <button
                 type="button"
                 onClick={handleRecordClick}
+                disabled={isTranscribing}
                 className={`aic-icon-btn ${
-                  isRecording ? '!text-red-500 !bg-red-500/15' : ''
+                  isRecording ? '!text-red-500 !bg-red-500/15' : isTranscribing ? '!text-indigo-400 !bg-indigo-500/15' : ''
                 }`}
-                aria-label={isRecording ? 'Stop recording voice' : 'Record voice input'}
-                title={isRecording ? `Recording... (${formattedRecordingTime})` : 'Voice input'}
+                aria-label={isRecording ? 'Stop recording voice' : isTranscribing ? 'Transcribing audio...' : 'Record voice input'}
+                title={isRecording ? `Recording... (${formattedRecordingTime})` : isTranscribing ? 'Transcribing audio...' : 'Voice input'}
               >
                 {isRecording ? (
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500 aic-recording-dot" />
+                ) : isTranscribing ? (
+                  <span className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <Mic size={16} />
                 )}
