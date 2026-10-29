@@ -36,3 +36,6 @@ export { ToolError } from './tool-error.aui.jsx';
 export { PermissionGrant } from './permission-grant.aui.jsx';
 export { ComputerUse } from './computer-use.aui.jsx';
 export { CodeRunner } from './code-runner.aui.jsx';
+
+// Phase 4: Agents
+export { AgentPlan } from './agent-plan.aui.jsx';
