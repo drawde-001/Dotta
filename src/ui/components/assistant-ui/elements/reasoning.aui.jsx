@@ -271,23 +271,53 @@ function ReasoningText({ className, children, ...props }) {
   );
 }
 
+function deriveReasoningLabel(text, streaming, explicitLabel) {
+  if (explicitLabel) return explicitLabel;
+  if (!streaming) return "Thought process";
+  if (typeof text === "string" && text.trim()) {
+    const lines = text
+      .trim()
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i];
+      const boldMatch = line.match(/^\*\*(.+?)\*\*$/);
+      if (boldMatch) {
+        return `Thinking · ${boldMatch[1].slice(0, 48)}`;
+      }
+      const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+      if (headingMatch) {
+        return `Thinking · ${headingMatch[1].slice(0, 48)}`;
+      }
+    }
+  }
+  return "Thinking";
+}
+
 export function Reasoning({
   text,
   status,
   streaming: propStreaming,
   duration,
+  label,
   variant = "ghost",
   children,
   className,
 }) {
   const streaming = propStreaming ?? status?.type === "running";
+  const resolvedLabel = deriveReasoningLabel(text, streaming, label);
   return (
     <ReasoningRoot
       variant={variant}
       streaming={streaming}
       className={className}
     >
-      <ReasoningTrigger active={streaming} duration={duration} />
+      <ReasoningTrigger
+        active={streaming}
+        duration={duration}
+        label={resolvedLabel}
+      />
       <ReasoningContent aria-busy={streaming}>
         <ReasoningText>{text || children}</ReasoningText>
       </ReasoningContent>

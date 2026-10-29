@@ -84,34 +84,88 @@ export function calculateMediaSegments(totalDurationSeconds, maxDurationSeconds 
   return segments.map((s) => ({ ...s, total }));
 }
 
+function extractTranscriptFromResponseJson(json) {
+  if (!json || typeof json !== 'object') return '';
+  const direct =
+    json.text ||
+    json.transcript ||
+    json.transcription ||
+    json.output ||
+    json.result ||
+    json.data?.text ||
+    json.data?.transcript ||
+    json.choices?.[0]?.message?.content;
+  if (typeof direct === 'string' && direct.trim()) {
+    return direct.trim();
+  }
+  if (Array.isArray(json.segments)) {
+    const joined = json.segments
+      .map((s) => (typeof s === 'string' ? s : s?.text || ''))
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (joined) return joined;
+  }
+  if (Array.isArray(json.results)) {
+    const joined = json.results
+      .map((r) => r?.text || r?.transcript || r?.alternatives?.[0]?.transcript || '')
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    if (joined) return joined;
+  }
+  return '';
+}
+
 /**
- * Send an audio segment to Meta Voice Transcribe or OpenAI Whisper as fallback.
- * Key resolution order: META_MUSE_API_KEY → OPENAI_API_KEY → MODEL_API_KEY → offline mock.
+ * Send an audio segment to Meta Voice Transcribe (muse-voice-transcribe-1.0),
+ * OpenAI Whisper, or Gemini Multimodal Audio as fallback.
  */
 export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
-  // Resolve the audio blob/buffer
+  const rawMime = (audioPayload.mimeType || 'audio/wav').split(';')[0].trim();
+  const defaultExt = rawMime.includes('wav') ? 'wav' : rawMime.includes('mp3') ? 'mp3' : 'webm';
+  const filename = audioPayload.filename || `audio.${defaultExt}`;
+
+  // Resolve the audio blob/buffer and base64
   let blob;
+  let base64 = '';
   if (audioPayload.buffer) {
-    blob = new Blob([audioPayload.buffer], { type: audioPayload.mimeType || 'audio/wav' });
+    const buf = Buffer.isBuffer(audioPayload.buffer)
+      ? audioPayload.buffer
+      : Buffer.from(audioPayload.buffer);
+    blob = new Blob([buf], { type: rawMime });
+    base64 = buf.toString('base64');
   } else if (audioPayload.blob) {
     blob = audioPayload.blob;
+    const arrayBuf = await blob.arrayBuffer();
+    base64 = Buffer.from(arrayBuf).toString('base64');
   } else {
-    blob = new Blob([new Uint8Array(audioPayload.bytes || [])], { type: 'audio/wav' });
+    const bytes = new Uint8Array(audioPayload.bytes || []);
+    blob = new Blob([bytes], { type: rawMime });
+    base64 = Buffer.from(bytes).toString('base64');
   }
 
-  // --- Attempt 1: Meta Muse Voice Transcribe (and OpenAI-compatible /audio/transcriptions) ---
+  // --- Attempt 1: Meta Muse Voice Transcribe (muse-voice-transcribe-1.0) ---
   const metaKey = options.apiKey || getApiKey('META_MUSE_API_KEY') || getApiKey('MODEL_API_KEY');
-  const metaBaseUrl = (options.baseUrl || process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || process.env.META_BASE_URL || 'https://api.meta.ai/v1').replace(/\/$/, '');
+  const metaBaseUrl = (
+    options.baseUrl ||
+    process.env.MODEL_API_BASE_URL ||
+    process.env.META_MUSE_BASE_URL ||
+    process.env.META_BASE_URL ||
+    'https://api.meta.ai/v1'
+  ).replace(/\/$/, '');
 
   if (metaKey) {
-    const endpointsToTry = [
+    const multipartEndpoints = [
       { url: `${metaBaseUrl}/asr/transcribe`, model: 'muse-voice-transcribe-1.0' },
+      { url: `${metaBaseUrl}/audio/transcriptions`, model: 'muse-voice-transcribe-1.0' },
       { url: `${metaBaseUrl}/audio/transcriptions`, model: 'whisper-1' }
     ];
-    for (const ep of endpointsToTry) {
+
+    for (const ep of multipartEndpoints) {
       try {
         const formData = new FormData();
-        formData.append('file', blob, audioPayload.filename || 'audio.webm');
+        formData.append('file', blob, filename);
         formData.append('model', ep.model);
 
         const res = await fetch(ep.url, {
@@ -125,20 +179,86 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
           const contentType = res.headers.get('content-type') || '';
           if (contentType.includes('application/json')) {
             const json = await res.json();
-            const text = json.text || json.transcript || '';
-            if (text.trim()) {
-              return { ok: true, text: text.trim(), source: 'meta_muse', data: json };
+            const text = extractTranscriptFromResponseJson(json);
+            if (text) {
+              return { ok: true, text, source: 'meta_muse', data: json };
             }
           } else {
-            const text = await res.text();
-            if (text.trim() && !text.trim().startsWith('<')) {
-              return { ok: true, text: text.trim(), source: 'meta_muse' };
+            const text = (await res.text()).trim();
+            if (text && !text.startsWith('<')) {
+              return { ok: true, text, source: 'meta_muse' };
             }
           }
         }
       } catch (err) {
-        console.warn(`[MediaProcessor] Meta transcription error (${ep.url}):`, err.message);
+        console.warn(`[MediaProcessor] Meta multipart transcription error (${ep.url}):`, err.message);
       }
+    }
+
+    // Also try JSON ASR & Multimodal Chat Completion on metaBaseUrl if multipart isn't supported
+    if (base64) {
+      try {
+        const jsonRes = await fetch(`${metaBaseUrl}/asr/transcribe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${metaKey}`
+          },
+          body: JSON.stringify({
+            model: 'muse-voice-transcribe-1.0',
+            audio: base64,
+            mime_type: rawMime,
+            format: defaultExt
+          }),
+          signal: AbortSignal.timeout(25000)
+        });
+        if (jsonRes.ok) {
+          const json = await jsonRes.json().catch(() => null);
+          const text = extractTranscriptFromResponseJson(json);
+          if (text) {
+            return { ok: true, text, source: 'meta_muse_json', data: json };
+          }
+        }
+      } catch {}
+
+      try {
+        const chatRes = await fetch(`${metaBaseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${metaKey}`
+          },
+          body: JSON.stringify({
+            model: 'muse-wonder-1.0',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'input_audio',
+                    input_audio: {
+                      data: base64,
+                      format: defaultExt === 'wav' ? 'wav' : 'mp3'
+                    }
+                  },
+                  {
+                    type: 'text',
+                    text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else.'
+                  }
+                ]
+              }
+            ]
+          }),
+          signal: AbortSignal.timeout(25000)
+        });
+        if (chatRes.ok) {
+          const json = await chatRes.json().catch(() => null);
+          const text = extractTranscriptFromResponseJson(json);
+          if (text) {
+            return { ok: true, text, source: 'meta_muse_chat', data: json };
+          }
+        }
+      } catch {}
     }
   }
 
@@ -147,7 +267,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   if (openaiKey) {
     try {
       const formData = new FormData();
-      formData.append('file', blob, audioPayload.filename || 'audio.webm');
+      formData.append('file', blob, filename);
       formData.append('model', 'whisper-1');
       formData.append('response_format', 'text');
 
@@ -159,9 +279,9 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
       });
 
       if (res.ok) {
-        const text = await res.text();
-        if (text.trim()) {
-          return { ok: true, text: text.trim(), source: 'openai_whisper' };
+        const text = (await res.text()).trim();
+        if (text) {
+          return { ok: true, text, source: 'openai_whisper' };
         }
       }
       const errText = await res.text().catch(() => 'unknown');
@@ -173,69 +293,72 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
 
   // --- Attempt 3: Gemini Multimodal Audio Transcription ---
   const geminiKey = getApiKey('GEMINI_API_KEY');
-  if (geminiKey) {
+  if (geminiKey && base64) {
     try {
-      let base64 = '';
-      if (audioPayload.buffer) {
-        base64 = Buffer.isBuffer(audioPayload.buffer)
-          ? audioPayload.buffer.toString('base64')
-          : Buffer.from(audioPayload.buffer).toString('base64');
-      } else if (blob) {
-        const arrayBuf = await blob.arrayBuffer();
-        base64 = Buffer.from(arrayBuf).toString('base64');
-      }
+      const geminiBaseUrl = (
+        process.env.GEMINI_API_BASE_URL ||
+        'https://generativelanguage.googleapis.com/v1beta'
+      ).replace(/\/$/, '');
+      const geminiModels = [
+        'gemini-2.5-flash',
+        'gemini-3-flash-preview',
+        'gemini-3.8-flash',
+        'gemini-2.5-pro'
+      ];
 
-      if (base64) {
-        // Strip codec parameters like audio/webm;codecs=opus -> audio/webm
-        const geminiMime = (audioPayload.mimeType || 'audio/webm').split(';')[0].trim();
-        const geminiBaseUrl = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/$/, '');
-        const geminiModels = [
-          'gemini-2.5-flash',
-          'gemini-2.0-flash',
-          'gemini-1.5-flash',
-          'gemini-2.5-pro'
-        ];
-
-        for (const gModel of geminiModels) {
-          try {
-            const res = await fetch(`${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`, {
+      for (const gModel of geminiModels) {
+        try {
+          const res = await fetch(
+            `${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`,
+            {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                contents: [{
-                  parts: [
-                    {
-                      inlineData: {
-                        mimeType: geminiMime,
-                        data: base64
+                contents: [
+                  {
+                    parts: [
+                      {
+                        inlineData: {
+                          mimeType: rawMime,
+                          data: base64
+                        }
+                      },
+                      {
+                        text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else. Do not add quotes, notes, or timestamps. If no speech is audible, output an empty string.'
                       }
-                    },
-                    {
-                      text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else. Do not add quotes, notes, or timestamps. If no speech is audible, output an empty string.'
-                    }
-                  ]
-                }]
+                    ]
+                  }
+                ]
               }),
               signal: AbortSignal.timeout(25000)
-            });
-
-            if (res.ok) {
-              const json = await res.json();
-              const candidateText = json.candidates?.[0]?.content?.parts
-                ?.filter((p) => !p.thought && typeof p.text === 'string')
-                .map((p) => p.text)
-                .join('')
-                .trim();
-              if (candidateText) {
-                return { ok: true, text: candidateText, source: `gemini_audio:${gModel}`, data: json };
-              }
-            } else {
-              const errText = await res.text().catch(() => '');
-              console.warn(`[MediaProcessor] Gemini audio (${gModel}) failed:`, res.status, errText.slice(0, 200));
             }
-          } catch (gErr) {
-            console.warn(`[MediaProcessor] Gemini audio (${gModel}) error:`, gErr.message);
+          );
+
+          if (res.ok) {
+            const json = await res.json();
+            const candidateText = json.candidates?.[0]?.content?.parts
+              ?.filter((p) => !p.thought && typeof p.text === 'string')
+              .map((p) => p.text)
+              .join('')
+              .trim();
+            if (candidateText) {
+              return {
+                ok: true,
+                text: candidateText,
+                source: `gemini_audio:${gModel}`,
+                data: json
+              };
+            }
+          } else {
+            const errText = await res.text().catch(() => '');
+            console.warn(
+              `[MediaProcessor] Gemini audio (${gModel}) failed:`,
+              res.status,
+              errText.slice(0, 200)
+            );
           }
+        } catch (gErr) {
+          console.warn(`[MediaProcessor] Gemini audio (${gModel}) error:`, gErr.message);
         }
       }
     } catch (err) {

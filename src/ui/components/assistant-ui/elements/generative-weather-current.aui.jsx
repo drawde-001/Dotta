@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeWeatherCurrentHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><div data-aui=\"row\" data-aui-align=\"center\" data-aui-justify=\"between\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-color=\"secondary\">Austin, TX</span><svg data-aui=\"icon\" data-aui-name=\"sun\" data-aui-size=\"lg\" viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"4.5\"></circle><line x1=\"12\" y1=\"2\" x2=\"12\" y2=\"5\"></line><line x1=\"12\" y1=\"19\" x2=\"12\" y2=\"22\"></line><line x1=\"2\" y1=\"12\" x2=\"5\" y2=\"12\"></line><line x1=\"19\" y1=\"12\" x2=\"22\" y2=\"12\"></line><line x1=\"5.5\" y1=\"5.5\" x2=\"7.5\" y2=\"7.5\"></line><line x1=\"16.5\" y1=\"16.5\" x2=\"18.5\" y2=\"18.5\"></line><line x1=\"18.5\" y1=\"5.5\" x2=\"16.5\" y2=\"7.5\"></line><line x1=\"7.5\" y1=\"16.5\" x2=\"5.5\" y2=\"18.5\"></line></svg></div><span data-aui=\"text\" data-aui-size=\"3xl\" data-aui-weight=\"bold\">94°F</span><span data-aui=\"text\" data-aui-size=\"md\" data-aui-color=\"secondary\">Sunny, feels like 98°F</span></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeWeatherCurrent({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-weather-current"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeWeatherCurrentHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeWeatherCurrent;

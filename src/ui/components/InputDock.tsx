@@ -529,8 +529,7 @@ export const InputDock: React.FC<InputDockProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
-  const speechRecognitionRef = useRef<any>(null);
-  const speechTranscriptRef = useRef<string>('');
+  const recordingStartTimeRef = useRef<number>(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const plusMenuTimerRef = useRef<number | null>(null);
@@ -856,8 +855,129 @@ export const InputDock: React.FC<InputDockProps> = ({
     });
   };
 
+  const encodeMono16kWavDataUrl = (samples: Float32Array, sampleRate = 16000): string => {
+    const numSamples = samples.length;
+    const buffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(buffer);
+
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) {
+        view.setUint8(offset + i, str.charCodeAt(i));
+      }
+    };
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true); // PCM chunk size
+    view.setUint16(20, 1, true); // PCM format = 1
+    view.setUint16(22, 1, true); // Mono = 1 channel
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate (sampleRate * blockAlign)
+    view.setUint16(32, 2, true); // block align (1 channel * 2 bytes)
+    view.setUint16(34, 16, true); // 16-bit PCM
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++, offset += 2) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+    }
+
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      binary += String.fromCharCode.apply(null, Array.from(slice));
+    }
+    return `data:audio/wav;base64,${btoa(binary)}`;
+  };
+
+  const convertAudioBlobToWavSegments = async (
+    blob: Blob,
+    fallbackDurationSec: number,
+    maxSegmentSec = 600
+  ): Promise<Array<{ base64Audio: string; durationSec: number; mimeType: string }>> => {
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioCtx = new AudioCtx();
+        try {
+          const decoded: AudioBuffer = await audioCtx.decodeAudioData(arrayBuffer.slice(0));
+          const targetSampleRate = 16000;
+          const totalTargetSamples = Math.max(1, Math.ceil(decoded.duration * targetSampleRate));
+          let monoSamples: Float32Array;
+
+          const OfflineCtx =
+            (window as any).OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+          if (OfflineCtx) {
+            const offlineCtx = new OfflineCtx(1, totalTargetSamples, targetSampleRate);
+            const source = offlineCtx.createBufferSource();
+            source.buffer = decoded;
+            source.connect(offlineCtx.destination);
+            source.start(0);
+            const rendered: AudioBuffer = await offlineCtx.startRendering();
+            monoSamples = rendered.getChannelData(0);
+          } else {
+            const ch0 = decoded.getChannelData(0);
+            const ratio = decoded.sampleRate / targetSampleRate;
+            monoSamples = new Float32Array(totalTargetSamples);
+            for (let i = 0; i < totalTargetSamples; i++) {
+              const srcIdx = Math.min(ch0.length - 1, Math.floor(i * ratio));
+              monoSamples[i] = ch0[srcIdx];
+            }
+          }
+
+          const samplesPerSegment = maxSegmentSec * targetSampleRate;
+          const segments: Array<{ base64Audio: string; durationSec: number; mimeType: string }> = [];
+          for (let start = 0; start < monoSamples.length; start += samplesPerSegment) {
+            const end = Math.min(start + samplesPerSegment, monoSamples.length);
+            const slice = monoSamples.subarray(start, end);
+            const segDurationSec = Math.max(1, Math.round(slice.length / targetSampleRate));
+            const base64Audio = encodeMono16kWavDataUrl(slice, targetSampleRate);
+            segments.push({
+              base64Audio,
+              durationSec: segDurationSec,
+              mimeType: 'audio/wav'
+            });
+          }
+
+          if (segments.length > 0) {
+            return segments;
+          }
+        } finally {
+          try {
+            await audioCtx.close();
+          } catch {}
+        }
+      }
+    } catch {
+      // Fallback to raw base64 data URL if Web Audio decode fails
+    }
+
+    const base64Audio = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result || ''));
+      reader.onerror = () => reject(new Error('Failed to read audio blob'));
+      reader.readAsDataURL(blob);
+    });
+
+    return [
+      {
+        base64Audio,
+        durationSec: Math.max(1, fallbackDurationSec || 5),
+        mimeType: blob.type || 'audio/wav'
+      }
+    ];
+  };
+
   const processIncomingFiles = async (rawFiles: File[]) => {
     const newStaged: StagedAttachment[] = [];
+    const audioFilesToTranscribe: File[] = [];
     const maxSizeBytes = 50 * 1024 * 1024; // 50 MB limit
 
     for (const file of rawFiles) {
@@ -869,6 +989,13 @@ export const InputDock: React.FC<InputDockProps> = ({
       let finalFile = file;
       if (file.type.startsWith('image/') || /\.(bmp|tiff|svg|webp|png|jpe?g)$/i.test(file.name)) {
         finalFile = await processImageFile(file);
+      }
+
+      const isAudioFile =
+        finalFile.type.startsWith('audio/') ||
+        /\.(wav|mp3|m4a|ogg|webm|flac|aac)$/i.test(finalFile.name);
+      if (isAudioFile) {
+        audioFilesToTranscribe.push(finalFile);
       }
 
       const isImage = finalFile.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|ico)$/i.test(finalFile.name);
@@ -888,6 +1015,10 @@ export const InputDock: React.FC<InputDockProps> = ({
       setStagedAttachments((prev) => [...prev, ...newStaged]);
       setAttachedFiles((prev) => [...prev, ...newStaged.map((f) => f.name)]);
       setSelectedFiles((prev) => [...prev, ...newStaged.map((f) => f.file!).filter(Boolean)]);
+    }
+
+    for (const audioFile of audioFilesToTranscribe) {
+      void handleAudioTranscription(audioFile);
     }
   };
 
@@ -910,48 +1041,35 @@ export const InputDock: React.FC<InputDockProps> = ({
         return;
       }
 
-      speechTranscriptRef.current = '';
-
-      // Start browser SpeechRecognition in parallel if supported
-      try {
-        const SpeechRecognitionCtor =
-          (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRecognitionCtor) {
-          const recognition = new SpeechRecognitionCtor();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          recognition.lang = navigator.language || 'en-US';
-          let finalizedText = '';
-          recognition.onresult = (event: any) => {
-            let interimText = '';
-            for (let i = event.resultIndex; i < event.results.length; i++) {
-              const transcriptPiece = event.results[i][0]?.transcript || '';
-              if (event.results[i].isFinal) {
-                finalizedText += transcriptPiece + ' ';
-              } else {
-                interimText += transcriptPiece;
-              }
-            }
-            speechTranscriptRef.current = `${finalizedText}${interimText}`.trim();
-          };
-          recognition.onerror = () => {};
-          recognition.start();
-          speechRecognitionRef.current = recognition;
+      // Explicitly request browser microphone permission (pure MediaRecorder without Web Speech API chime)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          channelCount: 1,
+          sampleRate: 16000,
+          echoCancellation: true,
+          noiseSuppression: true
         }
-      } catch {
-        // Ignore if browser SpeechRecognition fails to initialize
-      }
-
-      // Explicitly requests browser microphone permission
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      });
       audioStreamRef.current = stream;
       audioChunksRef.current = [];
+      recordingStartTimeRef.current = Date.now();
 
-      const options = { mimeType: 'audio/webm;codecs=opus' };
-      let recorder: MediaRecorder;
-      try {
-        recorder = new MediaRecorder(stream, options);
-      } catch {
+      const preferredTypes = [
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/ogg;codecs=opus',
+        'audio/mp4'
+      ];
+      let recorder: MediaRecorder | null = null;
+      for (const mimeType of preferredTypes) {
+        if (typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(mimeType)) {
+          try {
+            recorder = new MediaRecorder(stream, { mimeType });
+            break;
+          } catch {}
+        }
+      }
+      if (!recorder) {
         recorder = new MediaRecorder(stream);
       }
       mediaRecorderRef.current = recorder;
@@ -963,14 +1081,20 @@ export const InputDock: React.FC<InputDockProps> = ({
       };
 
       recorder.onstop = async () => {
+        const elapsedSec = recordingStartTimeRef.current
+          ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
+          : 5;
         const audioBlob = new Blob(audioChunksRef.current, {
-          type: recorder.mimeType || 'audio/webm'
+          type: recorder?.mimeType || 'audio/webm'
         });
         stream.getTracks().forEach((track) => track.stop());
         audioStreamRef.current = null;
         mediaRecorderRef.current = null;
+        recordingStartTimeRef.current = 0;
 
-        await handleAudioTranscription(audioBlob);
+        if (audioBlob.size > 0) {
+          await handleAudioTranscription(audioBlob, elapsedSec);
+        }
       };
 
       recorder.start(250);
@@ -978,12 +1102,6 @@ export const InputDock: React.FC<InputDockProps> = ({
       setIsRecording(true);
     } catch (err: any) {
       console.error('Microphone access error:', err);
-      if (speechRecognitionRef.current) {
-        try {
-          speechRecognitionRef.current.stop();
-        } catch {}
-        speechRecognitionRef.current = null;
-      }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         alert('Microphone permission was denied. Please allow microphone access in your browser to record audio.');
       } else {
@@ -994,12 +1112,6 @@ export const InputDock: React.FC<InputDockProps> = ({
   };
 
   const stopVoiceRecording = () => {
-    if (speechRecognitionRef.current) {
-      try {
-        speechRecognitionRef.current.stop();
-      } catch {}
-      speechRecognitionRef.current = null;
-    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -1007,13 +1119,13 @@ export const InputDock: React.FC<InputDockProps> = ({
   };
 
   const cancelVoiceRecording = () => {
-    if (speechRecognitionRef.current) {
+    recordingStartTimeRef.current = 0;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = null;
       try {
-        speechRecognitionRef.current.abort();
+        mediaRecorderRef.current.stop();
       } catch {}
-      speechRecognitionRef.current = null;
     }
-    speechTranscriptRef.current = '';
     if (audioStreamRef.current) {
       audioStreamRef.current.getTracks().forEach((track) => track.stop());
       audioStreamRef.current = null;
@@ -1025,72 +1137,67 @@ export const InputDock: React.FC<InputDockProps> = ({
     setRecordingSeconds(0);
   };
 
-  const handleAudioTranscription = async (blob: Blob) => {
-    const fallbackBrowserTranscript = speechTranscriptRef.current.trim();
+  const handleAudioTranscription = async (blob: Blob, explicitDurationSec?: number) => {
     try {
       setIsTranscribing(true);
-      const duration = recordingSeconds || 5;
+      const fallbackDuration =
+        explicitDurationSec ||
+        (recordingStartTimeRef.current
+          ? Math.max(1, Math.round((Date.now() - recordingStartTimeRef.current) / 1000))
+          : 0) ||
+        recordingSeconds ||
+        5;
 
-      // 10-minute (600s) segmentation check
-      if (duration > 600) {
-        const segCount = Math.ceil(duration / 600);
-        setTranscribingStatus(`Processing ${segCount} audio segments (10m threshold)...`);
-      } else {
-        setTranscribingStatus('Transcribing audio...');
+      setTranscribingStatus('Converting audio to 16kHz WAV...');
+      const segments = await convertAudioBlobToWavSegments(blob, fallbackDuration, 600);
+
+      const collectedTranscripts: string[] = [];
+      for (let i = 0; i < segments.length; i++) {
+        const seg = segments[i];
+        if (segments.length > 1) {
+          setTranscribingStatus(
+            `Transcribing segment ${i + 1} of ${segments.length} (10m threshold)...`
+          );
+        } else {
+          setTranscribingStatus('Transcribing audio...');
+        }
+
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            audio: seg.base64Audio,
+            durationSec: seg.durationSec,
+            mimeType: seg.mimeType
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const serverTranscript = String(data.transcript || '').trim();
+          if (
+            data.ok &&
+            serverTranscript &&
+            !serverTranscript.startsWith('[Transcribed audio segment')
+          ) {
+            collectedTranscripts.push(serverTranscript);
+          }
+        }
       }
 
-      const reader = new FileReader();
-      reader.readAsDataURL(blob);
-      reader.onloadend = async () => {
-        let inserted = false;
-        try {
-          const base64Audio = reader.result as string;
-          const response = await fetch('/api/transcribe', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              audio: base64Audio,
-              durationSec: duration,
-              mimeType: blob.type
-            })
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            const serverTranscript = (data.transcript || '').trim();
-            if (
-              data.ok &&
-              serverTranscript &&
-              !serverTranscript.startsWith('[Transcribed audio segment')
-            ) {
-              setPromptText((prev) => (prev ? `${prev} ${serverTranscript}` : serverTranscript));
-              promptInputRef.current?.focus();
-              inserted = true;
-            }
-          }
-        } catch (e) {
-          console.error('Failed to transcribe audio via server:', e);
-        } finally {
-          if (!inserted && fallbackBrowserTranscript) {
-            setPromptText((prev) =>
-              prev ? `${prev} ${fallbackBrowserTranscript}` : fallbackBrowserTranscript
-            );
-            promptInputRef.current?.focus();
-          }
-          speechTranscriptRef.current = '';
-          setIsTranscribing(false);
-          setRecordingSeconds(0);
-        }
-      };
+      const finalTranscript = collectedTranscripts.join(' ').trim();
+      if (finalTranscript) {
+        setPromptText((prev) =>
+          prev ? `${prev.trimEnd()} ${finalTranscript}` : finalTranscript
+        );
+        window.setTimeout(() => {
+          adjustTextareaHeight(promptInputRef.current);
+          promptInputRef.current?.focus();
+        }, 0);
+      }
     } catch (err) {
       console.error('Transcription handler error:', err);
-      if (fallbackBrowserTranscript) {
-        setPromptText((prev) =>
-          prev ? `${prev} ${fallbackBrowserTranscript}` : fallbackBrowserTranscript
-        );
-        promptInputRef.current?.focus();
-      }
-      speechTranscriptRef.current = '';
+    } finally {
       setIsTranscribing(false);
       setRecordingSeconds(0);
     }

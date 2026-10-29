@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeChartAreaHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><header data-aui=\"card-title\">Weekly active users</header><div data-aui=\"chart-frame\"><div data-aui=\"chart-ticks\"><div>2,000</div><div>1,500</div><div>1,000</div><div>500</div><div>0</div></div><svg data-aui=\"chart\" data-aui-variant=\"area\" role=\"img\" aria-label=\"area chart with 7 data points\" viewBox=\"0 0 100 40\" preserveAspectRatio=\"none\"><g data-aui=\"chart-series\" data-aui-series=\"0\"><polygon points=\"0,33.6 16.666666666666664,31.8 33.33333333333333,32.4 50,30.799999999999997 66.66666666666666,29.6 83.33333333333334,34 100,34.8 100,40 83.33333333333334,40 66.66666666666666,40 50,40 33.33333333333333,40 16.666666666666664,40 0,40\" fill=\"currentColor\" fill-opacity=\"0.25\"></polygon><polyline points=\"0,33.6 16.666666666666664,31.8 33.33333333333333,32.4 50,30.799999999999997 66.66666666666666,29.6 83.33333333333334,34 100,34.8\" fill=\"none\" stroke=\"currentColor\" vector-effect=\"non-scaling-stroke\"></polyline><circle data-aui=\"chart-point\" cx=\"0\" cy=\"33.6\" r=\"4\" fill=\"transparent\"><title>New users, Mon: 320</title></circle><circle data-aui=\"chart-point\" cx=\"16.666666666666664\" cy=\"31.8\" r=\"4\" fill=\"transparent\"><title>New users, Tue: 410</title></circle><circle data-aui=\"chart-point\" cx=\"33.33333333333333\" cy=\"32.4\" r=\"4\" fill=\"transparent\"><title>New users, Wed: 380</title></circle><circle data-aui=\"chart-point\" cx=\"50\" cy=\"30.799999999999997\" r=\"4\" fill=\"transparent\"><title>New users, Thu: 460</title></circle><circle data-aui=\"chart-point\" cx=\"66.66666666666666\" cy=\"29.6\" r=\"4\" fill=\"transparent\"><title>New users, Fri: 520</title></circle><circle data-aui=\"chart-point\" cx=\"83.33333333333334\" cy=\"34\" r=\"4\" fill=\"transparent\"><title>New users, Sat: 300</title></circle><circle data-aui=\"chart-point\" cx=\"100\" cy=\"34.8\" r=\"4\" fill=\"transparent\"><title>New users, Sun: 260</title></circle></g><g data-aui=\"chart-series\" data-aui-series=\"1\"><polygon points=\"0,15.8 16.666666666666664,13.599999999999998 33.33333333333333,13.599999999999998 50,11.200000000000003 66.66666666666666,9.2 83.33333333333334,18.799999999999997 100,20.8 100,34.8 83.33333333333334,34 66.66666666666666,29.6 50,30.799999999999997 33.33333333333333,32.4 16.666666666666664,31.8 0,33.6\" fill=\"currentColor\" fill-opacity=\"0.25\"></polygon><polyline points=\"0,15.8 16.666666666666664,13.599999999999998 33.33333333333333,13.599999999999998 50,11.200000000000003 66.66666666666666,9.2 83.33333333333334,18.799999999999997 100,20.8\" fill=\"none\" stroke=\"currentColor\" vector-effect=\"non-scaling-stroke\"></polyline><circle data-aui=\"chart-point\" cx=\"0\" cy=\"15.8\" r=\"4\" fill=\"transparent\"><title>Returning users, Mon: 890</title></circle><circle data-aui=\"chart-point\" cx=\"16.666666666666664\" cy=\"13.599999999999998\" r=\"4\" fill=\"transparent\"><title>Returning users, Tue: 910</title></circle><circle data-aui=\"chart-point\" cx=\"33.33333333333333\" cy=\"13.599999999999998\" r=\"4\" fill=\"transparent\"><title>Returning users, Wed: 940</title></circle><circle data-aui=\"chart-point\" cx=\"50\" cy=\"11.200000000000003\" r=\"4\" fill=\"transparent\"><title>Returning users, Thu: 980</title></circle><circle data-aui=\"chart-point\" cx=\"66.66666666666666\" cy=\"9.2\" r=\"4\" fill=\"transparent\"><title>Returning users, Fri: 1,020</title></circle><circle data-aui=\"chart-point\" cx=\"83.33333333333334\" cy=\"18.799999999999997\" r=\"4\" fill=\"transparent\"><title>Returning users, Sat: 760</title></circle><circle data-aui=\"chart-point\" cx=\"100\" cy=\"20.8\" r=\"4\" fill=\"transparent\"><title>Returning users, Sun: 700</title></circle></g></svg><div data-aui=\"chart-xlabels\"><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div></div><div data-aui=\"chart-legend\"><span data-aui=\"chart-legend-item\" data-aui-series=\"0\"><span data-aui=\"chart-legend-swatch\"></span>New users</span><span data-aui=\"chart-legend-item\" data-aui-series=\"1\"><span data-aui=\"chart-legend-swatch\"></span>Returning users</span></div></div></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeChartArea({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-chart-area"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeChartAreaHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeChartArea;

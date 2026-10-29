@@ -510,6 +510,23 @@ function formatRunDuration(ms) {
   return `${mins}m ${remSec}s`;
 }
 
+function extractThinkingStepLabel(text) {
+  if (typeof text !== "string" || !text.trim()) return "Thinking";
+  const lines = text
+    .trim()
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    const boldMatch = line.match(/^\*\*(.+?)\*\*$/);
+    if (boldMatch) return `Thinking · ${boldMatch[1].slice(0, 48)}`;
+    const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
+    if (headingMatch) return `Thinking · ${headingMatch[1].slice(0, 48)}`;
+  }
+  return "Thinking";
+}
+
 function AssistantMessageBody() {
   const [open, setOpen] = useState(true);
   const custom = useAuiState((s) => s.message.metadata?.custom);
@@ -518,6 +535,9 @@ function AssistantMessageBody() {
   const threadIsRunning = useAuiState((s) => s.thread.isRunning);
 
   const isRunning = Boolean(isLast && threadIsRunning);
+  const runStartedAt = custom?.runStartedAt;
+  const runCompletedAt = custom?.runCompletedAt;
+
   const rawParts = Array.isArray(custom?.rawParts)
     ? custom.rawParts
     : (content || []).filter((p) => !(p.type === "text" && !p.text));
@@ -526,7 +546,7 @@ function AssistantMessageBody() {
     if (isRunning) {
       return (
         <div className="py-2">
-          <ThinkingIndicator label="Thinking" />
+          <ThinkingIndicator label="Thinking" startTime={runStartedAt} />
         </div>
       );
     }
@@ -557,15 +577,17 @@ function AssistantMessageBody() {
         content: renderToolCallPart(part),
       });
     } else if (part.type === "reasoning") {
+      const stepLabel = extractThinkingStepLabel(part.text);
       entries.push({
         id: part.id || `reasoning-${idx}`,
         kind: "commentary",
-        label: "Thinking",
+        label: stepLabel,
         content: (
           <Reasoning
             text={part.text}
             status={part.status}
-            streaming={isRunning && part.status?.type === "running"}
+            label={stepLabel}
+            streaming={isRunning && (part.status?.type === "running" || idx === rawParts.length - 1)}
           />
         ),
       });
@@ -573,7 +595,7 @@ function AssistantMessageBody() {
       entries.push({
         id: part.id || `data-${idx}`,
         kind: "tool",
-        label: part.title || part.name || "Updating plan",
+        label: part.title || part.name || "Planning",
         content: renderDataPart(
           part.type === "plan" ? { name: "plan", ...part } : part
         ),
@@ -589,7 +611,7 @@ function AssistantMessageBody() {
         entries.push({
           id: part.id || `commentary-${idx}`,
           kind: "commentary",
-          label: firstLine || "Working",
+          label: firstLine || "Thinking",
           content: (
             <div className="text-foreground/90 leading-relaxed">
               <MarkdownText text={part.text} />
@@ -602,8 +624,6 @@ function AssistantMessageBody() {
     }
   });
 
-  const runStartedAt = custom?.runStartedAt;
-  const runCompletedAt = custom?.runCompletedAt;
   const durationMs =
     runStartedAt && runCompletedAt && runCompletedAt >= runStartedAt
       ? runCompletedAt - runStartedAt
@@ -620,9 +640,26 @@ function AssistantMessageBody() {
           ? "error"
           : "complete";
 
+  // Derive live dynamic status label based on what the agent is currently doing
+  let activeRunningLabel = "Thinking";
+  if (isRunning && rawParts.length > 0) {
+    const lastPart = rawParts[rawParts.length - 1];
+    if (lastPart?.type === "tool-call") {
+      activeRunningLabel = getToolActivityLabel(lastPart) || "Running tool";
+    } else if (lastPart?.type === "reasoning") {
+      activeRunningLabel = extractThinkingStepLabel(lastPart.text);
+    } else if (lastPart?.type === "plan" || lastPart?.type === "data") {
+      activeRunningLabel = lastPart.title || lastPart.name || "Planning";
+    } else if (lastPart?.type === "text" && finalAnswerParts.length > 0) {
+      activeRunningLabel = "Writing response";
+    } else if (entries.length > 0) {
+      activeRunningLabel = entries[entries.length - 1].label || "Thinking";
+    }
+  }
+
   const statusLabel =
     status === "running"
-      ? "Working"
+      ? activeRunningLabel
       : status === "requires-action"
         ? "Needs your input"
         : status === "cancelled"
@@ -668,7 +705,19 @@ function AssistantMessageBody() {
     );
   }
 
-  return finalAnswerNode;
+  if (finalAnswerNode) {
+    return finalAnswerNode;
+  }
+
+  if (isRunning) {
+    return (
+      <div className="py-2">
+        <ThinkingIndicator label={activeRunningLabel} startTime={runStartedAt} />
+      </div>
+    );
+  }
+
+  return null;
 }
 
 function AssistantMessage() {

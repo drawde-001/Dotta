@@ -1,25 +1,15 @@
-import https from 'https';
+import { execFileSync } from 'child_process';
 
 function fetchPage(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        https.get(res.headers.location, (redRes) => {
-          let data = '';
-          redRes.on('data', (c) => (data += c));
-          redRes.on('end', () => resolve({ statusCode: redRes.statusCode, html: data }));
-        }).on('error', reject);
-        return;
-      }
-      let data = '';
-      res.on('data', (c) => (data += c));
-      res.on('end', () => resolve({ statusCode: res.statusCode, html: data }));
-    }).on('error', reject);
+  const html = execFileSync('curl.exe', ['-sL', '-m', '15', url], {
+    encoding: 'utf8',
+    maxBuffer: 15 * 1024 * 1024
   });
+  return { statusCode: html ? 200 : 500, html };
 }
 
 async function run() {
-  const { statusCode, html } = await fetchPage('https://www.assistant-ui.com/elements/loading-state');
+  const { statusCode, html } = fetchPage('https://www.assistant-ui.com/elements/loading-state');
   if (statusCode !== 200) {
     console.error('Failed to fetch elements index, code:', statusCode);
     process.exit(1);

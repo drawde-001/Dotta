@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeStaysHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><header data-aui=\"card-title\">Riverside Loft</header><img data-aui=\"image\" src=\"https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=640&amp;q=80\" alt=\"Cozy loft interior with an open kitchen and a red armchair\"/><div data-aui=\"row\" data-aui-align=\"center\" data-aui-justify=\"between\"><p data-aui=\"caption\">Alfama · 2 guests · 1 bed</p><span data-aui=\"badge\" data-aui-variant=\"success\">4.9</span></div><button type=\"button\" data-aui=\"button\" data-aui-style=\"primary\" data-aui-block=\"true\" data-aui-action=\"{&quot;type&quot;:&quot;book_stay&quot;,&quot;stayId&quot;:&quot;riverside-loft&quot;}\">Book for $142/night</button></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeStays({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-stays"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeStaysHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeStays;
