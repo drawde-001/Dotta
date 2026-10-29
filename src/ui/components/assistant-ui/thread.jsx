@@ -51,6 +51,19 @@ import {
 import { Reasoning, ReasoningRoot, ReasoningTrigger, ReasoningContent, ReasoningText } from "@/components/assistant-ui/elements/reasoning.aui";
 import { Sources } from "@/components/assistant-ui/elements/sources.aui";
 import { Plan } from "@/components/assistant-ui/elements/plan.aui";
+import {
+  ThinkingIndicator,
+  ToolCall,
+  TerminalBlock,
+  CodeDiff,
+  ReviewableDiff,
+  FileTree,
+  AgentPlan,
+  GuardrailNotice,
+  ConfidenceMarker,
+  ReasoningEffort,
+  ErrorState,
+} from "@/components/assistant-ui/elements";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
 import { cn } from "@/lib/utils";
 
@@ -513,12 +526,78 @@ function AssistantMessage() {
                   return <MarkdownText />;
                 case "image":
                   return <MessagePartPrimitive.Image />;
-                case "tool-call":
-                  return part.toolUI ?? <ToolFallback {...part} />;
-                case "plan":
-                  return <Plan {...part} />;
-                case "data":
-                  return part.name === 'plan' || part.data?.steps ? <Plan {...(part.data || part)} /> : part.dataRendererUI;
+                case "tool-call": {
+                  if (part.toolUI) return part.toolUI;
+                  const toolName = part.toolName || part.name || 'tool';
+                  const args = part.args || part.arguments;
+                  if (['bash', 'terminal', 'run_command', 'execute_command'].includes(toolName)) {
+                    const cmd = (args && typeof args === 'object' ? args.command || args.CommandLine : args) || toolName;
+                    const outputStr = part.result ? (typeof part.result === 'string' ? part.result : JSON.stringify(part.result)) : '';
+                    const outputLines = outputStr ? outputStr.split('\n').filter(Boolean) : [];
+                    return (
+                      <div className="my-2">
+                        <TerminalBlock
+                          command={typeof cmd === 'string' ? cmd : JSON.stringify(cmd)}
+                          state={part.status?.type === 'running' ? 'running' : part.status?.type === 'error' ? 'failed' : 'done'}
+                          output={outputLines.slice(0, 8)}
+                        />
+                      </div>
+                    );
+                  }
+                  if (['edit_file', 'replace_file_content', 'code_diff'].includes(toolName)) {
+                    const filename = (args && typeof args === 'object' ? args.TargetFile || args.path || args.filename : 'code');
+                    return (
+                      <div className="my-2">
+                        <CodeDiff filename={typeof filename === 'string' ? filename.split(/[/\\]/).pop() : 'edit'} />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="my-1.5">
+                      <ToolCall
+                        toolName={toolName}
+                        completedName={toolName}
+                        argument={args ? (typeof args === 'string' ? args : JSON.stringify(args).slice(0, 45)) : ''}
+                        result={part.result}
+                        isComplete={part.status?.type !== 'running'}
+                      />
+                    </div>
+                  );
+                }
+                case "plan": {
+                  const pData = part.data || part;
+                  return (
+                    <div className="my-2">
+                      <AgentPlan title={pData.title || "Plan"} steps={pData.steps || []} />
+                    </div>
+                  );
+                }
+                case "data": {
+                  const dName = part.name;
+                  const d = part.data || part;
+                  if (dName === 'plan' || d?.steps) {
+                    return <div className="my-2"><AgentPlan title={d.title || "Plan"} steps={d.steps || []} /></div>;
+                  }
+                  if (dName === 'code_diff') {
+                    return <div className="my-2"><CodeDiff {...d} /></div>;
+                  }
+                  if (dName === 'file_tree') {
+                    return <div className="my-2"><FileTree {...d} /></div>;
+                  }
+                  if (dName === 'terminal') {
+                    return <div className="my-2"><TerminalBlock {...d} /></div>;
+                  }
+                  if (dName === 'guardrail') {
+                    return <div className="my-2"><GuardrailNotice {...d} /></div>;
+                  }
+                  if (dName === 'confidence') {
+                    return <div className="my-2"><ConfidenceMarker {...d} /></div>;
+                  }
+                  if (dName === 'reasoning_effort') {
+                    return <div className="my-2"><ReasoningEffort {...d} /></div>;
+                  }
+                  return part.dataRendererUI;
+                }
                 case "indicator":
                   return <span style={{ fontFamily: "revert" }}>{" \u25CF"}</span>;
                 default:
@@ -532,9 +611,8 @@ function AssistantMessage() {
         </MessagePrimitive.GroupedParts>
         <MessageError />
         <AuiIf condition={(s) => s.thread.isRunning && s.message.content.length === 0}>
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <LoaderIcon className="size-4 animate-spin" />
-            <span className="text-sm">Thinking...</span>
+          <div className="py-2.5">
+            <ThinkingIndicator label="Thinking" />
           </div>
         </AuiIf>
       </div>
