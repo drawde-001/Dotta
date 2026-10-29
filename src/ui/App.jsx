@@ -295,45 +295,9 @@ export default function App() {
                   toolCallId: event.id || `call-${Date.now()}`,
                   toolName: event.name,
                   args: event.args || {},
-                  argsText: JSON.stringify(event.args || {})
+                  argsText: JSON.stringify(event.args || {}),
+                  status: { type: 'running' }
                 });
-
-                // Update or create Plan trajectory as DataMessagePart
-                const stepTitle = event.args?.stepTitle || event.name;
-                const newStep = {
-                  id: event.id || `step-${Date.now()}`,
-                  title: stepTitle,
-                  description:
-                    event.args?.query ||
-                    event.args?.url ||
-                    event.args?.command ||
-                    event.args?.selectorOrText ||
-                    '',
-                  status: 'running'
-                };
-                const planIdx = contentParts.findIndex((c) => c.type === 'data' && c.name === 'plan');
-                if (planIdx >= 0) {
-                  const existingSteps = contentParts[planIdx].data?.steps || [];
-                  contentParts[planIdx] = {
-                    type: 'data',
-                    name: 'plan',
-                    data: {
-                      title: 'Agent Trajectory',
-                      status: 'running',
-                      steps: [...existingSteps, newStep]
-                    }
-                  };
-                } else {
-                  contentParts.unshift({
-                    type: 'data',
-                    name: 'plan',
-                    data: {
-                      title: 'Agent Trajectory',
-                      status: 'running',
-                      steps: [newStep]
-                    }
-                  });
-                }
 
                 // Auto-open live browser when browser tool runs
                 if (
@@ -352,28 +316,7 @@ export default function App() {
                   contentParts[tcIdx] = {
                     ...contentParts[tcIdx],
                     result: event.output,
-                    status: { type: 'complete' }
-                  };
-                }
-
-                // Update Plan trajectory step status
-                const planIdx = contentParts.findIndex((c) => c.type === 'data' && c.name === 'plan');
-                if (planIdx >= 0 && contentParts[planIdx].data?.steps) {
-                  const updatedSteps = contentParts[planIdx].data.steps.map((s) => {
-                    if (s.id === event.id || s.title === (event.name || event.args?.stepTitle)) {
-                      return { ...s, status: event.status === 'error' ? 'failed' : 'done' };
-                    }
-                    return s;
-                  });
-                  const allDone = updatedSteps.every((s) => s.status === 'done');
-                  contentParts[planIdx] = {
-                    type: 'data',
-                    name: 'plan',
-                    data: {
-                      title: 'Agent Trajectory',
-                      status: allDone ? 'done' : 'running',
-                      steps: updatedSteps
-                    }
+                    status: { type: event.status === 'error' ? 'error' : 'complete' }
                   };
                 }
               }
