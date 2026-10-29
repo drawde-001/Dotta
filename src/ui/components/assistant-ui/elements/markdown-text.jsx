@@ -2,12 +2,10 @@ import React from 'react';
 import { useAuiState } from '@assistant-ui/react';
 import { MarkdownRenderer } from '@/components/MarkdownRenderer';
 
-export function MarkdownText() {
-  const text = useAuiState((s) => {
-    // If inside a text part
+export function MarkdownText({ text: propText, content: propContent, children } = {}) {
+  const auiText = useAuiState((s) => {
     const part = s.part;
     if (part && typeof part.text === 'string') return part.text;
-    // Otherwise from message
     const msg = s.message;
     if (msg && Array.isArray(msg.content)) {
       return msg.content
@@ -18,5 +16,14 @@ export function MarkdownText() {
     return typeof msg?.content === 'string' ? msg.content : '';
   });
 
-  return <MarkdownRenderer content={text} />;
+  const resolvedText =
+    typeof propText === 'string'
+      ? propText
+      : typeof propContent === 'string'
+        ? propContent
+        : typeof children === 'string'
+          ? children
+          : auiText;
+
+  return <MarkdownRenderer content={resolvedText} />;
 }

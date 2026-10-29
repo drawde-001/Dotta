@@ -23,7 +23,7 @@ import {
 
 /**
  * Tool to Component Registry
- * Maps tool call names to specialized 1:1 assistant-ui components.
+ * Maps explicit UI element tool names to specialized 1:1 assistant-ui components.
  */
 const toolRenderers = new Map();
 
@@ -55,180 +55,80 @@ export function registerDataRenderer(dataName, renderer) {
   }
 }
 
+/**
+ * Derive a concise human-readable activity label for RunActivity while a tool is running
+ */
+export function getToolActivityLabel(part) {
+  const toolName = String(part?.toolName || part?.name || 'tool');
+  const lower = toolName.toLowerCase();
+  const args = part?.args || part?.arguments || {};
+
+  if (args && typeof args === 'object' && args.stepTitle) {
+    return String(args.stepTitle);
+  }
+
+  if (lower === 'file_read' || lower === 'read_file' || lower === 'view_file') {
+    const file = args?.path || args?.file || args?.filename || '';
+    const base = typeof file === 'string' && file ? file.split(/[/\\]/).pop() : 'files';
+    return `Reading ${base}`;
+  }
+  if (lower === 'file_write' || lower === 'write_file' || lower === 'file_edit' || lower === 'edit_file') {
+    const file = args?.path || args?.file || args?.filename || '';
+    const base = typeof file === 'string' && file ? file.split(/[/\\]/).pop() : 'file';
+    return `Updating ${base}`;
+  }
+  if (lower === 'file_list' || lower === 'list_files') {
+    return `Listing workspace files`;
+  }
+  if (lower === 'file_search' || lower === 'search_files') {
+    return `Searching files${args?.query ? ` for "${args.query}"` : ''}`;
+  }
+  if (lower === 'shell_run' || lower === 'run_command' || lower === 'bash') {
+    const cmd = args?.command || args?.CommandLine || args?.cmd || '';
+    if (typeof cmd === 'string' && cmd.includes('test')) return 'Running the tests';
+    return cmd ? `Running ${String(cmd).slice(0, 48)}` : 'Running command';
+  }
+  if (lower === 'browser_search' || lower === 'web_search') {
+    return args?.query ? `Searching web for "${args.query}"` : 'Searching the web';
+  }
+  if (lower === 'browser_read_page' || lower === 'read_page') {
+    return args?.url ? `Reading ${args.url}` : 'Reading webpage';
+  }
+  if (lower === 'browser_action') {
+    return args?.action ? `Performing browser ${args.action}` : 'Interacting with browser';
+  }
+  if (lower === 'snapshot_read' || lower === 'browser_screenshot') {
+    return 'Inspecting live browser page';
+  }
+  return `Running ${toolName}`;
+}
+
 // ==========================================
-// Default Tool Renderers
+// Explicit Specialized Element Tool Renderers
 // ==========================================
 
-// Terminal & Shell Execution tools
-registerToolComponent(
-  ['shell_run', 'shell_output', 'bash', 'terminal', 'run_command', 'execute_command', 'cmd_run'],
-  ({ toolName, args, result, status }) => {
-    const cmd =
-      (args && typeof args === 'object'
-        ? args.command || args.CommandLine || args.cmd || args.stepTitle
-        : args) || toolName;
-    const outputStr = result
-      ? typeof result === 'string'
-        ? result
-        : JSON.stringify(result, null, 2)
-      : '';
-    const outputLines = outputStr ? outputStr.split('\n').filter(Boolean) : [];
-    const state =
-      status?.type === 'running'
-        ? 'running'
-        : status?.type === 'error'
-        ? 'failed'
-        : 'done';
+registerToolComponent(['code_diff', 'patch_preview'], ({ args }) => {
+  const filename = args?.path || args?.filename || 'file';
+  const cleanName = typeof filename === 'string' ? filename.split(/[/\\]/).pop() : 'edit';
+  return (
+    <div className="my-1.5">
+      <CodeDiff
+        filename={cleanName}
+        oldCode={args?.old_text || args?.oldCode || ''}
+        newCode={args?.new_text || args?.newCode || ''}
+      />
+    </div>
+  );
+});
 
-    return (
-      <div className="my-2">
-        <TerminalBlock
-          command={typeof cmd === 'string' ? cmd : JSON.stringify(cmd)}
-          state={state}
-          output={outputLines.slice(0, 10)}
-        />
-      </div>
-    );
-  }
-);
-
-// Code Edit & Diff tools
-registerToolComponent(
-  ['file_edit', 'edit_file', 'replace_file_content', 'code_diff', 'patch_file'],
-  ({ toolName, args, result, status }) => {
-    const filename =
-      (args && typeof args === 'object'
-        ? args.path || args.TargetFile || args.filename || args.filePath
-        : 'code') || 'file';
-    const oldCode = args?.old_text || args?.TargetContent || '';
-    const newCode = args?.new_text || args?.ReplacementContent || '';
-    const cleanName = typeof filename === 'string' ? filename.split(/[/\\]/).pop() : 'edit';
-
-    return (
-      <div className="my-2">
-        <CodeDiff
-          filename={cleanName}
-          oldCode={oldCode}
-          newCode={newCode}
-        />
-      </div>
-    );
-  }
-);
-
-// File Tree / File List tools
-registerToolComponent(
-  ['file_list', 'list_files', 'workspace_files', 'dir_list', 'directory_list'],
-  ({ toolName, args, result, status }) => {
-    let files = [];
-    if (result && Array.isArray(result)) {
-      files = result;
-    } else if (result && typeof result === 'object' && Array.isArray(result.files)) {
-      files = result.files;
-    } else if (typeof result === 'string') {
-      try {
-        const parsed = JSON.parse(result);
-        if (Array.isArray(parsed)) files = parsed;
-        else if (Array.isArray(parsed.files)) files = parsed.files;
-      } catch {}
-    }
-
-    const title = (args && typeof args === 'object' && args.path) ? args.path : 'Workspace Files';
-
-    if (files.length > 0) {
-      return (
-        <div className="my-2">
-          <FileTree title={title} files={files} />
-        </div>
-      );
-    }
-
-    return (
-      <div className="my-1.5">
-        <ToolCall
-          toolName="file_list"
-          completedName="file_list"
-          argument={args ? (typeof args === 'string' ? args : JSON.stringify(args).slice(0, 50)) : ''}
-          result={result}
-          isComplete={status?.type !== 'running'}
-        />
-      </div>
-    );
-  }
-);
-
-// Browser Action & Computer Use tools
-registerToolComponent(
-  ['browser_action', 'computer_use', 'mouse_click', 'keyboard_type'],
-  ({ toolName, args, result, status }) => {
-    const action = args?.action || 'Interact';
-    const target = args?.selectorOrText || args?.stepTitle || '';
-    return (
-      <div className="my-2">
-        <ComputerUse
-          action={action}
-          target={target}
-          status={status?.type === 'running' ? 'running' : 'done'}
-          screenshot={result?.screenshot}
-        />
-      </div>
-    );
-  }
-);
-
-// Code Runner tools
-registerToolComponent(
-  ['code_runner', 'run_code', 'eval_code', 'python_run', 'node_run'],
-  ({ toolName, args, result, status }) => {
-    const code = args?.code || (typeof args === 'string' ? args : '');
-    const language = args?.language || 'javascript';
-    return (
-      <div className="my-2">
-        <CodeRunner
-          code={code}
-          language={language}
-          output={typeof result === 'string' ? result : JSON.stringify(result)}
-          status={status?.type === 'running' ? 'running' : 'done'}
-        />
-      </div>
-    );
-  }
-);
-
-// MCP tools
-registerToolComponent(
-  ['call_mcp_tool', 'mcp_tool', 'mcp_server'],
-  ({ toolName, args, result, status }) => {
-    const serverName = args?.ServerName || args?.server || 'mcp';
-    const tool = args?.ToolName || args?.tool || toolName;
-    return (
-      <div className="my-2">
-        <McpServerPanel
-          serverName={serverName}
-          toolName={tool}
-          status={status?.type === 'running' ? 'connecting' : 'active'}
-        />
-      </div>
-    );
-  }
-);
-
-// Permission Grant tools
-registerToolComponent(
-  ['file_delete', 'delete_file', 'request_permission', 'grant_permission'],
-  ({ toolName, args, result, status }) => {
-    const title = args?.stepTitle || `Permission requested: ${toolName}`;
-    const description = args?.path ? `Target path: ${args.path}` : JSON.stringify(args || {});
-    return (
-      <div className="my-2">
-        <PermissionGrant
-          title={title}
-          description={description}
-        />
-      </div>
-    );
-  }
-);
+registerToolComponent(['agent_plan', 'create_plan'], ({ args, result }) => {
+  const planData = result || args || {};
+  return (
+    <div className="my-1.5">
+      <AgentPlan title={planData.title || 'Plan'} steps={planData.steps || []} activeIndex={planData.activeIndex ?? 0} />
+    </div>
+  );
+});
 
 // ==========================================
 // Default Data Part Renderers
@@ -238,7 +138,7 @@ registerDataRenderer(['plan', 'agent_plan'], (data) => {
   const planData = data.data || data;
   return (
     <div className="my-2">
-      <AgentPlan title={planData.title || 'Plan'} steps={planData.steps || []} />
+      <AgentPlan title={planData.title || 'Plan'} steps={planData.steps || []} activeIndex={planData.activeIndex ?? 0} />
     </div>
   );
 });
@@ -314,7 +214,7 @@ registerDataRenderer('elicitation_form', (data) => (
 // ==========================================
 
 /**
- * Render any tool-call part using the registered specialized component or ToolCall fallback
+ * Render any tool-call part using the registered specialized component or official ToolFallback
  */
 export function renderToolCallPart(part) {
   const toolName = (part.toolName || part.name || 'tool').toLowerCase();
@@ -335,23 +235,15 @@ export function renderToolCallPart(part) {
     }
   }
 
-  // Universal Fallback: Collapsible 1:1 ToolCall card
-  const argDisplay = args
-    ? typeof args === 'string'
-      ? args
-      : (args.stepTitle || JSON.stringify(args).slice(0, 45))
-    : '';
-
   return (
-    <div className="my-1.5">
-      <ToolCall
-        toolName={part.toolName || part.name || 'tool'}
-        completedName={part.toolName || part.name || 'tool'}
-        argument={argDisplay}
-        result={part.result}
-        isComplete={part.status?.type !== 'running'}
-      />
-    </div>
+    <ToolFallback
+      toolName={part.toolName || part.name || 'tool'}
+      args={args}
+      argsText={part.argsText}
+      result={part.result}
+      status={part.status}
+      elapsedMs={part.elapsedMs}
+    />
   );
 }
 
@@ -370,12 +262,11 @@ export function renderDataPart(part) {
     }
   }
 
-  // If part has steps, it's an AgentPlan
   if (part.data?.steps || part.steps) {
     const pData = part.data || part;
     return (
       <div className="my-2">
-        <AgentPlan title={pData.title || 'Plan'} steps={pData.steps || []} />
+        <AgentPlan title={pData.title || 'Plan'} steps={pData.steps || []} activeIndex={pData.activeIndex ?? 0} />
       </div>
     );
   }

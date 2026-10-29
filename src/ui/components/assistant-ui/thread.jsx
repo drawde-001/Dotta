@@ -53,6 +53,7 @@ import { Sources } from "@/components/assistant-ui/elements/sources.aui";
 import {
   ThinkingIndicator,
   TypingIndicator,
+  RunActivity,
   ToolCall,
   TerminalBlock,
   CodeDiff,
@@ -65,7 +66,13 @@ import {
   ErrorState,
 } from "@/components/assistant-ui/elements";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
-import { renderToolCallPart, renderDataPart, registerToolComponent, registerDataRenderer } from "./tool-registry";
+import {
+  renderToolCallPart,
+  renderDataPart,
+  getToolActivityLabel,
+  registerToolComponent,
+  registerDataRenderer,
+} from "./tool-registry";
 import { cn } from "@/lib/utils";
 
 export { registerToolComponent, registerDataRenderer };
@@ -492,6 +499,178 @@ function EditComposer() {
   );
 }
 
+function formatRunDuration(ms) {
+  if (!ms || ms <= 0) return undefined;
+  const sec = ms / 1000;
+  if (sec < 60) {
+    return `${sec.toFixed(1)}s`;
+  }
+  const mins = Math.floor(sec / 60);
+  const remSec = Math.round(sec % 60);
+  return `${mins}m ${remSec}s`;
+}
+
+function AssistantMessageBody() {
+  const [open, setOpen] = useState(true);
+  const custom = useAuiState((s) => s.message.metadata?.custom);
+  const content = useAuiState((s) => s.message.content);
+  const isLast = useAuiState((s) => s.message.isLast);
+  const threadIsRunning = useAuiState((s) => s.thread.isRunning);
+
+  const isRunning = Boolean(isLast && threadIsRunning);
+  const rawParts = Array.isArray(custom?.rawParts)
+    ? custom.rawParts
+    : (content || []).filter((p) => !(p.type === "text" && !p.text));
+
+  if (rawParts.length === 0) {
+    if (isRunning) {
+      return (
+        <div className="py-2">
+          <ThinkingIndicator label="Thinking" />
+        </div>
+      );
+    }
+    return null;
+  }
+
+  // Find last non-text activity part (tool-call, reasoning, plan, data)
+  let lastActivityIdx = -1;
+  for (let i = rawParts.length - 1; i >= 0; i--) {
+    if (rawParts[i].type !== "text") {
+      lastActivityIdx = i;
+      break;
+    }
+  }
+
+  const entries = [];
+  const finalAnswerParts = [];
+  const sourceParts = [];
+
+  rawParts.forEach((part, idx) => {
+    if (!part) return;
+
+    if (part.type === "tool-call") {
+      entries.push({
+        id: part.toolCallId || `tool-${idx}`,
+        kind: "tool",
+        label: getToolActivityLabel(part),
+        content: renderToolCallPart(part),
+      });
+    } else if (part.type === "reasoning") {
+      entries.push({
+        id: part.id || `reasoning-${idx}`,
+        kind: "commentary",
+        label: "Thinking",
+        content: (
+          <Reasoning
+            text={part.text}
+            status={part.status}
+            streaming={isRunning && part.status?.type === "running"}
+          />
+        ),
+      });
+    } else if (part.type === "plan" || part.type === "data") {
+      entries.push({
+        id: part.id || `data-${idx}`,
+        kind: "tool",
+        label: part.title || part.name || "Updating plan",
+        content: renderDataPart(
+          part.type === "plan" ? { name: "plan", ...part } : part
+        ),
+      });
+    } else if (part.type === "source") {
+      sourceParts.push(part);
+    } else if (part.type === "text") {
+      const trimmed = (part.text || "").trim();
+      if (!trimmed) return;
+
+      if (idx < lastActivityIdx) {
+        const firstLine = trimmed.split("\n")[0].replace(/^[#>*-\s]+/, "").slice(0, 72);
+        entries.push({
+          id: part.id || `commentary-${idx}`,
+          kind: "commentary",
+          label: firstLine || "Working",
+          content: (
+            <div className="text-foreground/90 leading-relaxed">
+              <MarkdownText text={part.text} />
+            </div>
+          ),
+        });
+      } else {
+        finalAnswerParts.push(part);
+      }
+    }
+  });
+
+  const runStartedAt = custom?.runStartedAt;
+  const runCompletedAt = custom?.runCompletedAt;
+  const durationMs =
+    runStartedAt && runCompletedAt && runCompletedAt >= runStartedAt
+      ? runCompletedAt - runStartedAt
+      : undefined;
+  const durationLabel = !isRunning ? formatRunDuration(durationMs) : undefined;
+
+  const status = isRunning
+    ? "running"
+    : custom?.runStatus === "requires-action"
+      ? "requires-action"
+      : custom?.runStatus === "cancelled"
+        ? "cancelled"
+        : custom?.runStatus === "error"
+          ? "error"
+          : "complete";
+
+  const statusLabel =
+    status === "running"
+      ? "Working"
+      : status === "requires-action"
+        ? "Needs your input"
+        : status === "cancelled"
+          ? durationLabel != null
+            ? "Stopped after"
+            : "Stopped"
+          : status === "error"
+            ? durationLabel != null
+              ? "Failed after"
+              : "Failed"
+            : durationLabel != null
+              ? "Worked for"
+              : "Completed";
+
+  const finalAnswerNode =
+    finalAnswerParts.length > 0 ? (
+      <div className="flex flex-col gap-3 text-foreground leading-relaxed">
+        {finalAnswerParts.map((part, idx) => (
+          <MarkdownText key={part.id || `ans-${idx}`} text={part.text} />
+        ))}
+        {sourceParts.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {sourceParts.map((sp, i) => (
+              <Sources key={sp.id || i} {...sp} />
+            ))}
+          </div>
+        )}
+      </div>
+    ) : null;
+
+  if (entries.length > 0) {
+    return (
+      <RunActivity
+        status={status}
+        statusLabel={statusLabel}
+        durationLabel={durationLabel}
+        entries={entries}
+        open={open}
+        onOpenChange={setOpen}
+      >
+        {finalAnswerNode}
+      </RunActivity>
+    );
+  }
+
+  return finalAnswerNode;
+}
+
 function AssistantMessage() {
   return (
     <MessagePrimitive.Root
@@ -499,64 +678,8 @@ function AssistantMessage() {
       data-role="assistant"
     >
       <div className="break-words leading-relaxed text-foreground">
-        <MessagePrimitive.GroupedParts
-          groupBy={groupPartByType({
-            reasoning: ["group-reasoning"],
-            source: ["group-source"],
-          })}
-        >
-          {({ part, children }) => {
-            try {
-              switch (part.type) {
-                case "group-reasoning": {
-                  const running = part.status?.type === "running";
-                  return (
-                    <ReasoningRoot variant="muted" className="mb-0" streaming={running}>
-                      <ReasoningTrigger active={running} />
-                      <ReasoningContent aria-busy={running}>
-                        <ReasoningText>{children}</ReasoningText>
-                      </ReasoningContent>
-                    </ReasoningRoot>
-                  );
-                }
-                case "reasoning":
-                  return <Reasoning {...part} />;
-                case "group-source":
-                  return <div className="mt-2 flex flex-wrap gap-1.5">{children}</div>;
-                case "source":
-                  return <Sources {...part} />;
-                case "text":
-                  return <MarkdownText />;
-                case "image":
-                  return <MessagePartPrimitive.Image />;
-                case "tool-call":
-                  return renderToolCallPart(part);
-                case "plan":
-                  return renderDataPart({ name: 'plan', ...part });
-                case "data":
-                  return renderDataPart(part);
-                case "indicator":
-                  return null;
-                default:
-                  return null;
-              }
-            } catch (err) {
-              console.error("Error rendering message part:", part, err);
-              return null;
-            }
-          }}
-        </MessagePrimitive.GroupedParts>
+        <AssistantMessageBody />
         <MessageError />
-        <AuiIf condition={(s) => s.thread.isRunning && s.message.content.length === 0}>
-          <div className="py-2.5">
-            <ThinkingIndicator label="Thinking" />
-          </div>
-        </AuiIf>
-        <AuiIf condition={(s) => s.thread.isRunning && s.message.content.length > 0}>
-          <div className="py-2">
-            <TypingIndicator />
-          </div>
-        </AuiIf>
       </div>
 
       <div className="mt-1 ml-2 flex min-h-6 items-center">

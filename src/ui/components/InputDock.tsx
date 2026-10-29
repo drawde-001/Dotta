@@ -529,6 +529,8 @@ export const InputDock: React.FC<InputDockProps> = ({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioStreamRef = useRef<MediaStream | null>(null);
+  const speechRecognitionRef = useRef<any>(null);
+  const speechTranscriptRef = useRef<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const plusMenuTimerRef = useRef<number | null>(null);
@@ -908,6 +910,38 @@ export const InputDock: React.FC<InputDockProps> = ({
         return;
       }
 
+      speechTranscriptRef.current = '';
+
+      // Start browser SpeechRecognition in parallel if supported
+      try {
+        const SpeechRecognitionCtor =
+          (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognitionCtor) {
+          const recognition = new SpeechRecognitionCtor();
+          recognition.continuous = true;
+          recognition.interimResults = true;
+          recognition.lang = navigator.language || 'en-US';
+          let finalizedText = '';
+          recognition.onresult = (event: any) => {
+            let interimText = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcriptPiece = event.results[i][0]?.transcript || '';
+              if (event.results[i].isFinal) {
+                finalizedText += transcriptPiece + ' ';
+              } else {
+                interimText += transcriptPiece;
+              }
+            }
+            speechTranscriptRef.current = `${finalizedText}${interimText}`.trim();
+          };
+          recognition.onerror = () => {};
+          recognition.start();
+          speechRecognitionRef.current = recognition;
+        }
+      } catch {
+        // Ignore if browser SpeechRecognition fails to initialize
+      }
+
       // Explicitly requests browser microphone permission
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
@@ -944,6 +978,12 @@ export const InputDock: React.FC<InputDockProps> = ({
       setIsRecording(true);
     } catch (err: any) {
       console.error('Microphone access error:', err);
+      if (speechRecognitionRef.current) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch {}
+        speechRecognitionRef.current = null;
+      }
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         alert('Microphone permission was denied. Please allow microphone access in your browser to record audio.');
       } else {
@@ -954,6 +994,12 @@ export const InputDock: React.FC<InputDockProps> = ({
   };
 
   const stopVoiceRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
@@ -961,6 +1007,13 @@ export const InputDock: React.FC<InputDockProps> = ({
   };
 
   const cancelVoiceRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.abort();
+      } catch {}
+      speechRecognitionRef.current = null;
+    }
+    speechTranscriptRef.current = '';
     if (audioStreamRef.current) {
       audioStreamRef.current.getTracks().forEach((track) => track.stop());
       audioStreamRef.current = null;
@@ -973,6 +1026,7 @@ export const InputDock: React.FC<InputDockProps> = ({
   };
 
   const handleAudioTranscription = async (blob: Blob) => {
+    const fallbackBrowserTranscript = speechTranscriptRef.current.trim();
     try {
       setIsTranscribing(true);
       const duration = recordingSeconds || 5;
@@ -988,6 +1042,7 @@ export const InputDock: React.FC<InputDockProps> = ({
       const reader = new FileReader();
       reader.readAsDataURL(blob);
       reader.onloadend = async () => {
+        let inserted = false;
         try {
           const base64Audio = reader.result as string;
           const response = await fetch('/api/transcribe', {
@@ -1002,20 +1057,40 @@ export const InputDock: React.FC<InputDockProps> = ({
 
           if (response.ok) {
             const data = await response.json();
-            if (data.ok && data.transcript && !data.transcript.startsWith('[Transcribed audio segment')) {
-              setPromptText((prev) => (prev ? `${prev} ${data.transcript}` : data.transcript));
+            const serverTranscript = (data.transcript || '').trim();
+            if (
+              data.ok &&
+              serverTranscript &&
+              !serverTranscript.startsWith('[Transcribed audio segment')
+            ) {
+              setPromptText((prev) => (prev ? `${prev} ${serverTranscript}` : serverTranscript));
               promptInputRef.current?.focus();
+              inserted = true;
             }
           }
         } catch (e) {
-          console.error('Failed to transcribe audio:', e);
+          console.error('Failed to transcribe audio via server:', e);
         } finally {
+          if (!inserted && fallbackBrowserTranscript) {
+            setPromptText((prev) =>
+              prev ? `${prev} ${fallbackBrowserTranscript}` : fallbackBrowserTranscript
+            );
+            promptInputRef.current?.focus();
+          }
+          speechTranscriptRef.current = '';
           setIsTranscribing(false);
           setRecordingSeconds(0);
         }
       };
     } catch (err) {
       console.error('Transcription handler error:', err);
+      if (fallbackBrowserTranscript) {
+        setPromptText((prev) =>
+          prev ? `${prev} ${fallbackBrowserTranscript}` : fallbackBrowserTranscript
+        );
+        promptInputRef.current?.focus();
+      }
+      speechTranscriptRef.current = '';
       setIsTranscribing(false);
       setRecordingSeconds(0);
     }
