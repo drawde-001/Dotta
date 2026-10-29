@@ -9,18 +9,29 @@
 
 import { getApiKey } from '../env.js';
 
-export const MUSE_UI_MODEL_IDS = ['meta-muse-spark'];
+export const MUSE_UI_MODEL_IDS = [
+  'muse-wonder-1.0',
+  'muse-spark-1.3',
+  'muse-spark-1.2',
+  'muse-spark-1.1',
+  'meta-muse-spark'
+];
 
 export function isMuseModel(id) {
   const m = String(id || '').toLowerCase();
-  return m.startsWith('meta-muse') || m.startsWith('muse-');
+  return (
+    m.startsWith('meta-muse') ||
+    m.startsWith('muse-') ||
+    m === 'sam-3.1'
+  );
 }
 
 /** Resolve the real provider model id from a UI model id. */
 export function resolveMuseWireModel(requestedModel) {
-  const req = String(requestedModel || '');
+  const req = String(requestedModel || '').trim();
   if (req.toLowerCase().startsWith('muse-')) return req;
-  return process.env.META_MUSE_MODEL || 'muse-spark-1.3';
+  if (req.toLowerCase() === 'meta-muse-spark') return 'muse-spark-1.3';
+  return process.env.META_MUSE_MODEL || process.env.MODEL_ID || 'muse-spark-1.3';
 }
 
 /** Internal schema types are UPPERCASE; OpenAI JSON Schema needs lowercase. */
@@ -200,12 +211,12 @@ export async function callMuseStream({
   tools = null,
   generationConfig = {}
 }) {
-  const activeKey = apiKey || getApiKey('META_MUSE_API_KEY');
+  const activeKey = apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
   if (!activeKey) {
-    throw new Error('META_MUSE_API_KEY is not set on the server (.env / .env.local).');
+    throw new Error('MODEL_API_KEY (or META_MUSE_API_KEY) is not set on the server (.env / .env.local).');
   }
 
-  const baseUrl = (process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
+  const baseUrl = (process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
   const model = resolveMuseWireModel(requestedModel);
 
   const payload = {

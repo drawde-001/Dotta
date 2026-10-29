@@ -748,15 +748,16 @@ export function getModelAdapter(providerName = 'gemini') {
     return adapter;
   }
 
-  if (key === 'muse') {
+  if (key === 'muse' || key === 'meta') {
     const adapter = new OpenAiCompatibleModelAdapter({
-      providerName: 'muse',
-      apiKeyGetter: () => getApiKey('META_MUSE_API_KEY'),
-      baseUrlGetter: () => process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1',
+      providerName: 'meta',
+      apiKeyGetter: () => getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY'),
+      baseUrlGetter: () => process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1',
       defaultModel: 'muse-spark-1.3',
       modelResolver: (m) => (m && m.toLowerCase().startsWith('muse-') ? m : process.env.META_MUSE_MODEL || 'muse-spark-1.3')
     });
     adapterRegistry.set('muse', adapter);
+    adapterRegistry.set('meta', adapter);
     return adapter;
   }
 
@@ -819,14 +820,21 @@ export function getModelAdapter(providerName = 'gemini') {
 
 export function resolveProviderForModel(modelId = '') {
   const m = String(modelId || '').trim().toLowerCase();
-  if (m.startsWith('meta-muse') || m.startsWith('muse-') || m.startsWith('meta-') || m.startsWith('llama-')) return 'muse';
+  if (
+    m.startsWith('meta-muse') ||
+    m.startsWith('muse-') ||
+    m.startsWith('meta-') ||
+    m.startsWith('sam-')
+  ) {
+    return 'muse';
+  }
   if (m.startsWith('claude-') || m.startsWith('sonnet-') || m.startsWith('opus-') || m.startsWith('haiku-') || m.startsWith('fable-') || m.startsWith('spark-')) return 'anthropic';
   if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('chatgpt-')) return 'openai';
   if (m.startsWith('deepseek')) return 'deepseek';
   if (m.startsWith('kimi-') || m.startsWith('moonshot-')) return 'kimi';
   if (m.startsWith('gemini-')) return 'gemini';
 
-  if (getApiKey('META_MUSE_API_KEY')) return 'muse';
+  if (getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY')) return 'muse';
   if (getApiKey('OPENAI_API_KEY') || process.env.OPENAI_BASE_URL) return 'openai';
   if (getApiKey('ANTHROPIC_API_KEY')) return 'anthropic';
   if (getApiKey('DEEPSEEK_API_KEY')) return 'deepseek';
