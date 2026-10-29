@@ -91,6 +91,7 @@ import {
   GenerativeSoftwarePurchase,
   GenerativeChartBars,
 } from './elements';
+import { FileSystemArtifact } from '../FileSystemArtifact';
 
 /**
  * Tool to Component Registry
@@ -233,6 +234,43 @@ registerToolComponent(
           imageUrl={imageUrl}
           sizeLabel={sizeLabel}
         />
+      </div>
+    );
+  }
+);
+
+registerToolComponent(
+  [
+    'file_read',
+    'read_file',
+    'view_file',
+    'file_write',
+    'write_file',
+    'file_edit',
+    'edit_file',
+    'replace_file_content',
+    'write_to_file'
+  ],
+  ({ toolName, args, result, part }) => {
+    const rawPath = args?.path || args?.AbsolutePath || args?.TargetFile || args?.filename || args?.file || '';
+    const cleanFilename = typeof rawPath === 'string' ? rawPath.split(/[/\\]/).pop() : 'file';
+    const lower = (toolName || '').toLowerCase();
+    const action =
+      lower.includes('read') || lower.includes('view')
+        ? 'viewed'
+        : lower.includes('write')
+          ? 'created'
+          : 'single edit';
+    const artifact = part?.fileArtifact || {
+      path: rawPath,
+      name: cleanFilename,
+      action,
+      content: typeof result === 'string' ? result : undefined
+    };
+
+    return (
+      <div className="my-1.5">
+        <FileSystemArtifact artifact={artifact} />
       </div>
     );
   }
@@ -448,6 +486,15 @@ const DIRECT_DATA_MAP = {
   generative_software_purchase: GenerativeSoftwarePurchase,
   generative_chart_bars: GenerativeChartBars,
 };
+
+registerDataRenderer(['file_artifact', 'file-artifact', 'file_system', 'file-system'], (data) => {
+  const artifact = data?.data || data?.artifact || data;
+  return (
+    <div className="my-1.5">
+      <FileSystemArtifact artifact={artifact} />
+    </div>
+  );
+});
 
 registerDataRenderer(['plan', 'agent_plan', 'agent-plan'], (data) => {
   const planData = data.data || data;

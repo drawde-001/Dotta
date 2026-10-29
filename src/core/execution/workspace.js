@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url';
 import { capToolOutput } from '../tools/policy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = path.resolve(__dirname, '../../..');
+const PROJECT_ROOT_NAME = path.basename(PROJECT_ROOT);
 
 export function getWorkspacesBaseDir() {
   const dir = path.resolve(__dirname, '../../workspaces');
@@ -18,6 +20,66 @@ export function getWorkspaceRoot(runId) {
   return path.resolve(getWorkspacesBaseDir(), safeRunId);
 }
 
+/**
+ * Strips any absolute host path, workspace root path, or root directory name
+ * so neither the agent nor the user ever sees the name or location of the root directory.
+ */
+export function sanitizeRelativeDisplayPath(rawPath = '', effectiveRoot = '') {
+  let clean = String(rawPath || '').trim().replace(/\\/g, '/');
+  if (!clean) return '';
+
+  const rootsToStrip = [
+    effectiveRoot ? effectiveRoot.replace(/\\/g, '/') : '',
+    PROJECT_ROOT.replace(/\\/g, '/'),
+    getWorkspacesBaseDir().replace(/\\/g, '/'),
+    '/home/ubuntu/omni-agent',
+    '/app'
+  ].filter(Boolean);
+
+  for (const r of rootsToStrip) {
+    if (clean.toLowerCase().startsWith(r.toLowerCase())) {
+      clean = clean.slice(r.length);
+    }
+  }
+
+  clean = clean.replace(/^[a-zA-Z]:\//, '').replace(/^\/+/, '').replace(/^\.\//, '');
+
+  // Strip root folder name or internal run workspace folder prefixes if present
+  const rootNameRegex = new RegExp(`^(?:${PROJECT_ROOT_NAME}|workspaces|workspace|run-[a-zA-Z0-9_.-]+|default-run)\\/+`, 'i');
+  while (rootNameRegex.test(clean)) {
+    clean = clean.replace(rootNameRegex, '');
+  }
+
+  return clean || 'file';
+}
+
+export function redactRootPaths(text = '', effectiveRoot = '') {
+  if (typeof text !== 'string' || !text) return '';
+  let out = text;
+  const candidates = [
+    effectiveRoot,
+    effectiveRoot ? effectiveRoot.replace(/\\/g, '/') : '',
+    PROJECT_ROOT,
+    PROJECT_ROOT.replace(/\\/g, '/'),
+    getWorkspacesBaseDir(),
+    getWorkspacesBaseDir().replace(/\\/g, '/'),
+    '/home/ubuntu/omni-agent',
+    '/home/ubuntu',
+    'C:\\Users\\USER\\Downloads\\omni-agent',
+    'c:\\Users\\USER\\Downloads\\omni-agent',
+    '/app'
+  ].filter(Boolean);
+
+  for (const cand of candidates) {
+    out = out.split(cand).join('');
+  }
+  if (PROJECT_ROOT_NAME) {
+    const rootWordRegex = new RegExp(`${PROJECT_ROOT_NAME}[\\\\/]`, 'gi');
+    out = out.replace(rootWordRegex, '');
+  }
+  return out;
+}
+
 export function createWorkspace(runId, name = '') {
   const workspaceRoot = getWorkspaceRoot(runId);
   if (!fs.existsSync(workspaceRoot)) {
@@ -28,66 +90,71 @@ export function createWorkspace(runId, name = '') {
   const metadata = {
     runId,
     name: name || runId,
-    createdAt: Date.now(),
-    workspaceRoot
+    createdAt: Date.now()
   };
   fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
 
+  // Never expose workspaceRoot location or root directory name
   return {
     runId,
     name: metadata.name,
-    workspaceRoot,
     created: true
   };
 }
 
-const SENSITIVE_FILE_REGEX = /(^\.env|\.env$|\.env\.|\.pem$|\.key$|^\.ssh$|[\\/]\.ssh[\\/]|id_rsa|id_ed25519)/i;
+const SENSITIVE_FILE_REGEX = /(^\.env|\.env$|\.env\.|\.pem$|\.key$|^\.ssh$|[\\/]\.ssh[\\/]|id_rsa|id_ed25519|^\.git$|[\\/]\.git[\\/]|^\.agents|[\\/]\.agents|others[\\/])/i;
 
 export function validateAndResolvePath(workspaceRoot, relativePath) {
   if (!workspaceRoot || typeof workspaceRoot !== 'string') {
-    throw new Error('Workspace root must be a valid path string');
+    throw new Error('Workspace must be initialized');
   }
 
   if (typeof relativePath !== 'string' || !relativePath.trim()) {
     throw new Error('Path must be a non-empty string');
   }
 
-  const raw = relativePath.trim();
+  let raw = relativePath.trim();
 
   if (/[\x00-\x1f\x7f]/.test(raw)) {
-    throw new Error(`Invalid or control characters in path: "${raw}"`);
+    throw new Error('Invalid or control characters in path');
   }
 
   if (/%2e|%2f|%5c/i.test(raw)) {
-    throw new Error(`URL-encoded traversal sequences are strictly prohibited: "${raw}"`);
+    throw new Error('URL-encoded traversal sequences are strictly prohibited');
   }
 
   if (/^[\\/]{2}/.test(raw) || /\\\\[a-z0-9_.-]+\\/i.test(raw) || /^\\\\/i.test(raw) || /^\/\//i.test(raw)) {
-    throw new Error(`UNC network paths are strictly prohibited: "${raw}"`);
+    throw new Error('UNC network paths are strictly prohibited');
   }
 
   if (path.isAbsolute(raw) || /^[a-zA-Z]:[/\\]/.test(raw) || /^[a-zA-Z]:$/i.test(raw) || raw.startsWith('/') || raw.startsWith('\\')) {
-    throw new Error(`Absolute paths are strictly prohibited: "${raw}". Paths must be relative to the workspace root.`);
+    throw new Error('Access to root or absolute paths is strictly prohibited. Paths must be relative within the workspace.');
   }
 
   if (raw === '..' || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(raw) || raw.includes('../') || raw.includes('..\\')) {
-    throw new Error(`Path traversal ("..") is strictly prohibited: "${raw}"`);
+    throw new Error('Path traversal ("..") is strictly prohibited');
+  }
+
+  // Strip root folder prefix if the model prefixed it (e.g. "omni-agent/src/...")
+  const rootPrefixRegex = new RegExp(`^${PROJECT_ROOT_NAME}[\\\\/]+`, 'i');
+  if (rootPrefixRegex.test(raw)) {
+    raw = raw.replace(rootPrefixRegex, '');
   }
 
   if (SENSITIVE_FILE_REGEX.test(raw) || raw.includes('.ssh')) {
-    throw new Error(`Access to sensitive credential file is strictly denied: "${raw}"`);
+    throw new Error(`Access to sensitive credential or restricted file is strictly denied: "${sanitizeRelativeDisplayPath(raw)}"`);
   }
 
   const normalizedRoot = path.normalize(path.resolve(workspaceRoot));
   const resolved = path.normalize(path.resolve(normalizedRoot, raw));
 
   if (resolved !== normalizedRoot && !resolved.startsWith(normalizedRoot + path.sep)) {
-    throw new Error(`Path traversal escapes workspace root: "${raw}"`);
+    throw new Error('Path traversal escapes workspace boundaries');
   }
 
   const relFromRoot = path.relative(normalizedRoot, resolved);
   if (relFromRoot.startsWith('..') || path.isAbsolute(relFromRoot)) {
-    throw new Error(`Path traversal escapes workspace root: "${raw}"`);
+    throw new Error('Path traversal escapes workspace boundaries');
   }
 
   if (fs.existsSync(resolved)) {
@@ -97,11 +164,11 @@ export function validateAndResolvePath(workspaceRoot, relativePath) {
         const realTarget = fs.realpathSync(resolved);
         const normReal = path.normalize(realTarget);
         if (normReal !== normalizedRoot && !normReal.startsWith(normalizedRoot + path.sep)) {
-          throw new Error(`Symlink targets location outside workspace root: "${raw}" -> "${realTarget}"`);
+          throw new Error('Symlink targets location outside workspace boundaries');
         }
       }
     } catch (err) {
-      if (err.message.includes('outside workspace root')) throw err;
+      if (err.message.includes('outside workspace')) throw err;
     }
   }
 
@@ -109,6 +176,7 @@ export function validateAndResolvePath(workspaceRoot, relativePath) {
 }
 
 const filesReadByRun = new Map();
+const latestFileArtifactsByRun = new Map();
 
 export function recordFileRead(runId, resolvedPath) {
   if (!runId) return;
@@ -125,7 +193,30 @@ export function hasFileBeenRead(runId, resolvedPath) {
 }
 
 export function clearRunReadTracker(runId) {
-  if (runId) filesReadByRun.delete(runId);
+  if (runId) {
+    filesReadByRun.delete(runId);
+    latestFileArtifactsByRun.delete(runId);
+  }
+}
+
+export function recordFileArtifact(runId, artifact) {
+  const key = runId || 'default';
+  if (!latestFileArtifactsByRun.has(key)) {
+    latestFileArtifactsByRun.set(key, []);
+  }
+  const list = latestFileArtifactsByRun.get(key);
+  list.push({
+    ...artifact,
+    path: sanitizeRelativeDisplayPath(artifact.path),
+    timestamp: Date.now()
+  });
+}
+
+export function getLatestFileArtifact(runId) {
+  const key = runId || 'default';
+  const list = latestFileArtifactsByRun.get(key);
+  if (!list || list.length === 0) return null;
+  return list[list.length - 1];
 }
 
 function resolveEffectiveRoot({ workspaceRoot, runId }) {
@@ -138,42 +229,85 @@ function resolveEffectiveRoot({ workspaceRoot, runId }) {
   return path.resolve(process.cwd(), 'workspace');
 }
 
+/**
+ * If a run workspace doesn't have an interior project file yet (e.g. "src/...")
+ * and no explicit test workspaceRoot was passed, safely seed it into the run's sandbox
+ * so the agent can view/edit interior files without ever accessing the host root directory.
+ */
+function ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot }) {
+  if (workspaceRoot) return; // Explicit workspaceRoot (e.g. unit tests) stays isolated
+  const cleanRel = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
+  if (!cleanRel || cleanRel === '.' || cleanRel === 'file') return;
+
+  // Only allow safe interior subdirectories (e.g. src/, server/, public/, docs/) — never root-level files
+  if (!/^(src|server|public|docs)\//i.test(cleanRel)) return;
+
+  const targetInSandbox = path.resolve(effectiveRoot, cleanRel);
+  if (fs.existsSync(targetInSandbox)) return;
+
+  const sourceInProject = path.resolve(PROJECT_ROOT, cleanRel);
+  if (
+    sourceInProject.startsWith(PROJECT_ROOT + path.sep) &&
+    fs.existsSync(sourceInProject) &&
+    fs.statSync(sourceInProject).isFile()
+  ) {
+    fs.mkdirSync(path.dirname(targetInSandbox), { recursive: true });
+    fs.copyFileSync(sourceInProject, targetInSandbox);
+  }
+}
+
 export function workspaceFileRead({ path: relPath, runId, workspaceRoot, maxChars = 4000 }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+  ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
   if (!fs.existsSync(resolved)) {
-    throw new Error(`File not found: "${relPath}"`);
+    throw new Error(`File not found: "${displayPath}"`);
   }
 
   const stat = fs.statSync(resolved);
   if (!stat.isFile()) {
-    throw new Error(`Path is a directory, not a file: "${relPath}". Use file_list to inspect directories.`);
+    throw new Error(`Path is a directory, not a file: "${displayPath}". Use file_list to inspect directories.`);
   }
 
-  const content = fs.readFileSync(resolved, 'utf8');
+  const rawContent = fs.readFileSync(resolved, 'utf8');
+  const redactedContent = redactRootPaths(rawContent, effectiveRoot);
   recordFileRead(runId || 'default', resolved);
 
-  return capToolOutput(content, maxChars);
+  recordFileArtifact(runId || 'default', {
+    path: displayPath,
+    name: path.basename(displayPath),
+    action: 'viewed',
+    content: redactedContent,
+    startLine: 1
+  });
+
+  return capToolOutput(redactedContent, maxChars);
 }
 
 export function workspaceFileList({ path: relPath = '.', recursive = false, workspaceRoot, runId, maxChars = 4000 }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+  if (!fs.existsSync(effectiveRoot)) {
+    fs.mkdirSync(effectiveRoot, { recursive: true });
+  }
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath === '.' ? 'workspace' : relPath, effectiveRoot);
 
   if (!fs.existsSync(resolved)) {
-    throw new Error(`Directory not found: "${relPath}"`);
+    throw new Error(`Directory not found: "${displayPath}"`);
   }
 
   const stat = fs.statSync(resolved);
   if (!stat.isDirectory()) {
-    throw new Error(`Path is a file, not a directory: "${relPath}". Use file_read to read files.`);
+    throw new Error(`Path is a file, not a directory: "${displayPath}". Use file_read to read files.`);
   }
 
   function readDirRecursive(dir, currentRel = '') {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     let results = [];
     for (const ent of entries) {
+      if (ent.name === '.workspace.json' || ent.name.startsWith('.env') || ent.name === '.git') continue;
       const entRel = currentRel ? `${currentRel}/${ent.name}` : ent.name;
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
@@ -191,16 +325,20 @@ export function workspaceFileList({ path: relPath = '.', recursive = false, work
 
   const items = readDirRecursive(resolved);
   if (items.length === 0) {
-    return `Directory "${relPath}" is empty.`;
+    return 'Workspace directory is empty.';
   }
   return capToolOutput(items.join('\n'), maxChars);
 }
 
 export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoot, runId, maxChars = 4000 }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+  if (!fs.existsSync(effectiveRoot)) {
+    fs.mkdirSync(effectiveRoot, { recursive: true });
+  }
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
   if (!fs.existsSync(resolved)) {
-    throw new Error(`Search path not found: "${relPath}"`);
+    throw new Error(`Search path not found: "${displayPath}"`);
   }
 
   const query = String(pattern || '').toLowerCase();
@@ -209,6 +347,7 @@ export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoo
   function walk(dir, currentRel = '') {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const ent of entries) {
+      if (ent.name === '.workspace.json' || ent.name.startsWith('.env') || ent.name === '.git') continue;
       const entRel = currentRel ? `${currentRel}/${ent.name}` : ent.name;
       const fullPath = path.join(dir, ent.name);
       if (ent.isDirectory()) {
@@ -221,7 +360,7 @@ export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoo
           matches.push(`[NAME MATCH] ${entRel}`);
         }
         try {
-          const content = fs.readFileSync(fullPath, 'utf8');
+          const content = redactRootPaths(fs.readFileSync(fullPath, 'utf8'), effectiveRoot);
           if (content.toLowerCase().includes(query)) {
             const lines = content.split('\n');
             lines.forEach((line, idx) => {
@@ -237,7 +376,7 @@ export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoo
 
   walk(resolved);
   if (matches.length === 0) {
-    return `No matches found for "${pattern}" under "${relPath}".`;
+    return `No matches found for "${pattern}".`;
   }
   return capToolOutput(matches.join('\n'), maxChars);
 }
@@ -249,29 +388,46 @@ export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runI
   }
 
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
   const parentDir = path.dirname(resolved);
   if (!fs.existsSync(parentDir)) {
     fs.mkdirSync(parentDir, { recursive: true });
   }
 
   const data = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-  const linesAdded = data.split(/\r\n|\r|\n/).length;
-  fs.writeFileSync(resolved, data, 'utf8');
+  const redactedData = redactRootPaths(data, effectiveRoot);
+  const linesAdded = redactedData.split(/\r\n|\r|\n/).length;
+  fs.writeFileSync(resolved, redactedData, 'utf8');
+  recordFileRead(runId || 'default', resolved);
 
-  return `Successfully wrote ${Buffer.byteLength(data, 'utf8')} bytes (+${linesAdded} lines) to "${relPath}".`;
+  recordFileArtifact(runId || 'default', {
+    path: displayPath,
+    name: path.basename(displayPath),
+    action: 'created',
+    content: redactedData,
+    newText: redactedData,
+    editStartLine: 1,
+    editEndLine: linesAdded,
+    linesAdded,
+    linesRemoved: 0
+  });
+
+  return `Successfully wrote ${Buffer.byteLength(redactedData, 'utf8')} bytes (+${linesAdded} lines) to "${displayPath}".`;
 }
 
 export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, workspaceRoot }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+  ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
   const trackerKey = runId || 'default';
   if (!hasFileBeenRead(trackerKey, resolved)) {
-    throw new Error(`File "${relPath}" must be read with file_read earlier in this run before editing.`);
+    throw new Error(`File "${displayPath}" must be read with file_read earlier in this run before editing.`);
   }
 
   if (!fs.existsSync(resolved)) {
-    throw new Error(`File not found: "${relPath}"`);
+    throw new Error(`File not found: "${displayPath}"`);
   }
 
   if (typeof old_text !== 'string' || !old_text) {
@@ -283,41 +439,66 @@ export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, wo
 
   let count = 0;
   let pos = fileContent.indexOf(old_text);
+  let firstMatchPos = pos;
   while (pos !== -1) {
     count++;
     pos = fileContent.indexOf(old_text, pos + old_text.length);
   }
 
   if (count === 0) {
-    throw new Error(`Target old_text was not found in "${relPath}". Ensure the text matches exactly.`);
+    throw new Error(`Target old_text was not found in "${displayPath}". Ensure the text matches exactly.`);
   }
   if (count > 1) {
-    throw new Error(`Target old_text matched ${count} times in "${relPath}". It must match exactly once to edit safely.`);
+    throw new Error(`Target old_text matched ${count} times in "${displayPath}". It must match exactly once to edit safely.`);
   }
 
+  const prefixBeforeEdit = fileContent.slice(0, firstMatchPos);
+  const editStartLine = prefixBeforeEdit.split(/\r\n|\r|\n/).length;
   const linesRemoved = old_text.split(/\r\n|\r|\n/).length;
   const linesAdded = replacement.split(/\r\n|\r|\n/).length;
+  const editEndLine = editStartLine + Math.max(1, linesAdded) - 1;
 
-  const newContent = fileContent.replace(old_text, replacement);
+  const newContent = redactRootPaths(fileContent.replace(old_text, replacement), effectiveRoot);
   fs.writeFileSync(resolved, newContent, 'utf8');
 
-  return `Successfully edited "${relPath}" (+${linesAdded} -${linesRemoved}): replaced 1 exact match.`;
+  recordFileArtifact(runId || 'default', {
+    path: displayPath,
+    name: path.basename(displayPath),
+    action: 'single edit',
+    content: newContent,
+    oldText: redactRootPaths(old_text, effectiveRoot),
+    newText: redactRootPaths(replacement, effectiveRoot),
+    editStartLine,
+    editEndLine,
+    linesAdded,
+    linesRemoved
+  });
+
+  return `Successfully edited "${displayPath}" (+${linesAdded} -${linesRemoved}): replaced 1 exact match.`;
 }
 
 export function workspaceFileDelete({ path: relPath, runId, workspaceRoot }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
+  const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
   if (!fs.existsSync(resolved)) {
-    throw new Error(`File not found: "${relPath}"`);
+    throw new Error(`File not found: "${displayPath}"`);
   }
 
   const stat = fs.statSync(resolved);
   if (stat.isDirectory()) {
     fs.rmSync(resolved, { recursive: true, force: true });
-    return `Successfully deleted directory "${relPath}".`;
+    return `Successfully deleted directory "${displayPath}".`;
   }
 
   fs.unlinkSync(resolved);
-  return `Successfully deleted file "${relPath}".`;
+  recordFileArtifact(runId || 'default', {
+    path: displayPath,
+    name: path.basename(displayPath),
+    action: 'deleted',
+    content: '',
+    startLine: 1
+  });
+  return `Successfully deleted file "${displayPath}".`;
 }

@@ -66,6 +66,7 @@ import {
   ErrorState,
 } from "@/components/assistant-ui/elements";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
+import { SubmittedAskUserCard } from "@/components/SubmittedAskUserCard";
 import {
   renderToolCallPart,
   renderDataPart,
@@ -441,12 +442,16 @@ function ThreadScrollToBottom() {
 }
 
 function UserMessage() {
+  const attachments = useAuiState(
+    (s) => s.message.metadata?.custom?.attachments || s.message.attachments || []
+  );
+
   return (
     <MessagePrimitive.Root
       className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col items-end gap-1.5 px-2 py-2 fade-in slide-in-from-bottom-1 animate-in duration-150 group/user-msg"
       data-role="user"
     >
-      <UserMessageAttachments />
+      <UserMessageAttachments attachments={attachments} />
 
       <div className="relative flex max-w-[85%] flex-col items-end">
         <div className="rounded-2xl bg-background dark:bg-[#18181c] px-4 py-2.5 text-sm text-foreground break-words leading-relaxed">
@@ -687,6 +692,12 @@ function AssistantMessageBody() {
       });
     } else if (part.type === "source") {
       sourceParts.push(part);
+    } else if (part.type === "submitted-ask-user" || part.type === "ask-user-response") {
+      promotedVisualNodes.push(
+        <div key={part.id || `submitted-qa-${idx}`} className="my-2">
+          <SubmittedAskUserCard questions={part.questions || part.questionsAndAnswers || []} />
+        </div>
+      );
     } else if (part.type === "text") {
       const trimmed = (part.text || "").trim();
       if (!trimmed) return;

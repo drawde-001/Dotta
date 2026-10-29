@@ -453,7 +453,7 @@ export const ASK_USER_TOOL = {
   name: 'ask_user',
   readOnly: true,
   description:
-    'Pauses execution to present a brief question or recommendation with 2 to 3 concise selectable options. Use this tool when you genuinely need a decision or confirmation from the user. Keep "question" to a single brief sentence (under 18 words) and ALWAYS provide 2 to 3 short options (2-6 words each), placing your recommended option first prefixed with "(Recommended)".',
+    'Pauses execution to present 1 or more brief questions with 2 to 3 concise selectable options per question. Use this tool when you need a decision, preference, or confirmation from the user. Keep each question to a single brief sentence and ALWAYS provide 2 to 3 short options (2-6 words each), placing your recommended option first prefixed with "(Recommended)". If asking multiple questions at once, pass them in the "questions" array.',
   parameters: {
     type: 'OBJECT',
     properties: {
@@ -469,6 +469,17 @@ export const ASK_USER_TOOL = {
         type: 'ARRAY',
         description: 'REQUIRED: 2 to 3 short selectable options (2-6 words each). Prefix the first option with "(Recommended)" when suggesting a preferred path.',
         items: { type: 'STRING' }
+      },
+      questions: {
+        type: 'ARRAY',
+        description: 'Optional list of multiple questions when asking more than one question in a single prompt. Each item has { question, options }.',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            question: { type: 'STRING' },
+            options: { type: 'ARRAY', items: { type: 'STRING' } }
+          }
+        }
       },
       is_multi_select: {
         type: 'BOOLEAN',

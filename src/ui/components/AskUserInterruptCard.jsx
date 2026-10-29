@@ -348,12 +348,18 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
     }
   };
 
+  const cleanRecPrefix = (str) =>
+    String(str || '')
+      .replace(/^\(recommended\)\s*/i, '')
+      .replace(/\s*\(recommended\)$/i, '')
+      .trim();
+
   const handleSubmit = () => {
     const chosenOptions = [];
     steps.forEach((s, idx) => {
       const selected = selectedByIndex[idx];
       if (selected !== undefined && s.options[selected]) {
-        chosenOptions.push(s.options[selected]);
+        chosenOptions.push(cleanRecPrefix(s.options[selected]));
       }
     });
 
@@ -364,7 +370,7 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
       })
       .filter(Boolean);
 
-    const primarySelection = chosenOptions[0] || (currentOptions[0] ?? 'Confirmed');
+    const primarySelection = chosenOptions[0] || cleanRecPrefix(currentOptions[0] ?? 'Confirmed');
     const hasManual = manualEntries.length > 0;
     const finalAnswer = hasManual
       ? `${chosenOptions.length ? chosenOptions.join('; ') + ' | ' : ''}${manualEntries.join('; ')}`
@@ -377,7 +383,7 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
 
     const questionsAndAnswers = steps.map((s, idx) => {
       const selected = selectedByIndex[idx];
-      const opt = selected !== undefined && s.options[selected] ? s.options[selected] : undefined;
+      const opt = selected !== undefined && s.options[selected] ? cleanRecPrefix(s.options[selected]) : undefined;
       const manual = manualInputByStep[idx]?.trim();
       return {
         question: s.title,

@@ -41,12 +41,20 @@ interface ContextTagOption {
   category: string;
 }
 
+export const MAX_ATTACHMENTS = 5;
+export const MAX_INDIVIDUAL_ATTACHMENT_BYTES = 15 * 1024 * 1024; // 15 MB per individual attachment
+
 export interface StagedAttachment {
   id: string;
+  order: number;
   name: string;
   size: number;
   type: string;
+  state?: 'uploading' | 'done' | 'error';
+  progress?: number;
   previewUrl?: string;
+  dataUrl?: string;
+  textContent?: string;
   file?: File;
 }
 
@@ -470,7 +478,7 @@ function CheckmarkIcon() {
 }
 
 interface InputDockProps {
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string, options?: Record<string, unknown>) => void;
   onReplayFakeStream?: () => void;
   isWorking: boolean;
   onStopWorking: () => void;
@@ -975,14 +983,56 @@ export const InputDock: React.FC<InputDockProps> = ({
     ];
   };
 
+  const readFilePayloadInBackground = (
+    file: File
+  ): Promise<{ dataUrl?: string; textContent?: string }> => {
+    return new Promise((resolve) => {
+      const isTextLike =
+        file.type.startsWith('text/') ||
+        /\.(txt|md|csv|json|js|jsx|ts|tsx|py|sh|yaml|yml|sql|css|html|xml|log|env\.example)$/i.test(
+          file.name
+        );
+
+      if (isTextLike && file.size <= 2 * 1024 * 1024) {
+        const textReader = new FileReader();
+        textReader.onloadend = () => {
+          resolve({ textContent: String(textReader.result || '') });
+        };
+        textReader.onerror = () => resolve({});
+        textReader.readAsText(file);
+        return;
+      }
+
+      const dataReader = new FileReader();
+      dataReader.onloadend = () => {
+        resolve({ dataUrl: String(dataReader.result || '') });
+      };
+      dataReader.onerror = () => resolve({});
+      dataReader.readAsDataURL(file);
+    });
+  };
+
   const processIncomingFiles = async (rawFiles: File[]) => {
+    const currentCount = stagedAttachments.length;
+    if (currentCount >= MAX_ATTACHMENTS) {
+      alert(`Maximum of ${MAX_ATTACHMENTS} attachments allowed per message.`);
+      return;
+    }
+
+    const availableSlots = MAX_ATTACHMENTS - currentCount;
+    const filesToProcess = rawFiles.slice(0, availableSlots);
+    if (rawFiles.length > availableSlots) {
+      alert(`Only ${MAX_ATTACHMENTS} attachments are allowed per message. Added the first ${availableSlots}.`);
+    }
+
     const newStaged: StagedAttachment[] = [];
     const audioFilesToTranscribe: File[] = [];
-    const maxSizeBytes = 50 * 1024 * 1024; // 50 MB limit
 
-    for (const file of rawFiles) {
-      if (file.size > maxSizeBytes) {
-        alert(`File "${file.name}" exceeds the 50 MB limit and cannot be attached.`);
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+      if (file.size > MAX_INDIVIDUAL_ATTACHMENT_BYTES) {
+        const maxMb = Math.round(MAX_INDIVIDUAL_ATTACHMENT_BYTES / (1024 * 1024));
+        alert(`File "${file.name}" exceeds the ${maxMb} MB individual attachment size limit.`);
         continue;
       }
 
@@ -998,23 +1048,53 @@ export const InputDock: React.FC<InputDockProps> = ({
         audioFilesToTranscribe.push(finalFile);
       }
 
-      const isImage = finalFile.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|ico)$/i.test(finalFile.name);
+      const isImage =
+        finalFile.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|ico)$/i.test(finalFile.name);
       const previewUrl = isImage ? URL.createObjectURL(finalFile) : undefined;
+      const attId = `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const orderNumber = currentCount + newStaged.length + 1;
 
       newStaged.push({
-        id: `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: attId,
+        order: orderNumber,
         name: finalFile.name,
         size: finalFile.size,
-        type: finalFile.type,
+        type: finalFile.type || 'application/octet-stream',
+        state: 'uploading',
+        progress: 35,
         previewUrl,
         file: finalFile
       });
     }
 
     if (newStaged.length > 0) {
-      setStagedAttachments((prev) => [...prev, ...newStaged]);
+      setStagedAttachments((prev) => {
+        const merged = [...prev, ...newStaged];
+        return merged.map((item, idx) => ({ ...item, order: idx + 1 }));
+      });
       setAttachedFiles((prev) => [...prev, ...newStaged.map((f) => f.name)]);
       setSelectedFiles((prev) => [...prev, ...newStaged.map((f) => f.file!).filter(Boolean)]);
+
+      // Read file payloads in background and mark each chip state="done"
+      for (const item of newStaged) {
+        if (!item.file) continue;
+        void readFilePayloadInBackground(item.file).then((payload) => {
+          setStagedAttachments((prev) =>
+            prev.map((att) =>
+              att.id === item.id
+                ? {
+                    ...att,
+                    state: 'done',
+                    progress: 100,
+                    dataUrl: payload.dataUrl,
+                    textContent: payload.textContent,
+                    previewUrl: payload.dataUrl && att.type.startsWith('image/') ? payload.dataUrl : att.previewUrl
+                  }
+                : att
+            )
+          );
+        });
+      }
     }
 
     for (const audioFile of audioFilesToTranscribe) {
@@ -1025,10 +1105,12 @@ export const InputDock: React.FC<InputDockProps> = ({
   const handleRemoveAttachment = (idxToRemove: number) => {
     setStagedAttachments((prev) => {
       const target = prev[idxToRemove];
-      if (target?.previewUrl) {
+      if (target?.previewUrl && target.previewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(target.previewUrl);
       }
-      return prev.filter((_, i) => i !== idxToRemove);
+      return prev
+        .filter((_, i) => i !== idxToRemove)
+        .map((att, idx) => ({ ...att, order: idx + 1 }));
     });
     setAttachedFiles((prev) => prev.filter((_, i) => i !== idxToRemove));
     setSelectedFiles((prev) => prev.filter((_, i) => i !== idxToRemove));
@@ -1140,6 +1222,7 @@ export const InputDock: React.FC<InputDockProps> = ({
   const handleAudioTranscription = async (blob: Blob, explicitDurationSec?: number) => {
     try {
       setIsTranscribing(true);
+      setTranscribingStatus('Transcribing');
       const fallbackDuration =
         explicitDurationSec ||
         (recordingStartTimeRef.current
@@ -1148,20 +1231,12 @@ export const InputDock: React.FC<InputDockProps> = ({
         recordingSeconds ||
         5;
 
-      setTranscribingStatus('Converting audio to 16kHz WAV...');
+      // Silent background WAV conversion & 10m segmentation (never exposed in UI)
       const segments = await convertAudioBlobToWavSegments(blob, fallbackDuration, 600);
 
       const collectedTranscripts: string[] = [];
       for (let i = 0; i < segments.length; i++) {
         const seg = segments[i];
-        if (segments.length > 1) {
-          setTranscribingStatus(
-            `Transcribing segment ${i + 1} of ${segments.length} (10m threshold)...`
-          );
-        } else {
-          setTranscribingStatus('Transcribing audio...');
-        }
-
         const response = await fetch('/api/transcribe', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1219,19 +1294,28 @@ export const InputDock: React.FC<InputDockProps> = ({
     if (isRecording) stopVoiceRecording();
 
     const trimmed = promptText.trim();
-    if (!trimmed && attachedFiles.length === 0) {
+    if (!trimmed && stagedAttachments.length === 0) {
       return;
     }
 
-    const attachmentPrefix =
-      attachedFiles.length > 0 ? `[Attached: ${attachedFiles.join(', ')}] ` : '';
-    const finalMessage = `${attachmentPrefix}${trimmed}`.trim();
+    const orderedAttachments = stagedAttachments
+      .map((att, idx) => ({
+        id: att.id,
+        order: idx + 1,
+        name: att.name,
+        size: att.size,
+        type: att.type,
+        state: 'done' as const,
+        previewUrl: att.dataUrl || att.previewUrl,
+        dataUrl: att.dataUrl,
+        textContent: att.textContent
+      }));
 
-    onSendMessage(finalMessage);
-    setPromptText('');
-    stagedAttachments.forEach((att) => {
-      if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+    onSendMessage(trimmed, {
+      attachments: orderedAttachments,
+      maxIndividualSizeBytes: MAX_INDIVIDUAL_ATTACHMENT_BYTES
     });
+    setPromptText('');
     setStagedAttachments([]);
     setAttachedFiles([]);
     setSelectedFiles([]);
@@ -1826,26 +1910,6 @@ export const InputDock: React.FC<InputDockProps> = ({
           transition: 'max-width 0.22s ease',
         }}
       >
-        {/* Attached Context File Cards matching assistant-ui elements/composer-attachments */}
-        {stagedAttachments.length > 0 && (
-          <ComposerAttachments
-            attachments={stagedAttachments}
-            onRemove={handleRemoveAttachment}
-          />
-        )}
-
-        {/* Live Voice Recording & Transcribing Component matching assistant-ui elements/composer-voice */}
-        {(isRecording || isTranscribing) && (
-          <ComposerVoiceDictation
-            isRecording={isRecording}
-            isTranscribing={isTranscribing}
-            recordingTime={formattedRecordingTime}
-            transcribingStatus={transcribingStatus}
-            onStop={stopVoiceRecording}
-            onCancel={cancelVoiceRecording}
-          />
-        )}
-
         {/* If the agent has a question/interrupt, the composer box transitions to Ask User state */}
         {activeInterrupt ? (
           <div className="w-full">
@@ -1856,7 +1920,39 @@ export const InputDock: React.FC<InputDockProps> = ({
           </div>
         ) : (
           /* Primary Composer Card */
-          <section className="aic-composer-card">
+          <section
+            className="aic-composer-card"
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const droppedFiles = Array.from(e.dataTransfer?.files || []);
+              if (droppedFiles.length > 0) {
+                void processIncomingFiles(droppedFiles);
+              }
+            }}
+          >
+            {/* Attached Context File Cards INSIDE the composer matching gathered-elements/composer/composer-attachments */}
+            {stagedAttachments.length > 0 && (
+              <ComposerAttachments
+                attachments={stagedAttachments}
+                onRemove={handleRemoveAttachment}
+              />
+            )}
+
+            {/* Live Voice Recording & Transcribing Component INSIDE the composer (no Done button) */}
+            {(isRecording || isTranscribing) && (
+              <ComposerVoiceDictation
+                isRecording={isRecording}
+                isTranscribing={isTranscribing}
+                recordingSeconds={recordingSeconds}
+                recordingTime={formattedRecordingTime}
+              />
+            )}
+
             {/* @ Context Mention Popover */}
             <div
             className={`aic-glass-popover ${
