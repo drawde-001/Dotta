@@ -38,6 +38,7 @@ import {
   executeBrowserScreenshot
 } from './execution/browser.js';
 import { executeSegmentImage } from './tools/sam-tool.js';
+import { executeGenerateImage } from './tools/image-tool.js';
 
 export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent.
 You possess direct, real-world execution tools to fulfill user instructions:
@@ -48,20 +49,25 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - "snapshot_read": Inspect current page DOM and interactive elements without navigating.
 - "browser_screenshot": Capture a visual screenshot of the live page.
 - "profile_get": Retrieve user applicant profile and credentials.
-2. Workspace & Files:
+2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
+- "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text.
+- "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
+3. Workspace & Files:
 - "workspace_create": Initialize a dedicated run workspace directory.
 - "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
-3. Sandboxed Execution:
+4. Sandboxed Execution:
 - "shell_run": Execute terminal/bash commands in the isolated workspace sandbox.
 - "shell_output": Check output or logs of running background commands.
 - "shell_kill": Terminate running processes.
-4. User Interaction (HITL):
-- "ask_user": When you genuinely need user confirmation, clarification, or choices to proceed, invoke ask_user with question and options.
+5. User Interaction (HITL):
+- "ask_user": When you genuinely need a decision, preference, or confirmation from the user, invoke "ask_user" with:
+  * "question": A brief 1-sentence question or recommendation (max 15-18 words).
+  * "options": REQUIRED array of 2 to 3 short, concrete choices (2-6 words each). Put your top recommendation FIRST prefixed with "(Recommended)".
 
 CRITICAL EXECUTION RULES:
-- DECISIVE TOOL USE: Never give conversational excuses or pretend you cannot access the web or run tools. When asked to check online, search, read, or run code, invoke the respective tool immediately on turn 1.
+- DECISIVE TOOL USE: Never give conversational excuses or pretend you cannot access the web, generate images, or run tools. Invoke the appropriate tool immediately on turn 1.
 - DO NOT CHATTER BEFORE CALLING TOOLS: When calling tools, emit ONLY the function call without conversational preambles.
-- SYNTHESIZE AFTER RESULTS: Once tool results are returned, synthesize a thorough, well-formatted Markdown response with links, citations, and summaries.`;
+- SYNTHESIZE AFTER RESULTS: Once tool results are returned, synthesize a concise, well-formatted Markdown response.`;
 
 export class OmniEngine extends EventEmitter {
   constructor(options = {}) {
@@ -145,6 +151,12 @@ export class OmniEngine extends EventEmitter {
       case 'segment_image':
         return await executeSegmentImage(toolArgs, { workspaceRoot, runId, threadId: context.threadId });
 
+      case 'generate_image':
+      case 'image_generation':
+      case 'create_image':
+      case 'edit_image':
+        return await executeGenerateImage(toolArgs);
+
       default:
         throw new Error(`No local executor registered for tool "${toolName}".`);
     }
@@ -180,8 +192,9 @@ export class OmniEngine extends EventEmitter {
     });
 
     if (resume) {
-      if (resume.approved && (resume.toolName || resume.pendingToolName)) {
-        addThreadApproval(threadId, resume.toolName || resume.pendingToolName);
+      const approvedTool = resume.toolName || resume.pendingToolName;
+      if (resume.approved && approvedTool && approvedTool !== 'ask_user') {
+        addThreadApproval(threadId, approvedTool);
       }
       clearInterrupt(threadId);
     }
@@ -312,23 +325,67 @@ export class OmniEngine extends EventEmitter {
             }
 
             if (toolName === 'ask_user' || perm.decision === 'ask') {
+              const rawQuestion =
+                toolArgs.question ||
+                toolArgs.prompt ||
+                toolArgs.message ||
+                toolArgs.title ||
+                toolArgs.stepTitle ||
+                (toolName === 'ask_user'
+                  ? 'How would you like to proceed?'
+                  : `Approve ${toolName.replace(/_/g, ' ')}?`);
+
+              const rawList = Array.isArray(toolArgs.options)
+                ? toolArgs.options
+                : Array.isArray(toolArgs.choices)
+                  ? toolArgs.choices
+                  : [];
+
+              let normalizedOptions = rawList
+                .map((opt) => (typeof opt === 'string' ? opt.trim() : String(opt?.label || opt?.value || '').trim()))
+                .filter(Boolean)
+                .slice(0, 3);
+
+              if (normalizedOptions.length === 0) {
+                normalizedOptions =
+                  toolName === 'ask_user'
+                    ? ['(Recommended) Proceed with recommended defaults', 'Specify custom details']
+                    : ['(Recommended) Allow and proceed', 'Skip this action'];
+              } else if (!normalizedOptions.some((o) => /recommended/i.test(o))) {
+                normalizedOptions[0] = `(Recommended) ${normalizedOptions[0]}`;
+              }
+
+              const enrichedArgs = {
+                ...toolArgs,
+                question: rawQuestion,
+                options: normalizedOptions
+              };
+
               saveInterrupt(threadId, {
                 runId,
                 pendingToolName: toolName,
-                pendingToolArgs: toolArgs
+                pendingToolArgs: enrichedArgs
               });
               this.emit('event', {
                 type: 'INTERRUPT',
                 threadId,
                 runId,
                 tool: toolName,
-                args: toolArgs,
-                question: toolArgs.question || perm.reason,
-                options: toolArgs.options || [],
-                context: toolArgs.context,
-                reason: perm.reason || 'user_confirmation'
+                args: enrichedArgs,
+                question: rawQuestion,
+                options: normalizedOptions,
+                context: toolArgs.context || (toolName !== 'ask_user' ? perm.reason : undefined),
+                reason: toolName === 'ask_user' ? 'user_question' : perm.reason || 'user_confirmation'
               });
-              return { status: 'interrupted', threadId, runId, pendingTool: toolName, args: toolArgs };
+              return {
+                status: 'interrupted',
+                threadId,
+                runId,
+                pendingTool: toolName,
+                args: enrichedArgs,
+                question: rawQuestion,
+                options: normalizedOptions
+              };
             }
 
             // 3. Execution with retry

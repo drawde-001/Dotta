@@ -255,17 +255,38 @@ export default function App() {
             const event = JSON.parse(jsonStr);
 
             if (event.type === 'INTERRUPT') {
-              setActiveInterrupt({
-                id: event.id || `interrupt-${Date.now()}`,
-                reason: event.reason,
-                message: event.question || event.message || 'Permission or input required to proceed:',
-                metadata: {
-                  toolName: event.tool || event.pendingTool,
-                  toolArgs: event.args || {},
-                  options: event.options,
-                  context: event.context,
-                  questions: event.questions
-                }
+              setActiveInterrupt((prev) => {
+                const args =
+                  event.args && Object.keys(event.args).length > 0
+                    ? event.args
+                    : prev?.metadata?.toolArgs || {};
+                const rawQuestion =
+                  event.question ||
+                  args.question ||
+                  args.prompt ||
+                  args.message ||
+                  args.title ||
+                  event.message ||
+                  prev?.message ||
+                  'Which option would you prefer?';
+                const candidateOpts =
+                  (Array.isArray(event.options) && event.options.length > 0 ? event.options : null) ||
+                  (Array.isArray(args.options) && args.options.length > 0 ? args.options : null) ||
+                  (Array.isArray(args.choices) && args.choices.length > 0 ? args.choices : null) ||
+                  prev?.metadata?.options ||
+                  [];
+                return {
+                  id: event.id || prev?.id || `interrupt-${Date.now()}`,
+                  reason: event.reason || prev?.reason || 'user_question',
+                  message: rawQuestion,
+                  metadata: {
+                    toolName: event.tool || event.pendingTool || prev?.metadata?.toolName,
+                    toolArgs: args,
+                    options: candidateOpts.slice(0, 3),
+                    context: event.context || args.context || prev?.metadata?.context,
+                    questions: event.questions || args.questions || prev?.metadata?.questions
+                  }
+                };
               });
               setMessages((prev) => {
                 const updated = [...prev];

@@ -282,6 +282,9 @@ const ToolFallbackImpl = ({
   status,
   responseDeliveryStatus,
   elapsedMs,
+  active = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
   defaultOpen = false,
 }) => {
   const toolName = propToolName || name || "tool";
@@ -299,10 +302,31 @@ const ToolFallbackImpl = ({
     status?.type === "incomplete" && status.reason === "cancelled";
   const isRequiresAction = status?.type === "requires-action";
 
-  const [open, setOpen] = useState(defaultOpen || isRequiresAction);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(
+    defaultOpen || isRequiresAction
+  );
+
+  const prevActiveRef = useRef(active || isRequiresAction);
+  React.useEffect(() => {
+    const nowActive = Boolean(active || isRequiresAction);
+    if (prevActiveRef.current && !nowActive) {
+      setUncontrolledOpen(false);
+    }
+    prevActiveRef.current = nowActive;
+  }, [active, isRequiresAction]);
+
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : uncontrolledOpen;
+  const handleOpenChange = useCallback(
+    (next) => {
+      if (!isControlled) setUncontrolledOpen(next);
+      controlledOnOpenChange?.(next);
+    },
+    [isControlled, controlledOnOpenChange]
+  );
 
   return (
-    <ToolFallbackRoot open={open} onOpenChange={setOpen}>
+    <ToolFallbackRoot open={open} onOpenChange={handleOpenChange}>
       <ToolFallbackTrigger
         toolName={toolName}
         status={status}

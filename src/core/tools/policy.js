@@ -192,7 +192,8 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     'snapshot_read',
     'browser_screenshot',
     'profile_get',
-    'shell_output'
+    'shell_output',
+    'generate_image'
   ];
 
   if (mode === 'default') {

@@ -79,10 +79,22 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
   // Main title / question: the shorter the card text is, the better!
   const baseTitleText = useMemo(() => {
     let raw = '';
-    if (interrupt?.message && interrupt.message.trim()) {
+    if (
+      interrupt?.message &&
+      interrupt.message.trim() &&
+      interrupt.message.trim() !== 'Permission or input required to proceed:'
+    ) {
       raw = interrupt.message.trim();
     } else if (interrupt?.question && interrupt.question.trim()) {
       raw = interrupt.question.trim();
+    } else if (typeof toolArgs?.question === 'string' && toolArgs.question.trim()) {
+      raw = toolArgs.question.trim();
+    } else if (typeof toolArgs?.prompt === 'string' && toolArgs.prompt.trim()) {
+      raw = toolArgs.prompt.trim();
+    } else if (typeof toolArgs?.title === 'string' && toolArgs.title.trim()) {
+      raw = toolArgs.title.trim();
+    } else if (typeof toolArgs?.stepTitle === 'string' && toolArgs.stepTitle.trim()) {
+      raw = toolArgs.stepTitle.trim();
     } else if (toolName === 'browser_read_page' || toolName === 'read_page') {
       raw = 'Allow reading this URL?';
     } else if (toolName === 'shell_run') {
@@ -90,11 +102,11 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
     } else if (toolName === 'file_delete') {
       raw = 'Allow deleting this file?';
     } else {
-      raw = 'Permission or input required to proceed:';
+      raw = 'How would you like to proceed?';
     }
     const { conciseQuestion } = splitQuestionMessage(raw);
     return conciseQuestion;
-  }, [interrupt?.message, interrupt?.question, toolName]);
+  }, [interrupt?.message, interrupt?.question, toolArgs, toolName]);
 
   // Robust string extractor for options
   const extractOptionString = (opt) => {
@@ -176,57 +188,59 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
     return results;
   };
 
-  // All raw options
+  // All raw options (capped to 2-3 concise options, always with a recommendation)
   const rawOptions = useMemo(() => {
     const fromMeta = normalizeOptionsList(metadata?.options);
-    if (fromMeta.length > 0) return fromMeta;
+    if (fromMeta.length > 0) return fromMeta.slice(0, 3);
 
     const fromArgs = normalizeOptionsList(toolArgs?.options);
-    if (fromArgs.length > 0) return fromArgs;
+    if (fromArgs.length > 0) return fromArgs.slice(0, 3);
 
     const fromQuestions = normalizeOptionsList(toolArgs?.questions?.[0]?.options);
-    if (fromQuestions.length > 0) return fromQuestions;
+    if (fromQuestions.length > 0) return fromQuestions.slice(0, 3);
 
     const fromChoices = normalizeOptionsList(toolArgs?.choices);
-    if (fromChoices.length > 0) return fromChoices;
+    if (fromChoices.length > 0) return fromChoices.slice(0, 3);
 
     if (toolName === 'browser_read_page' || toolName === 'read_page') {
       return [
-        'Yes, allow this time',
-        'No (tell the agent what to do instead)'
+        '(Recommended) Yes, allow this time',
+        'Skip this page'
       ];
     }
     if (toolName === 'shell_run') {
       return [
-        'Yes, allow this command',
-        'No (tell the agent what to do instead)'
+        '(Recommended) Yes, allow this command',
+        'Skip this command'
       ];
     }
     if (toolName === 'file_delete') {
       return [
-        'Yes, allow deleting this file',
-        'No, keep the file'
+        '(Recommended) Yes, delete file',
+        'Keep the file'
       ];
     }
 
-    const msg = (interrupt?.message || interrupt?.question || '').toLowerCase();
+    const msg = (interrupt?.message || interrupt?.question || baseTitleText || '').toLowerCase();
     if (msg.includes('url') || msg.includes('link') || msg.includes('form')) {
       return [
-        'https://docs.google.com/forms/d/e/1FAIpQLSe_GDPtLZsdA57xP.../viewform',
-        'https://boards.greenhouse.io/demo/jobs/12345',
-        'Type or paste custom URL below'
+        '(Recommended) Use default target URL',
+        'Paste custom URL below'
       ];
     }
     if (msg.includes('job') || msg.includes('role') || msg.includes('position')) {
       return [
-        'Full Stack Engineer',
+        '(Recommended) Full Stack AI Engineer',
         'Frontend Engineer (React/TypeScript)',
-        'Software Engineer (Node.js/Backend)'
+        'Backend Engineer (Node.js)'
       ];
     }
 
-    return [];
-  }, [metadata?.options, toolArgs, toolName, interrupt?.message, interrupt?.question]);
+    return [
+      '(Recommended) Proceed with recommended defaults',
+      'Customize details first'
+    ];
+  }, [metadata?.options, toolArgs, toolName, interrupt?.message, interrupt?.question, baseTitleText]);
 
   // Break options into steps: Only paginate when options >= 5
   const steps = useMemo(() => {
@@ -425,11 +439,17 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
         </div>
       )}
 
-      {/* Numbered Options List */}
+      {/* Numbered Options List (2-3 concise options, Recommended badge on preferred choice) */}
       {currentOptions.length > 0 && (
         <div className="mt-3 flex flex-col gap-1.5">
           {currentOptions.map((opt, idx) => {
             const isSelected = currentSelectedIndex === idx;
+            const hasRecTag = /^\(recommended\)\s*/i.test(opt) || /\(recommended\)$/i.test(opt);
+            const isRecommended = hasRecTag || (idx === 0 && !currentOptions.some((o) => /recommended/i.test(o)));
+            const cleanOpt = opt
+              .replace(/^\(recommended\)\s*/i, '')
+              .replace(/\s*\(recommended\)$/i, '')
+              .trim();
             return (
               <div
                 key={idx}
@@ -439,33 +459,41 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
                     [currentStepIndex]: idx
                   }));
                 }}
-                className={`group flex items-center w-full px-3 py-2 rounded-lg text-left transition-all cursor-pointer select-none ${
+                className={`group flex items-center justify-between gap-2 w-full px-3 py-2 rounded-lg text-left transition-all cursor-pointer select-none ${
                   isSelected
                     ? 'bg-white/10 text-white ring-1 ring-white/20'
                     : 'text-zinc-300 hover:bg-white/[0.04] hover:text-zinc-200'
                 }`}
               >
-                <span
-                  className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-semibold mr-2.5 shrink-0 transition-colors ${
-                    isSelected
-                      ? 'bg-white text-zinc-950 font-bold shadow-sm'
-                      : 'bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-300'
-                  }`}
-                >
-                  {idx + 1}
-                </span>
-                <span className="text-[13px] leading-tight flex-1">
-                  {opt}
-                </span>
+                <div className="flex items-center min-w-0 flex-1">
+                  <span
+                    className={`w-5 h-5 rounded flex items-center justify-center text-[11px] font-semibold mr-2.5 shrink-0 transition-colors ${
+                      isSelected
+                        ? 'bg-white text-zinc-950 font-bold shadow-sm'
+                        : 'bg-zinc-800/80 text-zinc-400 group-hover:text-zinc-300'
+                    }`}
+                  >
+                    {idx + 1}
+                  </span>
+                  <span className="text-[13px] leading-tight truncate">
+                    {cleanOpt}
+                  </span>
+                </div>
+                {isRecommended && (
+                  <span className="shrink-0 text-[10.5px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                    Recommended
+                  </span>
+                )}
               </div>
             );
           })}
         </div>
       )}
 
-      {/* User Manual Input */}
-      <div className="mt-3">
-        <textarea
+      {/* Compact 1-Line Custom Reply Input */}
+      <div className="mt-2.5">
+        <input
+          type="text"
           ref={manualInputRef}
           value={manualInputByStep[currentStepIndex] || ''}
           onChange={(e) => {
@@ -475,13 +503,8 @@ export function AskUserInterruptCard({ interrupt, onResolve }) {
               [currentStepIndex]: val
             }));
           }}
-          placeholder={
-            currentOptions.length > 0
-              ? "Tell the agent what to do instead or type custom details (optional)..."
-              : "Type your response or paste URL / details here..."
-          }
-          rows={2}
-          className="w-full bg-[#0e0e11] border border-zinc-700/80 rounded-lg p-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-white/40 focus:ring-1 focus:ring-white/20 transition-all resize-none"
+          placeholder="Or type a custom response..."
+          className="w-full h-8 bg-[#0e0e11] border border-zinc-800 rounded-lg px-2.5 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/15 transition-all"
         />
       </div>
 

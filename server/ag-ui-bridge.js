@@ -39,7 +39,11 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
       `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | prompt: "${instruction.slice(0, 100)}"`
     );
 
+    let interruptEmitted = false;
     const eventListener = (evt) => {
+      if (evt.type === 'INTERRUPT') {
+        interruptEmitted = true;
+      }
       if (evt.type === 'TOOL_CALL') {
         console.log(`[Omni Server] Tool call -> ${evt.name}(${JSON.stringify(evt.args || {})})`);
       } else if (evt.type === 'TOOL_RESULT') {
@@ -63,7 +67,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         resume
       });
 
-      if (result.status === 'interrupted') {
+      if (result.status === 'interrupted' && !interruptEmitted) {
         writeAgUiEvent(res, {
           type: 'INTERRUPT',
           threadId,
