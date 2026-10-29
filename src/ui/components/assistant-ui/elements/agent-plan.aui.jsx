@@ -19,8 +19,8 @@ export function AgentPlan({
   className = '',
   ...props
 }) {
-  const completedCount = steps.filter((s) => s.status === 'completed').length;
-  const progressPercent = Math.round((completedCount / steps.length) * 100);
+  const completedCount = steps.filter((s) => s.status === 'completed' || s.status === 'done').length;
+  const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
 
   return (
     <div
@@ -54,7 +54,7 @@ export function AgentPlan({
       <ul className="flex flex-col gap-2.5">
         {steps.map((st, idx) => {
           const isRunning = st.status === 'running';
-          const isDone = st.status === 'completed';
+          const isDone = st.status === 'completed' || st.status === 'done';
 
           return (
             <li

@@ -50,7 +50,6 @@ import {
 } from "@/components/assistant-ui/elements/attachment.aui";
 import { Reasoning, ReasoningRoot, ReasoningTrigger, ReasoningContent, ReasoningText } from "@/components/assistant-ui/elements/reasoning.aui";
 import { Sources } from "@/components/assistant-ui/elements/sources.aui";
-import { Plan } from "@/components/assistant-ui/elements/plan.aui";
 import {
   ThinkingIndicator,
   ToolCall,
@@ -527,7 +526,6 @@ function AssistantMessage() {
                 case "image":
                   return <MessagePartPrimitive.Image />;
                 case "tool-call": {
-                  if (part.toolUI) return part.toolUI;
                   const toolName = part.toolName || part.name || 'tool';
                   const args = part.args || part.arguments;
                   if (['bash', 'terminal', 'run_command', 'execute_command'].includes(toolName)) {
