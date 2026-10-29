@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -65,7 +65,10 @@ import {
   ErrorState,
 } from "@/components/assistant-ui/elements";
 import { AskUserInterruptCard } from "@/components/AskUserInterruptCard";
+import { renderToolCallPart, renderDataPart, registerToolComponent, registerDataRenderer } from "./tool-registry";
 import { cn } from "@/lib/utils";
+
+export { registerToolComponent, registerDataRenderer };
 
 export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel, showComposer = false }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
@@ -439,7 +442,7 @@ function UserMessage() {
       <UserMessageAttachments />
 
       <div className="relative flex max-w-[85%] flex-col items-end">
-        <div className="rounded-2xl border border-border/60 bg-background dark:bg-[#18181c] px-4 py-2.5 text-sm text-foreground shadow-xs break-words leading-relaxed">
+        <div className="rounded-2xl bg-background dark:bg-[#18181c] px-4 py-2.5 text-sm text-foreground break-words leading-relaxed">
           <MessagePrimitive.Parts />
         </div>
         <div className="absolute top-1/2 -left-8 -translate-y-1/2 opacity-0 group-hover/user-msg:opacity-100 transition-opacity">
@@ -526,77 +529,12 @@ function AssistantMessage() {
                   return <MarkdownText />;
                 case "image":
                   return <MessagePartPrimitive.Image />;
-                case "tool-call": {
-                  const toolName = part.toolName || part.name || 'tool';
-                  const args = part.args || part.arguments;
-                  if (['bash', 'terminal', 'run_command', 'execute_command'].includes(toolName)) {
-                    const cmd = (args && typeof args === 'object' ? args.command || args.CommandLine : args) || toolName;
-                    const outputStr = part.result ? (typeof part.result === 'string' ? part.result : JSON.stringify(part.result)) : '';
-                    const outputLines = outputStr ? outputStr.split('\n').filter(Boolean) : [];
-                    return (
-                      <div className="my-2">
-                        <TerminalBlock
-                          command={typeof cmd === 'string' ? cmd : JSON.stringify(cmd)}
-                          state={part.status?.type === 'running' ? 'running' : part.status?.type === 'error' ? 'failed' : 'done'}
-                          output={outputLines.slice(0, 8)}
-                        />
-                      </div>
-                    );
-                  }
-                  if (['edit_file', 'replace_file_content', 'code_diff'].includes(toolName)) {
-                    const filename = (args && typeof args === 'object' ? args.TargetFile || args.path || args.filename : 'code');
-                    return (
-                      <div className="my-2">
-                        <CodeDiff filename={typeof filename === 'string' ? filename.split(/[/\\]/).pop() : 'edit'} />
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="my-1.5">
-                      <ToolCall
-                        toolName={toolName}
-                        completedName={toolName}
-                        argument={args ? (typeof args === 'string' ? args : JSON.stringify(args).slice(0, 45)) : ''}
-                        result={part.result}
-                        isComplete={part.status?.type !== 'running'}
-                      />
-                    </div>
-                  );
-                }
-                case "plan": {
-                  const pData = part.data || part;
-                  return (
-                    <div className="my-2">
-                      <AgentPlan title={pData.title || "Plan"} steps={pData.steps || []} />
-                    </div>
-                  );
-                }
-                case "data": {
-                  const dName = part.name;
-                  const d = part.data || part;
-                  if (dName === 'plan' || d?.steps) {
-                    return <div className="my-2"><AgentPlan title={d.title || "Plan"} steps={d.steps || []} /></div>;
-                  }
-                  if (dName === 'code_diff') {
-                    return <div className="my-2"><CodeDiff {...d} /></div>;
-                  }
-                  if (dName === 'file_tree') {
-                    return <div className="my-2"><FileTree {...d} /></div>;
-                  }
-                  if (dName === 'terminal') {
-                    return <div className="my-2"><TerminalBlock {...d} /></div>;
-                  }
-                  if (dName === 'guardrail') {
-                    return <div className="my-2"><GuardrailNotice {...d} /></div>;
-                  }
-                  if (dName === 'confidence') {
-                    return <div className="my-2"><ConfidenceMarker {...d} /></div>;
-                  }
-                  if (dName === 'reasoning_effort') {
-                    return <div className="my-2"><ReasoningEffort {...d} /></div>;
-                  }
-                  return part.dataRendererUI;
-                }
+                case "tool-call":
+                  return renderToolCallPart(part);
+                case "plan":
+                  return renderDataPart({ name: 'plan', ...part });
+                case "data":
+                  return renderDataPart(part);
                 case "indicator":
                   return null;
                 default:

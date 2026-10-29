@@ -15,7 +15,7 @@ export function MessagePair({
       className={`flex w-full max-w-sm flex-col gap-5 ${className}`}
       {...props}
     >
-      <p className="max-w-[85%] self-end text-sm bg-background border border-border/60 dark:bg-popover rounded-2xl px-3.5 py-2 text-foreground">
+      <p className="max-w-[85%] self-end text-sm bg-background dark:bg-popover rounded-2xl px-3.5 py-2 text-foreground">
         {userMessage}
       </p>
       <div className="group/message flex flex-col items-start">
