@@ -799,18 +799,6 @@ export default function App() {
         {/* Right Minimal Workspace Panel (Shown in Work mode) */}
         {workspaceMode === 'work' && (
           <div className="flex-1 flex flex-col min-w-[360px] max-w-[50%] h-full bg-[#08080A] relative overflow-hidden">
-            {/* Dedicated Top Bar for Close Workspace Button */}
-            <div className="h-10 px-3.5 flex items-center justify-end shrink-0 bg-[#08080A]">
-              <button
-                type="button"
-                onClick={handleCloseWorkspace}
-                title="Hide workspace panel"
-                className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-              >
-                <PanelRight size={15} />
-              </button>
-            </div>
-
             {/* Minimal Browser Stream Frame */}
             <div className="flex-1 overflow-hidden flex flex-col">
               <LiveBrowserStream

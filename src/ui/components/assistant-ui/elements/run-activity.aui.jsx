@@ -114,11 +114,6 @@ export function RunActivity({
               ))}
             </ol>
           </CollapsibleContent>
-          {!open && latestActivity && (
-            <p className="text-muted-foreground ps-5 text-sm wrap-anywhere peer-[:not([hidden])]:hidden">
-              {latestActivity}
-            </p>
-          )}
         </Collapsible>
       ) : (
         <div className="text-muted-foreground py-1 text-sm">{summary}</div>

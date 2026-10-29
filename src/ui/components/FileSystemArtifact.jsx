@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChevronRight, FileCode, ExternalLink } from 'lucide-react';
+import { File } from '@/components/assistant-ui/elements/file';
 
 export function getFileLanguageMeta(filename = '') {
   const ext = (filename.split('.').pop() || '').toLowerCase();
@@ -47,9 +47,46 @@ export function openFileInViewer(fileData) {
   window.dispatchEvent(new CustomEvent('omni:open-file', { detail: fileData }));
 }
 
+export function getFileMimeType(filename = '') {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  switch (ext) {
+    case 'json':
+      return 'application/json';
+    case 'pdf':
+      return 'application/pdf';
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'webp':
+    case 'svg':
+      return `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    case 'mp3':
+    case 'wav':
+      return `audio/${ext}`;
+    case 'mp4':
+    case 'webm':
+      return `video/${ext}`;
+    case 'js':
+    case 'jsx':
+    case 'ts':
+    case 'tsx':
+    case 'html':
+    case 'css':
+    case 'py':
+    case 'md':
+    case 'sh':
+    case 'txt':
+      return 'text/plain';
+    default:
+      return 'application/octet-stream';
+  }
+}
+
 /**
- * Clickable File System Component in Chat
- * Clicking opens the Left Sidebar File Viewer matching Screenshot 2.
+ * Clickable file entry in chat, rendered with the gathered assistant-ui `File` element
+ * (File.Root / File.Icon / File.Name). Clicking opens the Left Sidebar File Viewer.
+ * The path line is display-only (never clickable / selectable).
  */
 export function FileSystemArtifact({ artifact, onClick }) {
   const filename = artifact?.name || (artifact?.path ? artifact.path.split(/[/\\]/).pop() : 'file');
@@ -58,7 +95,7 @@ export function FileSystemArtifact({ artifact, onClick }) {
   const displayBreadcrumb = cleanRelativeDisplayPath(artifact?.path || '');
   const langMeta = getFileLanguageMeta(filename);
 
-  const handleClick = (e) => {
+  const handleOpen = (e) => {
     e.stopPropagation();
     const payload = {
       ...artifact,
@@ -76,43 +113,31 @@ export function FileSystemArtifact({ artifact, onClick }) {
   };
 
   return (
-    <div
-      onClick={handleClick}
+    <File.Root
       role="button"
       tabIndex={0}
       title="Click to view file in left sidebar"
-      className="group relative my-2 flex items-center justify-between rounded-xl border border-zinc-800/90 bg-[#121316] px-3.5 py-2.5 transition-all duration-150 hover:border-zinc-700 hover:bg-[#18191d] cursor-pointer shadow-sm select-none"
+      onClick={handleOpen}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handleOpen(e);
+        }
+      }}
+      className="cursor-pointer max-w-full select-none"
     >
-      <div className="flex items-center gap-3 min-w-0">
-        <span
-          className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10.5px] font-bold border ${langMeta.color}`}
-        >
-          {langMeta.badge}
-        </span>
-
-        <div className="flex flex-col min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate text-[13.5px] font-medium text-zinc-100 group-hover:text-white">
-              {filename}
-            </span>
-            <span className="shrink-0 text-xs italic text-zinc-400">
-              {actionLabel}
-            </span>
-          </div>
-
-          {displayBreadcrumb && (
-            <span className="truncate text-[11px] text-zinc-500 font-mono pointer-events-none select-none">
-              {displayBreadcrumb}
-            </span>
-          )}
-        </div>
+      <File.Icon mimeType={getFileMimeType(filename)} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <File.Name>
+          {filename} <span className="text-muted-foreground font-normal italic">{actionLabel}</span>
+        </File.Name>
+        {displayBreadcrumb && (
+          <span className="text-muted-foreground pointer-events-none truncate text-xs select-none">
+            {displayBreadcrumb}
+          </span>
+        )}
       </div>
-
-      <div className="flex items-center gap-1 shrink-0 text-zinc-500 group-hover:text-zinc-300 transition-colors ps-2">
-        <span className="text-[11px] font-medium hidden sm:inline-block">View</span>
-        <ChevronRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-      </div>
-    </div>
+    </File.Root>
   );
 }
 
