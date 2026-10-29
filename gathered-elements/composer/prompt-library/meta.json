@@ -1,0 +1,14 @@
+{
+  "slug": "prompt-library",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/prompt-library",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "prompt-library.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

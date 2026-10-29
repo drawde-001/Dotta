@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-retrieval-chunks",
+  "type": "registry:component",
+  "title": "Retrieval chunks",
+  "description": "The passages a retrieval answer stands on, scored, before the answer itself arrives.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/retrieval-chunks.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/retrieval-chunks.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { DatabaseIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, mono, paper, ShimmerLabel } from \"./surfaces\";\nimport { announced, pct, take } from \"../utils/range\";\n\nexport interface RetrievalChunk {\n  id: string;\n  source: string;\n  locator: string;\n  score: number;\n  text: string;\n}\n\nexport function RetrievalChunks({\n  query,\n  chunks,\n  visibleCount,\n  searching,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"query\" | \"chunks\" | \"visibleCount\" | \"searching\"\n> & {\n  query: string;\n  chunks: readonly RetrievalChunk[];\n  visibleCount: number;\n  searching: boolean;\n}) {\n  return (\n    <div\n      data-slot=\"retrieval-chunks\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2.5\", className)}\n\n      {...props}\n    >\n      <span\n        className={cn(\n          field,\n          \"text-foreground/70 inline-flex w-fit items-center gap-1.5 rounded-full px-3.5 py-2 text-xs\",\n        )}\n      >\n        <DatabaseIcon className=\"text-muted-foreground size-3\" />\n        {query}\n      </span>\n\n      <div className=\"text-muted-foreground text-xs\">\n        {searching ? (\n          <ShimmerLabel className=\"relative inline-block leading-none\">\n            Retrieving\n          </ShimmerLabel>\n        ) : (\n          <span className=\"fade-in animate-in duration-300\">\n            {chunks.length} passages above threshold\n          </span>\n        )}\n      </div>\n\n      <div className=\"flex min-h-[7rem] flex-col gap-1.5\">\n        {take(chunks, visibleCount).map((chunk) => (\n          <div\n            key={chunk.id}\n            className={cn(\n              paper,\n              \"fade-in slide-in-from-bottom-1 animate-in fill-mode-both flex flex-col gap-1.5 rounded-2xl px-3.5 py-2.5 duration-300\",\n            )}\n          >\n            <div className=\"flex items-baseline gap-2\">\n              <span className=\"text-foreground/90 min-w-0 flex-1 truncate text-[13px] font-medium\">\n                {chunk.source}\n              </span>\n              <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n                {chunk.locator}\n              </span>\n              <span\n                className={cn(\n                  mono,\n                  \"shrink-0 tabular-nums\",\n                  chunk.score >= 0.8\n                    ? \"text-emerald-600 dark:text-emerald-400\"\n                    : \"text-muted-foreground\",\n                )}\n              >\n                {chunk.score.toFixed(2)}\n              </span>\n            </div>\n            <p className=\"text-muted-foreground line-clamp-2 text-xs leading-relaxed\">\n              {chunk.text}\n            </p>\n            <span\n              role=\"meter\"\n              aria-label={`${chunk.source} relevance score`}\n              aria-valuemin={0}\n              aria-valuemax={100}\n              aria-valuenow={announced(pct(chunk.score, 1))}\n              aria-valuetext={`${chunk.score.toFixed(2)} of 1.00`}\n              className=\"bg-foreground/[0.06] inset-ring-border h-[2px] w-full overflow-hidden rounded-full inset-ring forced-colors:outline\"\n            >\n              <span\n                className=\"block h-full rounded-full bg-blue-500/70 transition-[width] duration-500 forced-color-adjust-none dark:bg-blue-400/70\"\n                style={{ width: `${pct(chunk.score, 1)}%` }}\n              />\n            </span>\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

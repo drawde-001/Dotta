@@ -1,0 +1,13 @@
+{
+  "slug": "generative-portfolio",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-portfolio",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

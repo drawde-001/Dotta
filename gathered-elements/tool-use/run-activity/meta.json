@@ -1,0 +1,14 @@
+{
+  "slug": "run-activity",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/run-activity",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "run-activity.aui.jsx",
+    "run-activity.tsx",
+    "showcase-snippet.html"
+  ]
+}

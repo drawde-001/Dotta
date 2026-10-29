@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-trace-waterfall",
+  "type": "registry:component",
+  "title": "Trace waterfall",
+  "description": "Every span in a run on one time axis, nested, so you can see where it actually went.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/trace-waterfall.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/trace-waterfall.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\nimport { pct, take } from \"../utils/range\";\n\nexport type SpanStatus = \"running\" | \"completed\" | \"failed\";\n\nexport interface TraceSpan {\n  id: string;\n  name: string;\n  depth: number;\n  startMs: number;\n  durationMs: number;\n  status: SpanStatus;\n}\n\nconst TONE: Record<SpanStatus, string> = {\n  running: \"bg-blue-500 dark:bg-blue-400\",\n  completed: \"bg-foreground/35\",\n  failed: \"bg-red-500/80\",\n};\n\nexport function TraceWaterfall({\n  spans,\n  totalMs,\n  visibleCount,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"spans\" | \"totalMs\" | \"visibleCount\"\n> & {\n  spans: readonly TraceSpan[];\n  totalMs: number;\n  visibleCount: number;\n}) {\n  const span = totalMs || 1;\n\n  return (\n    <div\n      data-slot=\"trace-waterfall\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-md flex-col gap-2 rounded-2xl p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-baseline justify-between\">\n        <span className=\"text-[13.5px] font-medium\">Trace</span>\n        <span className={cn(mono, \"text-muted-foreground tabular-nums\")}>\n          {totalMs}ms\n        </span>\n      </div>\n\n      <div className=\"flex flex-col gap-1\">\n        {take(spans, visibleCount).map((item) => {\n          const left = pct(item.startMs, span);\n          const width = Math.max(1.5, pct(item.durationMs, span));\n          return (\n            <div\n              key={item.id}\n              className=\"fade-in slide-in-from-left-1 animate-in fill-mode-both grid grid-cols-[7.5rem_1fr_2.5rem] items-center gap-2 duration-300\"\n            >\n              <span\n                className=\"text-foreground/70 min-w-0 truncate text-xs\"\n                style={{ paddingInlineStart: `${item.depth * 0.75}rem` }}\n              >\n                {item.name}\n              </span>\n              <span\n                role=\"img\"\n                aria-label={`${item.status}, starts at ${item.startMs}ms, runs ${item.durationMs}ms`}\n                className=\"relative flex h-4 min-w-0 items-center\"\n              >\n                <span\n                  className={cn(\n                    \"absolute h-[7px] rounded-full transition-[width] duration-500 ease-out motion-reduce:transition-none\",\n                    TONE[item.status],\n                    item.status === \"running\" && \"animate-pulse\",\n                  )}\n                  style={{ insetInlineStart: `${left}%`, width: `${width}%` }}\n                />\n              </span>\n              <span\n                className={cn(\n                  mono,\n                  \"text-muted-foreground text-end tabular-nums\",\n                )}\n              >\n                {item.durationMs}\n              </span>\n            </div>\n          );\n        })}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "context-display",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/context-display",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "context-display.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

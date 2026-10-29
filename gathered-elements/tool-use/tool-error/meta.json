@@ -1,0 +1,14 @@
+{
+  "slug": "tool-error",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/tool-error",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tool-error.aui.jsx",
+    "tool-error.tsx"
+  ]
+}

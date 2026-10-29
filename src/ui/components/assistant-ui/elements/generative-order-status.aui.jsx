@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeOrderStatusHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><header data-aui=\"card-title\">Order #48213</header><div data-aui=\"alert\" data-aui-tone=\"success\" role=\"alert\"><header data-aui=\"alert-title\">Order confirmed</header><p data-aui=\"alert-desc\">Your order is on its way and should arrive today.</p></div><ul data-aui=\"listview\"><li data-aui=\"listview-item\"><div data-aui=\"row\" data-aui-justify=\"between\"><div data-aui=\"col\" data-aui-gap=\"1\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Order placed</span><p data-aui=\"caption\">Today at 9:02 AM</p></div><span data-aui=\"badge\" data-aui-variant=\"success\">Done</span></div></li><li data-aui=\"listview-item\"><div data-aui=\"row\" data-aui-justify=\"between\"><div data-aui=\"col\" data-aui-gap=\"1\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Packed</span><p data-aui=\"caption\">Today at 9:41 AM</p></div><span data-aui=\"badge\" data-aui-variant=\"success\">Done</span></div></li><li data-aui=\"listview-item\"><div data-aui=\"row\" data-aui-justify=\"between\"><div data-aui=\"col\" data-aui-gap=\"1\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Out for delivery</span><p data-aui=\"caption\">Estimated 2:00 to 4:00 PM</p></div><span data-aui=\"badge\" data-aui-variant=\"info\">In progress</span></div></li></ul><hr data-aui=\"divider\"/><div data-aui=\"row\" data-aui-justify=\"end\"><button type=\"button\" data-aui=\"button\" data-aui-style=\"outline\" data-aui-action=\"{&quot;type&quot;:&quot;track_order&quot;,&quot;orderId&quot;:&quot;48213&quot;}\">Track package</button><button type=\"button\" data-aui=\"button\" data-aui-style=\"ghost\" data-aui-action=\"{&quot;type&quot;:&quot;contact_support&quot;,&quot;orderId&quot;:&quot;48213&quot;}\">Contact support</button></div></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeOrderStatus({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-order-status"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeOrderStatusHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeOrderStatus;

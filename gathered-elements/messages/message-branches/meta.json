@@ -1,0 +1,14 @@
+{
+  "slug": "message-branches",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/message-branches",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "message-branches.aui.jsx",
+    "message-branches.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

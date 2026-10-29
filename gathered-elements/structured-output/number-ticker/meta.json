@@ -1,0 +1,14 @@
+{
+  "slug": "number-ticker",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/number-ticker",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "number-ticker.tsx",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "checkpoint-history",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/checkpoint-history",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "checkpoint-history.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

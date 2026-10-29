@@ -1,0 +1,14 @@
+{
+  "slug": "mobile-composer",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/mobile-composer",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "mobile-composer.tsx",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

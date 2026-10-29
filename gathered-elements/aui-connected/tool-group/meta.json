@@ -1,0 +1,13 @@
+{
+  "slug": "tool-group",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/tool-group",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tool-group.tsx"
+  ]
+}

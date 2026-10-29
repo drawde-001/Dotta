@@ -1,0 +1,14 @@
+{
+  "slug": "logos",
+  "category": "Primitives",
+  "folder": "gathered-elements/primitives/logos",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "logos.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

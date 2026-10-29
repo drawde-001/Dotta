@@ -1,0 +1,26 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "generative-ui",
+  "type": "registry:component",
+  "title": "Generative UI",
+  "description": "Styled component library for rendering generative UI output.",
+  "dependencies": [
+    "@assistant-ui/generative-ui@^0.0.8",
+    "react-markdown",
+    "remark-gfm",
+    "zod"
+  ],
+  "registryDependencies": [
+    "https://r.assistant-ui.com/generative-ui-style.json",
+    "https://r.assistant-ui.com/elements-mermaid-diagram.json",
+    "https://r.assistant-ui.com/elements-geo-map.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/generative-ui.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/generative-ui.tsx",
+      "content": "\"use client\";\n\nimport ReactMarkdown from \"react-markdown\";\nimport remarkGfm from \"remark-gfm\";\nimport type { GenerativeUILibrary } from \"@assistant-ui/generative-ui/react\";\nimport { defaultGenerativeUILibrary } from \"@assistant-ui/generative-ui/react\";\nimport { GeoMap, type GeoMapPlace } from \"./geo-map\";\nimport { MermaidDiagram } from \"./mermaid-diagram\";\n\nconst markdownBase = defaultGenerativeUILibrary.Markdown!;\n\nconst pinsOf = (places: unknown): GeoMapPlace[] =>\n  (Array.isArray(places) ? places : []).flatMap((place: unknown, index) => {\n    if (place === null || typeof place !== \"object\") return [];\n    const { label, lat, lng, detail } = place as Record<string, unknown>;\n    return typeof label === \"string\" &&\n      typeof lat === \"number\" &&\n      typeof lng === \"number\"\n      ? [\n          {\n            id: String(index),\n            label,\n            lat,\n            lng,\n            description: typeof detail === \"string\" ? detail : undefined,\n          },\n        ]\n      : [];\n  });\n\n/** `MarkdownTextPrimitive` cannot be reused here: it reads from message-part context, not a prop string. */\nexport const styledGenerativeUILibrary: GenerativeUILibrary = {\n  ...defaultGenerativeUILibrary,\n  Markdown: {\n    properties: markdownBase.properties,\n    streamProperties: markdownBase.streamProperties,\n    description: \"A markdown string, rendered with GitHub-flavored markdown.\",\n    render: ({ value, children }) => (\n      <div data-aui=\"markdown\">\n        <ReactMarkdown remarkPlugins={[remarkGfm]}>{value ?? \"\"}</ReactMarkdown>\n        {children}\n      </div>\n    ),\n  },\n  Diagram: {\n    ...defaultGenerativeUILibrary.Diagram!,\n    render: ({ code, title }) => (\n      <figure data-aui=\"diagram\">\n        <MermaidDiagram code={typeof code === \"string\" ? code : \"\"} />\n        {typeof title === \"string\" || typeof title === \"number\" ? (\n          <figcaption data-aui=\"diagram-title\">{title}</figcaption>\n        ) : null}\n      </figure>\n    ),\n  },\n  Map: {\n    ...defaultGenerativeUILibrary.Map!,\n    render: ({ places, route }) => {\n      const pins = pinsOf(places);\n      return (\n        <GeoMap\n          data-aui=\"map\"\n          className=\"max-w-none [&_[data-slot=geo-map-coordinates]]:hidden\"\n          places={pins}\n          routes={\n            route && pins.length > 1\n              ? [\n                  {\n                    id: \"route\",\n                    points: pins.map(({ lat, lng }) => [lat, lng] as const),\n                  },\n                ]\n              : undefined\n          }\n        />\n      );\n    },\n  },\n};\n"
+    }
+  ]
+}

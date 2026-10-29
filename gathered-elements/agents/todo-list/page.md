@@ -1,0 +1,282 @@
+# Todo list
+URL: /elements/todo-list
+
+The agent's own working list, rewritten mid-run as it discovers what else is needed.
+
+> For AI agents: a documentation index is available at [llms.txt](/llms.txt). Use `.md` for canonical markdown pages; `.mdx` is kept as a backwards-compatible alias on supported URL paths.
+
+A todo list shows the plan an agent is working through right now: what is done, what is active, what failed, what was cancelled, and what is still pending. With a runtime the list comes from a tool call the model keeps rewriting as it works; standalone you pass the items in yourself.
+
+## Getting started
+
+**With a runtime:**
+
+Nothing in the runtime tracks a todo list on its own. The list is ordinary tool output: define a tool whose arguments are the current items, and render it with the `TodoList` element.
+
+1. ### Define the todo tool
+
+   A frontend tool is enough here: the model needs somewhere to write the plan, and the renderer reads it from `args`.
+
+   ```
+   import { defineToolkit } from "@assistant-ui/react";
+   import { z } from "zod";
+   import { TodoList } from "@/components/assistant-ui/elements/todo-list";
+
+   export const toolkit = defineToolkit({
+     update_todos: {
+       type: "frontend",
+       description: "Replace the visible working list with the current plan.",
+       parameters: z.object({
+         title: z.string().optional(),
+         description: z.string().optional(),
+         maxVisible: z.number().optional(),
+         items: z.array(
+           z.object({
+             id: z.string(),
+             text: z.string(),
+             description: z.string().optional(),
+             status: z.enum(["pending", "active", "done", "failed", "cancelled"]),
+             reason: z.string().optional(),
+           }),
+         ),
+       }),
+       execute: async ({ items }) => ({ count: items.length }),
+       render: ({ args }) => (
+         <TodoList
+           title={args.title}
+           description={args.description}
+           maxVisible={args.maxVisible}
+           items={args.items ?? []}
+         />
+       ),
+     },
+   });
+   ```
+
+   See [Defining tools](/docs/tools/defining-tools) for toolkit registration and server-side wiring.
+
+2. ### Register the toolkit
+
+   ```
+   "use client";
+
+   import { AssistantRuntimeProvider, AuiConfig, Tools } from "@assistant-ui/react";
+   import { useChatRuntime } from "@assistant-ui/ai-sdk";
+   import { toolkit } from "./toolkit";
+
+   export function MyRuntimeProvider({ children }: { children: React.ReactNode }) {
+     const runtime = useChatRuntime();
+     const config = AuiConfig({ tools: Tools({ toolkit }) });
+     return (
+       <AssistantRuntimeProvider runtime={runtime} config={config}>
+         {children}
+       </AssistantRuntimeProvider>
+     );
+   }
+   ```
+
+   Each call to `update_todos` becomes its own tool-call message part, so a model that revises the plan three times leaves three cards in the transcript. Set `display: "standalone"` on the entry to keep each one out of the inline chain-of-thought trace and presented as its own block.
+
+**Standalone (no runtime):**
+
+Standalone, the element is fully controlled: you hold the array of items and hand it the whole list on every render.
+
+1. ### Hold the todo state
+
+   ```
+   "use client";
+
+   import { useState } from "react";
+   import { TodoList, type TodoItem } from "@/components/assistant-ui/elements/todo-list";
+
+   const initialItems: TodoItem[] = [
+     { id: "1", text: "Read the failing test", description: "Trace the current behavior.", status: "done" },
+     { id: "2", text: "Reproduce locally", status: "active" },
+     { id: "3", text: "Write the fix", status: "pending" },
+     { id: "4", text: "Re-run the suite", status: "failed", reason: "Tests timed out" },
+     { id: "5", text: "Update the old fixture", status: "cancelled" },
+   ];
+
+   export function Plan() {
+     const [items, setItems] = useState(initialItems);
+     return <TodoList items={items} />;
+   }
+   ```
+
+2. ### Update an item's status
+
+   Replace the item rather than mutate it; the row keys off `id`, so the same id keeps its place while the new status re-renders its icon and text style.
+
+   ```
+   function advance(id: string) {
+     setItems((prev) =>
+       prev.map((item) =>
+         item.id === id
+           ? { ...item, status: item.status === "pending" ? "active" : "done" }
+           : item,
+       ),
+     );
+   }
+   ```
+
+## Anatomy
+
+```
+<div data-slot="todo-list">
+  <div>
+    <div>
+      <span>Todos</span>
+      <p>{/* optional list description */}</p>
+    </div>
+    <span>{/* n/m, or n/m · rev r when revision is set */}</span>
+  </div>
+  <ul>
+    <li data-status="pending | active | done | failed | cancelled">
+      <span>{/* status icon: check, spinner, cross, dash, or empty box */}</span>
+      <span>{/* the status as visually hidden text */}</span>
+      <div>
+        <span>{/* item text */}</span>
+        <p>{/* optional item description or failure reason */}</p>
+      </div>
+    </li>
+    {/* one row per item */}
+  </ul>
+  <button aria-expanded="false">Show N more</button>
+</div>
+```
+
+Each row shows one of five status icons: a checked box for `done`, a spinning loader for `active`, a red cross for `failed`, a muted dash for `cancelled`, and an empty outlined box for `pending`. The icon is decorative; every row carries its status as visually hidden text so a screen reader announces it alongside the item. Item descriptions appear below pending, active, and done items. A failed item's `reason` takes that place when present. Done and cancelled text is struck through in the muted foreground. Rows key off `item.id`; passing a new array with the same ids only restyles the existing rows, while a new id mounts a row that fades and slides in.
+
+A failed item is terminal but it is not a success, so it counts toward the denominator and never toward the numerator: three items that have all settled with one of them failed read `2/3`, not `3/3`. A cancelled item has left the plan, so it counts toward neither: three items with two done and one cancelled read `2/2`. With zero items the header still renders `0/0` and the list is empty, with no placeholder message. `revision` does not affect the count; it only appends `· rev {revision}` next to the ratio when you pass a number.
+
+## Examples
+
+### Item states
+
+The five states rendered together, independent of how the list is produced:
+
+```
+<TodoList
+  items={[
+    { id: "1", text: "Read the failing test", status: "done" },
+    { id: "2", text: "Reproduce locally", status: "active" },
+    { id: "3", text: "Write the fix", status: "pending" },
+    { id: "4", text: "Run deployment", status: "failed", reason: "Timed out" },
+    { id: "5", text: "Replace the old fixture", status: "cancelled" },
+  ]}
+/>
+```
+
+### Fold a long list
+
+`maxVisible` keeps the first rows in view, then keeps any later active or failed row visible as well. The button reveals the remaining rows in their original order:
+
+```
+<TodoList
+  maxVisible={3}
+  items={[
+    { id: "1", text: "Read the failing test", status: "done" },
+    { id: "2", text: "Reproduce locally", status: "done" },
+    { id: "3", text: "Write the fix", status: "pending" },
+    { id: "4", text: "Run typecheck", status: "active" },
+    { id: "5", text: "Run unit tests", status: "failed", reason: "Timed out" },
+    { id: "6", text: "Update the changelog", status: "pending" },
+    { id: "7", text: "Publish", status: "pending" },
+  ]}
+/>
+```
+
+### Where the list comes from
+
+**With a runtime:**
+
+While the tool call is still streaming, `args.items` is a partial parse: fields can be missing until the model finishes writing them. `useToolArgsStatus` reports whether the `items` argument itself is still arriving, which is enough to dim the whole list without claiming a specific item is settled:
+
+```
+import { useToolArgsStatus } from "@assistant-ui/react";
+
+function TodoToolUI({ args }: { args: { items?: TodoItem[] } }) {
+  const { propStatus } = useToolArgsStatus<{ items: TodoItem[] }>();
+  return (
+    <TodoList
+      items={args.items ?? []}
+      className={propStatus.items === "streaming" ? "opacity-70" : undefined}
+    />
+  );
+}
+```
+
+**Standalone (no runtime):**
+
+A discovered step is an append; the component does not distinguish "the agent found new work" from any other update:
+
+```
+function addItem(text: string) {
+  setItems((prev) => [
+    ...prev,
+    { id: crypto.randomUUID(), text, status: "pending" },
+  ]);
+}
+```
+
+### Restyle the list
+
+Both lanes take `className` on the root, and the revision counter uses the shared `mono` surface from `surfaces.tsx`.
+
+```
+<TodoList className="max-w-md gap-2" items={items} revision={3} />
+```
+
+## API reference
+
+**With a runtime:**
+
+### Tool definition
+
+| Field        | Type                                           | Description                                                                                  |
+| ------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `parameters` | Zod schema                                     | Shape of `args`; use the task list fields below.                                             |
+| `execute`    | `(args) => TResult \| Promise<TResult>`        | Runs once the call resolves; the result is separate from what the renderer shows.            |
+| `render`     | `ToolCallMessagePartComponent<TArgs, TResult>` | Receives `args`, `status`, and `result` for this call; re-runs as `args` streams in.         |
+| `display`    | `"standalone" \| "inline"`                     | `"standalone"` surfaces the card outside the chain-of-thought trace. Defaults to `"inline"`. |
+
+### Todo tool arguments
+
+| Field         | Type         | Description                                                                                       |
+| ------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `items`       | `TodoItem[]` | The rows to render in order.                                                                      |
+| `title`       | `string`     | Optional heading. The element falls back to `"Todos"`.                                            |
+| `description` | `string`     | Optional muted text below the heading.                                                            |
+| `maxVisible`  | `number`     | Optional count of initial rows to show before folding. Later active and failed rows stay visible. |
+
+### Tool-call part state
+
+| Field                            | Type                                                           | Description                                                              |
+| -------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `part.status.type`               | `"running" \| "complete" \| "incomplete" \| "requires-action"` | Lifecycle of the call backing the render.                                |
+| `useToolArgsStatus().propStatus` | `Partial<Record<keyof TArgs, "streaming" \| "complete">>`      | Per top-level argument streaming state; called from inside the renderer. |
+
+**Standalone (no runtime):**
+
+### TodoList
+
+| Prop          | Type                  | Default   | Description                                                                                                                      |
+| ------------- | --------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `items`       | `readonly TodoItem[]` | required  | The rows to render, in order.                                                                                                    |
+| `revision`    | `number`              |           | When set, appended to the counter as `· rev {revision}`.                                                                         |
+| `title`       | `string`              | `"Todos"` | Heading above the rows.                                                                                                          |
+| `description` | `string`              |           | Muted text below the heading.                                                                                                    |
+| `maxVisible`  | `number`              |           | Initial rows to show before folding. Values are clamped from `0` to `items.length`; later active and failed rows remain visible. |
+| `className`   | `string`              |           | Merged onto the root.                                                                                                            |
+
+All other `div` props are forwarded to the root.
+
+### TodoItem
+
+| Field         | Type                                                         | Description                                                                                                                    |
+| ------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `id`          | `string`                                                     | Row key; stable ids keep entrance animation from replaying on every render.                                                    |
+| `text`        | `string`                                                     | The step's label.                                                                                                              |
+| `status`      | `"pending" \| "active" \| "done" \| "failed" \| "cancelled"` | Drives the icon and text styling. Only `done` counts toward the progress numerator, and `cancelled` leaves the count entirely. |
+| `description` | `string`                                                     | Optional detail below pending, active, and done items.                                                                         |
+| `reason`      | `string`                                                     | Optional detail rendered below a failed item instead of its description.                                                       |

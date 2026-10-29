@@ -1,0 +1,14 @@
+{
+  "slug": "speaker-identity",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/speaker-identity",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "speaker-identity.aui.jsx",
+    "speaker-identity.tsx"
+  ]
+}

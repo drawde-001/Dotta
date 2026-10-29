@@ -1,0 +1,14 @@
+{
+  "slug": "geo-map",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/geo-map",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "geo-map.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

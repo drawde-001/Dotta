@@ -1,0 +1,13 @@
+{
+  "slug": "generative-notify-confirm",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-notify-confirm",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

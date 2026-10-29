@@ -1,0 +1,13 @@
+{
+  "slug": "generative-ride-status",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-ride-status",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

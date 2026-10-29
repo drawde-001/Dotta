@@ -1,0 +1,14 @@
+{
+  "slug": "loading-state",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/loading-state",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "loading-state.aui.jsx",
+    "loading-state.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

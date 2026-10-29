@@ -1,0 +1,14 @@
+{
+  "slug": "artifact-card",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/artifact-card",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "artifact-card.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

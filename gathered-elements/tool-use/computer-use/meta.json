@@ -1,0 +1,14 @@
+{
+  "slug": "computer-use",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/computer-use",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "computer-use.aui.jsx",
+    "computer-use.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "confidence-marker",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/confidence-marker",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "confidence-marker.aui.jsx",
+    "confidence-marker.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

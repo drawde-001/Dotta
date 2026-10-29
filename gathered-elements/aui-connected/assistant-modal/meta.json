@@ -1,0 +1,14 @@
+{
+  "slug": "assistant-modal",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/assistant-modal",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "assistant-modal.aui.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

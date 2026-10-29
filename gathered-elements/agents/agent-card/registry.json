@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-agent-card",
+  "type": "registry:component",
+  "title": "Agent card",
+  "description": "Who you are about to talk to: its skills, its model, and the endpoint behind it.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/agent-card.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/agent-card.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { BotIcon, CheckIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, inkButton, mono, paper } from \"./surfaces\";\n\nexport interface AgentSkill {\n  name: string;\n  description: string;\n}\n\nexport function AgentCard({\n  name,\n  description,\n  provider,\n  version,\n  model,\n  endpoint,\n  skills,\n  connected,\n  onConnect,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  | \"children\"\n  | \"name\"\n  | \"description\"\n  | \"provider\"\n  | \"version\"\n  | \"model\"\n  | \"endpoint\"\n  | \"skills\"\n  | \"connected\"\n  | \"onConnect\"\n> & {\n  name: string;\n  description: string;\n  provider: string;\n  version: string;\n  model: string;\n  endpoint: string;\n  skills: readonly AgentSkill[];\n  connected: boolean;\n  onConnect?: () => void;\n}) {\n  return (\n    <div\n      data-slot=\"agent-card\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3.5 rounded-[20px] p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-start gap-3\">\n        <span className=\"bg-foreground/[0.05] text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-xl\">\n          <BotIcon className=\"size-4\" />\n        </span>\n        <div className=\"flex min-w-0 flex-1 flex-col\">\n          <span className=\"flex items-baseline gap-2\">\n            <span className=\"truncate text-[13.5px] font-medium\">{name}</span>\n            <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n              v{version}\n            </span>\n          </span>\n          <span className=\"text-muted-foreground truncate text-xs\">\n            {provider}\n          </span>\n        </div>\n      </div>\n\n      <p className=\"text-foreground/60 text-xs leading-relaxed\">\n        {description}\n      </p>\n\n      <div className=\"flex flex-col gap-1.5\">\n        {skills.map((skill) => (\n          <div key={skill.name} className=\"flex items-baseline gap-2\">\n            <span\n              className={cn(\n                field,\n                mono,\n                \"text-muted-foreground shrink-0 rounded-md px-1.5 py-0.5\",\n              )}\n            >\n              {skill.name}\n            </span>\n            <span className=\"text-muted-foreground min-w-0 flex-1 truncate text-xs\">\n              {skill.description}\n            </span>\n          </div>\n        ))}\n      </div>\n\n      <div className=\"border-foreground/[0.07] flex items-center gap-2 border-t pt-3\">\n        <span\n          className={cn(mono, \"text-muted-foreground min-w-0 flex-1 truncate\")}\n        >\n          {endpoint}\n        </span>\n        <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n          {model}\n        </span>\n      </div>\n\n      <button\n        type=\"button\"\n        onClick={onConnect}\n        disabled={connected}\n        className={cn(\n          connected\n            ? cn(field, \"text-muted-foreground\")\n            : cn(inkButton, \"justify-center\"),\n          \"flex h-8 items-center justify-center gap-1.5 rounded-full px-3.5 text-xs font-medium disabled:pointer-events-none\",\n        )}\n      >\n        {connected ? (\n          <>\n            <CheckIcon className=\"size-3.5 text-emerald-500\" />\n            Connected\n          </>\n        ) : (\n          \"Connect\"\n        )}\n      </button>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

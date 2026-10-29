@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-spec-sheet",
+  "type": "registry:component",
+  "title": "Spec sheet",
+  "description": "The most common structured answer after a table: one object, labeled.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/spec-sheet.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/spec-sheet.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\nimport { take } from \"../utils/range\";\n\nexport interface SpecRow {\n  label: string;\n  value: string;\n  emphasis?: boolean;\n}\n\nexport function SpecSheet({\n  title,\n  subtitle,\n  rows,\n  visibleCount,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"title\" | \"subtitle\" | \"rows\" | \"visibleCount\"\n> & {\n  title: string;\n  subtitle?: string;\n  rows: readonly SpecRow[];\n  visibleCount: number;\n}) {\n  return (\n    <div\n      data-slot=\"spec-sheet\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3 rounded-2xl p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex flex-col gap-0.5\">\n        <span className=\"text-[13.5px] font-medium\">{title}</span>\n        {subtitle && (\n          <span className=\"text-muted-foreground text-xs\">{subtitle}</span>\n        )}\n      </div>\n\n      <div className=\"flex flex-col\">\n        {take(rows, visibleCount).map((row) => (\n          <div\n            key={row.label}\n            className=\"border-foreground/[0.06] fade-in animate-in fill-mode-both flex items-baseline gap-3 border-t py-1.5 duration-300 first:border-t-0 first:pt-0\"\n          >\n            <span className={cn(mono, \"text-muted-foreground w-24 shrink-0\")}>\n              {row.label}\n            </span>\n            <span\n              className={cn(\n                \"min-w-0 flex-1 text-end text-[13px] tabular-nums\",\n                row.emphasis\n                  ? \"text-foreground/95 font-medium\"\n                  : \"text-foreground/70\",\n              )}\n            >\n              {row.value}\n            </span>\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

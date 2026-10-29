@@ -1,0 +1,14 @@
+{
+  "slug": "link-preview",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/link-preview",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "link-preview.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

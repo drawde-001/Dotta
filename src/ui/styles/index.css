@@ -57,13 +57,14 @@
 .shimmer {
   background: linear-gradient(
     90deg,
-    color-mix(in oklab, currentColor 55%, transparent) 0%,
-    currentColor 50%,
-    color-mix(in oklab, currentColor 55%, transparent) 100%
+    color-mix(in oklab, var(--foreground) 45%, transparent) 0%,
+    var(--foreground) 50%,
+    color-mix(in oklab, var(--foreground) 45%, transparent) 100%
   );
   background-size: 200% 100%;
   -webkit-background-clip: text;
   background-clip: text;
+  -webkit-text-fill-color: transparent;
   color: transparent;
   animation: aui-shimmer 2.2s linear infinite;
 }

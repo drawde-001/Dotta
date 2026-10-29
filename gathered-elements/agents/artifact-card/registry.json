@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-artifact-card",
+  "type": "registry:component",
+  "title": "Artifact card",
+  "description": "A generated document as a tangible object, written live and versioned.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/artifact-card.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/artifact-card.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ArrowUpRightIcon, FileTextIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper, ShimmerLabel } from \"./surfaces\";\n\nexport function ArtifactCard({\n  title,\n  meta,\n  generating = false,\n  words = 0,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"title\" | \"meta\" | \"generating\" | \"words\"\n> & {\n  title: string;\n  meta: string;\n  generating?: boolean;\n  words?: number;\n}) {\n  return (\n    <div\n      data-slot=\"artifact-card\"\n      className={cn(\n        paper,\n        \"group flex w-full max-w-xs items-center gap-3 rounded-[20px] p-3.5 transition-transform duration-150 hover:-translate-y-px active:scale-[0.98]\",\n        className,\n      )}\n\n      {...props}\n    >\n      <span className=\"bg-foreground/[0.05] text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-xl\">\n        <FileTextIcon\n          className={cn(\n            \"size-4\",\n            generating && \"animate-pulse motion-reduce:animate-none\",\n          )}\n        />\n      </span>\n      <div className=\"min-w-0 flex-1\">\n        <p className=\"truncate text-[13.5px] font-medium\">{title}</p>\n        {generating ? (\n          <p\n            className={cn(\n              mono,\n              \"text-muted-foreground flex items-center gap-1\",\n            )}\n          >\n            <ShimmerLabel className=\"relative inline-block leading-none\">\n              Writing\n            </ShimmerLabel>\n            <span>·</span>\n            <span className=\"tabular-nums\">{words} words</span>\n          </p>\n        ) : (\n          <p\n            className={cn(\n              mono,\n              \"fade-in blur-in-[2px] animate-in text-muted-foreground duration-300 motion-reduce:animate-none\",\n            )}\n          >\n            {meta}\n          </p>\n        )}\n      </div>\n      <ArrowUpRightIcon className=\"text-foreground/35 size-3.5 opacity-0 transition-opacity group-hover:opacity-100\" />\n    </div>\n  );\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "day-separator",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/day-separator",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "day-separator.aui.jsx",
+    "day-separator.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

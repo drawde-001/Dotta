@@ -1,0 +1,14 @@
+{
+  "slug": "message-actions",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/message-actions",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "message-actions.aui.jsx",
+    "message-actions.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

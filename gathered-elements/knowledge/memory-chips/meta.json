@@ -1,0 +1,14 @@
+{
+  "slug": "memory-chips",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/memory-chips",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "memory-chips.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

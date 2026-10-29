@@ -1,0 +1,13 @@
+{
+  "slug": "shiki-highlighter",
+  "category": "Renderers",
+  "folder": "gathered-elements/renderers/shiki-highlighter",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "shiki-highlighter.tsx",
+    "showcase-snippet.html"
+  ]
+}

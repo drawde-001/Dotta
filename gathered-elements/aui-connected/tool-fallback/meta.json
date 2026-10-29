@@ -1,0 +1,14 @@
+{
+  "slug": "tool-fallback",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/tool-fallback",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tool-fallback.aui.jsx",
+    "tool-fallback.aui.tsx"
+  ]
+}

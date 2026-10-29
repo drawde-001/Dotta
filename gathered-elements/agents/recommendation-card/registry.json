@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-recommendation-card",
+  "type": "registry:component",
+  "title": "Recommendation card",
+  "description": "The agent proposes a change with its confidence, and waits for a yes.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-receipt-focus.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/recommendation-card.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/recommendation-card.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport type { ReactNode } from \"react\";\nimport { CheckIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { inkButton, mono, paper } from \"./surfaces\";\nimport { useReceiptFocus } from \"./receipt-focus\";\n\nexport type RecommendationState = \"idle\" | \"accepted\";\n\nconst CONFIDENCE_BARS = [0, 1, 2];\n\nexport function RecommendationCard({\n  state,\n  question,\n  children,\n  confidenceLabel,\n  acceptedLabel,\n  onAccept,\n  onAlternatives,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  | \"state\"\n  | \"question\"\n  | \"children\"\n  | \"confidenceLabel\"\n  | \"acceptedLabel\"\n  | \"onAccept\"\n  | \"onAlternatives\"\n> & {\n  state: RecommendationState;\n  question: string;\n  children: ReactNode;\n  confidenceLabel: string;\n  acceptedLabel: string;\n  onAccept?: () => void;\n  onAlternatives?: () => void;\n}) {\n  const { receiptRef, focusHandlers } = useReceiptFocus<HTMLDivElement>(props);\n  return (\n    <div\n      data-slot=\"recommendation-card\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3 rounded-[20px] p-4\",\n        className,\n      )}\n\n      {...props}\n      {...focusHandlers}\n    >\n      <p className=\"text-sm font-medium\">{question}</p>\n      <p className=\"text-muted-foreground text-[13px] leading-relaxed\">\n        {children}\n      </p>\n\n      <div className=\"flex h-8 items-center justify-between\">\n        {state === \"idle\" ? (\n          <>\n            <div className=\"flex items-center gap-2\">\n              <span className=\"flex items-end gap-0.5\" aria-hidden>\n                {CONFIDENCE_BARS.map((bar) => (\n                  <span\n                    key={bar}\n                    className=\"w-1 rounded-full bg-emerald-500/70\"\n                    style={{ height: 6 + bar * 3 }}\n                  />\n                ))}\n              </span>\n              <span className={cn(mono, \"text-muted-foreground\")}>\n                {confidenceLabel}\n              </span>\n            </div>\n            <div className=\"flex items-center gap-2\">\n              <button\n                type=\"button\"\n                onClick={onAlternatives}\n                className=\"text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground/90 h-8 rounded-full px-3.5 text-xs font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]\"\n              >\n                Alternatives\n              </button>\n              <button\n                type=\"button\"\n                onClick={onAccept}\n                className={cn(\n                  inkButton,\n                  \"flex h-8 items-center rounded-full px-3.5 text-xs font-medium\",\n                )}\n              >\n                Accept\n              </button>\n            </div>\n          </>\n        ) : (\n          <div\n            key=\"accepted\"\n            ref={receiptRef}\n            tabIndex={-1}\n            className=\"fade-in animate-in text-muted-foreground flex items-center gap-2 text-xs duration-300\"\n          >\n            <CheckIcon className=\"size-3.5 text-emerald-500\" />\n            {acceptedLabel}\n          </div>\n        )}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

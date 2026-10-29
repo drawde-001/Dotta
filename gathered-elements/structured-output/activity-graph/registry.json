@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-activity-graph",
+  "type": "registry:component",
+  "title": "Activity graph",
+  "description": "A half-year of runs as a calendar of cells, dense where the work was.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "heat-graph@^0.0.26"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/activity-graph.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/activity-graph.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport * as HeatGraph from \"heat-graph\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nconst LEVEL_TINT = [\n  \"bg-foreground/[0.06] inset-ring inset-ring-border forced-colors:border\",\n  \"bg-blue-500/25 dark:bg-blue-400/25 forced-color-adjust-none\",\n  \"bg-blue-500/45 dark:bg-blue-400/45 forced-color-adjust-none\",\n  \"bg-blue-500/70 dark:bg-blue-400/70 forced-color-adjust-none\",\n  \"bg-blue-500 dark:bg-blue-400 forced-color-adjust-none\",\n] as const;\n\nexport function ActivityGraph({\n  data,\n  start,\n  end,\n  title,\n  total,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"data\" | \"start\" | \"end\" | \"title\" | \"total\"\n> & {\n  data: readonly HeatGraph.DataPoint[];\n  start: string | Date;\n  end: string | Date;\n  title: string;\n  total: string;\n}) {\n  return (\n    <div\n      data-slot=\"activity-graph\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3 rounded-2xl p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-baseline justify-between\">\n        <span className=\"text-[13.5px] font-medium\">{title}</span>\n        <span className={cn(mono, \"text-muted-foreground tabular-nums\")}>\n          {total}\n        </span>\n      </div>\n\n      <HeatGraph.Root\n        data={[...data]}\n        start={start}\n        end={end}\n        weekStart=\"monday\"\n        className=\"flex flex-col gap-2\"\n      >\n        <div className=\"flex gap-2\">\n          <div className=\"flex shrink-0 flex-col gap-[3px]\">\n            <HeatGraph.DayLabels>\n              {({ label }) => (\n                <span\n                  className={cn(\n                    mono,\n                    \"text-muted-foreground flex h-[9px] items-center leading-none\",\n                  )}\n                >\n                  {label.row % 2 === 1\n                    ? HeatGraph.DAY_SHORT[label.dayOfWeek]\n                    : \"\"}\n                </span>\n              )}\n            </HeatGraph.DayLabels>\n          </div>\n\n          {/* A reversed row starts scrolled to its end, so a narrow graph opens on the newest weeks. */}\n          <div className=\"flex min-w-0 flex-row-reverse overflow-x-auto\">\n            <HeatGraph.Grid className=\"shrink-0 gap-[3px]\">\n              {({ cell }) => (\n                <HeatGraph.Cell\n                  className={cn(\n                    \"size-[9px] rounded-[2px]\",\n                    LEVEL_TINT[cell.level] ?? LEVEL_TINT[0],\n                  )}\n                />\n              )}\n            </HeatGraph.Grid>\n          </div>\n        </div>\n\n        <div className=\"flex items-center gap-1.5 self-end\">\n          <span className={cn(mono, \"text-muted-foreground\")}>less</span>\n          {LEVEL_TINT.map((tint, level) => (\n            <span\n              key={level}\n              aria-hidden\n              className={cn(\"size-[9px] rounded-[2px]\", tint)}\n            />\n          ))}\n          <span className={cn(mono, \"text-muted-foreground\")}>more</span>\n        </div>\n      </HeatGraph.Root>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

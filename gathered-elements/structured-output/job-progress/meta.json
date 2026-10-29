@@ -1,0 +1,14 @@
+{
+  "slug": "job-progress",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/job-progress",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "job-progress.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

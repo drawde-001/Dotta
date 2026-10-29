@@ -1,0 +1,14 @@
+{
+  "slug": "thread-search",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/thread-search",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "thread-search.tsx"
+  ]
+}

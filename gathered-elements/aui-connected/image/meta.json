@@ -1,0 +1,13 @@
+{
+  "slug": "image",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/image",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "image.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

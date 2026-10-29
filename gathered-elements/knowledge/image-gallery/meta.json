@@ -1,0 +1,14 @@
+{
+  "slug": "image-gallery",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/image-gallery",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "image-gallery.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

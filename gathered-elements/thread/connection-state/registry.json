@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-connection-state",
+  "type": "registry:component",
+  "title": "Connection state",
+  "description": "The socket drops, the run keeps going on the server, and the stream is picked back up.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/connection-state.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/connection-state.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { CheckIcon, CloudOffIcon, Loader2Icon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nexport type ConnectionPhase = \"online\" | \"dropped\" | \"reconnecting\" | \"resumed\";\n\nexport function ConnectionState({\n  phase,\n  attempt,\n  resumedTokens,\n  onRetry,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"phase\" | \"attempt\" | \"resumedTokens\" | \"onRetry\"\n> & {\n  phase: ConnectionPhase;\n  attempt?: number;\n  resumedTokens?: number;\n  onRetry?: () => void;\n}) {\n  if (phase === \"online\") return null;\n\n  return (\n    <div\n      data-slot=\"connection-state\"\n      className={cn(\n        paper,\n        \"fade-in slide-in-from-top-1 animate-in flex w-full max-w-sm items-center gap-2.5 rounded-2xl px-3.5 py-2.5 duration-300\",\n        className,\n      )}\n\n      {...props}\n    >\n      {phase === \"dropped\" && (\n        <>\n          <CloudOffIcon className=\"size-3.5 shrink-0 text-amber-600 dark:text-amber-400\" />\n          <span className=\"min-w-0 flex-1 text-[13px]\">\n            Connection lost. The run kept going on the server.\n          </span>\n          <button\n            type=\"button\"\n            onClick={onRetry}\n            className=\"text-foreground/70 hover:bg-foreground/[0.06] hover:text-foreground/95 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]\"\n          >\n            Reconnect\n          </button>\n        </>\n      )}\n\n      {phase === \"reconnecting\" && (\n        <>\n          <Loader2Icon className=\"text-muted-foreground size-3.5 shrink-0 animate-spin motion-reduce:animate-none\" />\n          <span className=\"min-w-0 flex-1 text-[13px]\">Reconnecting</span>\n          {attempt !== undefined && (\n            <span\n              className={cn(\n                mono,\n                \"text-muted-foreground shrink-0 tabular-nums\",\n              )}\n            >\n              attempt {attempt}\n            </span>\n          )}\n        </>\n      )}\n\n      {phase === \"resumed\" && (\n        <>\n          <CheckIcon className=\"size-3.5 shrink-0 text-emerald-500\" />\n          <span className=\"min-w-0 flex-1 text-[13px]\">\n            Picked the stream back up.\n          </span>\n          {resumedTokens !== undefined && (\n            <span\n              className={cn(\n                mono,\n                \"text-muted-foreground shrink-0 tabular-nums\",\n              )}\n            >\n              +{resumedTokens} tokens\n            </span>\n          )}\n        </>\n      )}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

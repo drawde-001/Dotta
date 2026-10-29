@@ -1,0 +1,15 @@
+{
+  "slug": "composer-voice",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/composer-voice",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "composer-voice.aui.jsx",
+    "composer.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

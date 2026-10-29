@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "assistant-sidebar",
+  "type": "registry:component",
+  "title": "Assistant Sidebar",
+  "description": "Side panel chat for copilot experiences and inline assistance.",
+  "dependencies": [
+    "@assistant-ui/react@^0.15.32"
+  ],
+  "registryDependencies": [
+    "resizable",
+    "https://r.assistant-ui.com/thread.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/assistant-sidebar.aui.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/assistant-sidebar.aui.tsx",
+      "content": "import {\n  ResizableHandle,\n  ResizablePanel,\n  ResizablePanelGroup,\n} from \"@/components/ui/resizable\";\nimport type { FC, PropsWithChildren } from \"react\";\n\nimport { Thread } from \"@/components/assistant-ui/elements/thread.aui\";\n\nexport const AssistantSidebar: FC<PropsWithChildren> = ({ children }) => {\n  return (\n    <ResizablePanelGroup orientation=\"horizontal\">\n      <ResizablePanel>{children}</ResizablePanel>\n      <ResizableHandle />\n      <ResizablePanel>\n        <Thread />\n      </ResizablePanel>\n    </ResizablePanelGroup>\n  );\n};\n"
+    }
+  ]
+}

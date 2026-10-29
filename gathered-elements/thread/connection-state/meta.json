@@ -1,0 +1,14 @@
+{
+  "slug": "connection-state",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/connection-state",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "connection-state.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

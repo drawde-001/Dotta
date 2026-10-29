@@ -1,0 +1,14 @@
+{
+  "slug": "spec-sheet",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/spec-sheet",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "spec-sheet.tsx"
+  ]
+}

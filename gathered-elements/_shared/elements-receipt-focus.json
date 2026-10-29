@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-receipt-focus",
+  "type": "registry:component",
+  "title": "Receipt focus",
+  "description": "Keeps focus on a receipt when the focused answer is replaced.",
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/receipt-focus.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/receipt-focus.ts",
+      "content": "\"use client\";\n\nimport { useRef, type ComponentProps } from \"react\";\nimport { useIsomorphicLayoutEffect } from \"../utils/useIsomorphicLayoutEffect\";\n\ntype FocusHandlers = Pick<\n  ComponentProps<\"div\">,\n  \"onFocusCapture\" | \"onBlurCapture\"\n>;\n\nexport function useReceiptFocus<T extends HTMLElement = HTMLElement>(\n  handlers: FocusHandlers = {},\n) {\n  const focusedElementRef = useRef<HTMLElement | null>(null);\n  const receiptRef = useRef<T | null>(null);\n\n  useIsomorphicLayoutEffect(() => {\n    const focusedElement = focusedElementRef.current;\n    if (focusedElement && !focusedElement.isConnected) {\n      focusedElementRef.current = null;\n      if (\n        focusedElement.ownerDocument.activeElement ===\n        focusedElement.ownerDocument.body\n      ) {\n        receiptRef.current?.focus({ preventScroll: true });\n      }\n    }\n  });\n\n  return {\n    receiptRef,\n    focusHandlers: {\n      onFocusCapture: (event) => {\n        handlers.onFocusCapture?.(event);\n        focusedElementRef.current = event.target as HTMLElement;\n      },\n      onBlurCapture: (event) => {\n        handlers.onBlurCapture?.(event);\n        if (\n          event.target.isConnected &&\n          !event.currentTarget.contains(\n            event.relatedTarget ??\n              event.currentTarget.ownerDocument.activeElement,\n          )\n        ) {\n          focusedElementRef.current = null;\n        }\n      },\n    } satisfies FocusHandlers,\n  };\n}\n"
+    },
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/utils/useIsomorphicLayoutEffect.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/utils/useIsomorphicLayoutEffect.ts",
+      "content": "import { useEffect, useLayoutEffect } from \"react\";\n\nconst hasWindow =\n  typeof (globalThis as typeof globalThis & { window?: unknown }).window !==\n  \"undefined\";\n\nexport const useIsomorphicLayoutEffect = hasWindow\n  ? useLayoutEffect\n  : useEffect;\n"
+    }
+  ]
+}

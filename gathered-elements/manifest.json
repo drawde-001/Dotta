@@ -1,0 +1,2082 @@
+{
+  "totalCatalogCount": 151,
+  "withCodeCount": 151,
+  "withShowcaseCount": 151,
+  "completedAt": "2026-10-29T20:03:15.805Z",
+  "elements": [
+    {
+      "slug": "loading-state",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/loading-state",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "loading-state.aui.jsx",
+        "loading-state.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "thinking-indicator",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/thinking-indicator",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "thinking-indicator.aui.jsx",
+        "thinking-indicator.tsx"
+      ]
+    },
+    {
+      "slug": "streaming-text",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/streaming-text",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "streaming-text.aui.jsx",
+        "streaming-text.tsx"
+      ]
+    },
+    {
+      "slug": "typing-indicator",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/typing-indicator",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "typing-indicator.aui.jsx",
+        "typing-indicator.tsx"
+      ]
+    },
+    {
+      "slug": "reasoning-effort",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/reasoning-effort",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "reasoning-effort.aui.jsx",
+        "reasoning-effort.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "guardrail-notice",
+      "category": "Reasoning",
+      "folder": "gathered-elements/reasoning/guardrail-notice",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "guardrail-notice.aui.jsx",
+        "guardrail-notice.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "message-pair",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/message-pair",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "message-pair.aui.jsx",
+        "message-pair.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "message-branches",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/message-branches",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "message-branches.aui.jsx",
+        "message-branches.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "message-actions",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/message-actions",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "message-actions.aui.jsx",
+        "message-actions.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "error-state",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/error-state",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "error-state.aui.jsx",
+        "error-state.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "message-queue",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/message-queue",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "message-queue.aui.jsx",
+        "message-queue.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "edit-message",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/edit-message",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "edit-message.aui.jsx",
+        "edit-message.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "feedback-dialog",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/feedback-dialog",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "feedback-dialog.aui.jsx",
+        "feedback-dialog.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "stopped-run",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/stopped-run",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "stopped-run.aui.jsx",
+        "stopped-run.tsx"
+      ]
+    },
+    {
+      "slug": "day-separator",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/day-separator",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "day-separator.aui.jsx",
+        "day-separator.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "speaker-identity",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/speaker-identity",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "speaker-identity.aui.jsx",
+        "speaker-identity.tsx"
+      ]
+    },
+    {
+      "slug": "regenerate-menu",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/regenerate-menu",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "regenerate-menu.aui.jsx",
+        "regenerate-menu.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "confidence-marker",
+      "category": "Messages",
+      "folder": "gathered-elements/messages/confidence-marker",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "confidence-marker.aui.jsx",
+        "confidence-marker.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "tool-call",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/tool-call",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tool-call.aui.jsx",
+        "tool-call.tsx"
+      ]
+    },
+    {
+      "slug": "run-activity",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/run-activity",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "run-activity.aui.jsx",
+        "run-activity.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "tool-timeline",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/tool-timeline",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tool-timeline.aui.jsx",
+        "tool-timeline.tsx"
+      ]
+    },
+    {
+      "slug": "terminal-block",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/terminal-block",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "terminal-block.aui.jsx",
+        "terminal-block.tsx"
+      ]
+    },
+    {
+      "slug": "code-diff",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/code-diff",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "code-diff.aui.jsx",
+        "code-diff.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "reviewable-diff",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/reviewable-diff",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "reviewable-diff.aui.jsx",
+        "reviewable-diff.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "file-tree",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/file-tree",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "file-tree.aui.jsx",
+        "file-tree.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "elicitation-form",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/elicitation-form",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "elicitation-form.aui.jsx",
+        "elicitation-form.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "mcp-server-panel",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/mcp-server-panel",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "mcp-server-panel.aui.jsx",
+        "mcp-server-panel.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "tool-error",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/tool-error",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tool-error.aui.jsx",
+        "tool-error.tsx"
+      ]
+    },
+    {
+      "slug": "permission-grant",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/permission-grant",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "permission-grant.aui.jsx",
+        "permission-grant.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "computer-use",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/computer-use",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "computer-use.aui.jsx",
+        "computer-use.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "code-runner",
+      "category": "Tool use",
+      "folder": "gathered-elements/tool-use/code-runner",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "code-runner.aui.jsx",
+        "code-runner.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "web-search",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/web-search",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "web-search.tsx"
+      ]
+    },
+    {
+      "slug": "inline-citation",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/inline-citation",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "inline-citation.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "link-preview",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/link-preview",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "link-preview.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "image-generation",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/image-generation",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "image-generation.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "image-gallery",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/image-gallery",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "image-gallery.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "retrieval-chunks",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/retrieval-chunks",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "retrieval-chunks.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "document-reference",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/document-reference",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "document-reference.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "memory-chips",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/memory-chips",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "memory-chips.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "research-report",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/research-report",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "research-report.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "map-answer",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/map-answer",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "map-answer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "geo-map",
+      "category": "Knowledge",
+      "folder": "gathered-elements/knowledge/geo-map",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "geo-map.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "data-table",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/data-table",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "data-table.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "number-ticker",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/number-ticker",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "number-ticker.tsx",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "chart",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/chart",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "chart.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "media-player",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/media-player",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "media-player.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "web-preview",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/web-preview",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "web-preview.tsx"
+      ]
+    },
+    {
+      "slug": "diagram",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/diagram",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "diagram.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "flow-graph",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/flow-graph",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "flow-graph.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "activity-graph",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/activity-graph",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "activity-graph.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "math-block",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/math-block",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "math-block.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "spec-sheet",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/spec-sheet",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "spec-sheet.tsx"
+      ]
+    },
+    {
+      "slug": "comparison-card",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/comparison-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "comparison-card.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "timeline",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/timeline",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "timeline.tsx"
+      ]
+    },
+    {
+      "slug": "job-progress",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/job-progress",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "job-progress.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "score-breakdown",
+      "category": "Structured output",
+      "folder": "gathered-elements/structured-output/score-breakdown",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "score-breakdown.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "agent-plan",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/agent-plan",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "agent-plan.aui.jsx",
+        "agent-plan.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "subagent-list",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/subagent-list",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "subagent-list.tsx"
+      ]
+    },
+    {
+      "slug": "task-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/task-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "task-card.tsx"
+      ]
+    },
+    {
+      "slug": "agent-status",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/agent-status",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "agent-status.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "approval-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/approval-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "approval-card.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "option-list",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/option-list",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "option-list.tsx",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "question-flow",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/question-flow",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "question-flow.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "recommendation-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/recommendation-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "recommendation-card.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "artifact-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/artifact-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "artifact-card.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "todo-list",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/todo-list",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "todo-list.tsx"
+      ]
+    },
+    {
+      "slug": "agent-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/agent-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "agent-card.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "agent-handoff",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/agent-handoff",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "agent-handoff.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "background-inbox",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/background-inbox",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "background-inbox.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "checkpoint-history",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/checkpoint-history",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "checkpoint-history.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "schedule-card",
+      "category": "Agents",
+      "folder": "gathered-elements/agents/schedule-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "schedule-card.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "trace-waterfall",
+      "category": "Observability",
+      "folder": "gathered-elements/observability/trace-waterfall",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "trace-waterfall.tsx"
+      ]
+    },
+    {
+      "slug": "cost-meter",
+      "category": "Observability",
+      "folder": "gathered-elements/observability/cost-meter",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "cost-meter.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "quota-banner",
+      "category": "Observability",
+      "folder": "gathered-elements/observability/quota-banner",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "quota-banner.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-slash-commands",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-slash-commands",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-mentions",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-mentions",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-attachments",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-attachments",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-model-picker",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-model-picker",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-voice",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-voice",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer-voice.aui.jsx",
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-context",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/composer-context",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "draft-restore",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/draft-restore",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "draft-restore.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "context-breakdown",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/context-breakdown",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "context-breakdown.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "prompt-library",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/prompt-library",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "prompt-library.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "command-palette",
+      "category": "Composer",
+      "folder": "gathered-elements/composer/command-palette",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "command-palette.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "voice-conversation",
+      "category": "Voice",
+      "folder": "gathered-elements/voice/voice-conversation",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "voice-conversation.tsx"
+      ]
+    },
+    {
+      "slug": "read-aloud",
+      "category": "Voice",
+      "folder": "gathered-elements/voice/read-aloud",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "read-aloud.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "chat-panel",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/chat-panel",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "chat-panel.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "empty-state",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/empty-state",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "empty-state.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "scroll-anchor",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/scroll-anchor",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "scroll-anchor.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "canvas-split",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/canvas-split",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "canvas-split.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "connection-state",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/connection-state",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "connection-state.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "shared-conversation",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/shared-conversation",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "shared-conversation.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "conversation-search",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/conversation-search",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "conversation-search.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "thread-search",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/thread-search",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "thread-search.tsx"
+      ]
+    },
+    {
+      "slug": "launcher-bubble",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/launcher-bubble",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "launcher-bubble.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "settings-panel",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/settings-panel",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "settings-panel.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "onboarding",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/onboarding",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "onboarding.tsx",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "mobile-composer",
+      "category": "Thread",
+      "folder": "gathered-elements/thread/mobile-composer",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "mobile-composer.tsx",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "thread",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/thread",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "thread.aui.tsx"
+      ]
+    },
+    {
+      "slug": "assistant-modal",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/assistant-modal",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "assistant-modal.aui.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "assistant-sidebar",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/assistant-sidebar",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "assistant-sidebar.aui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "thread-list",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/thread-list",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "thread-list.tsx"
+      ]
+    },
+    {
+      "slug": "thread-list-sidebar",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/thread-list-sidebar",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "github.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "threadlist-sidebar.aui.tsx"
+      ]
+    },
+    {
+      "slug": "orb",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/orb",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "voice.aui.tsx"
+      ]
+    },
+    {
+      "slug": "reasoning",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/reasoning",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "reasoning.aui.jsx",
+        "reasoning.tsx",
+        "registry.json",
+        "showcase-snippet.html",
+        "useIsomorphicLayoutEffect.ts"
+      ]
+    },
+    {
+      "slug": "message-timing",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/message-timing",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "message-timing.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "conversation-map",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/conversation-map",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "conversation-map.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "context-display",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/context-display",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "context-display.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "mcp-config",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/mcp-config",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "mcp-config.aui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "attachment",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/attachment",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "attachment.aui.jsx",
+        "attachment.aui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "follow-up-suggestions",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/follow-up-suggestions",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "follow-up-suggestions.aui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "tool-fallback",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/tool-fallback",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tool-fallback.aui.jsx",
+        "tool-fallback.aui.tsx"
+      ]
+    },
+    {
+      "slug": "tool-group",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/tool-group",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tool-group.tsx"
+      ]
+    },
+    {
+      "slug": "quote",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/quote",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "quote.aui.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "sources",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/sources",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "sources.aui.jsx",
+        "sources.tsx"
+      ]
+    },
+    {
+      "slug": "image",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/image",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "image.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "file",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/file",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "file.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "model-selector",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/model-selector",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "model-selector.tsx",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "composer-trigger-popover",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/composer-trigger-popover",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "composer-trigger-popover.aui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "directive-text",
+      "category": "AUI connected",
+      "folder": "gathered-elements/aui-connected/directive-text",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "directive-text.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "markdown-text",
+      "category": "Renderers",
+      "folder": "gathered-elements/renderers/markdown-text",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "markdown-text.jsx",
+        "markdown-text.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "syntax-highlighter",
+      "category": "Renderers",
+      "folder": "gathered-elements/renderers/syntax-highlighter",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html",
+        "syntax-highlighter.tsx"
+      ]
+    },
+    {
+      "slug": "shiki-highlighter",
+      "category": "Renderers",
+      "folder": "gathered-elements/renderers/shiki-highlighter",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "shiki-highlighter.tsx",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "mermaid-diagram",
+      "category": "Renderers",
+      "folder": "gathered-elements/renderers/mermaid-diagram",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "mermaid-diagram.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-ui",
+      "category": "Renderers",
+      "folder": "gathered-elements/renderers/generative-ui",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "generative-ui-style.json",
+        "generative-ui.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "tooltip-icon-button",
+      "category": "Primitives",
+      "folder": "gathered-elements/primitives/tooltip-icon-button",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "tooltip-icon-button.jsx",
+        "tooltip-icon-button.tsx"
+      ]
+    },
+    {
+      "slug": "logos",
+      "category": "Primitives",
+      "folder": "gathered-elements/primitives/logos",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "logos.tsx",
+        "meta.json",
+        "page.md",
+        "registry.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "heat-graph",
+      "category": "Primitives",
+      "folder": "gathered-elements/primitives/heat-graph",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "heat-graph.tsx",
+        "meta.json",
+        "registry.json",
+        "showcase-snippet.html",
+        "useIsomorphicLayoutEffect.ts"
+      ]
+    },
+    {
+      "slug": "generative-stays",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-stays",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-booking",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-booking",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-order-status",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-order-status",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-flight-tracker",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-flight-tracker",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-portfolio",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-portfolio",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-create-event",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-create-event",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-view-event",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-view-event",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-weather-current",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-weather-current",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-ride-status",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-ride-status",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-draft-email",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-draft-email",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-cart",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-cart",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-playlist",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-playlist",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-channel-message",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-channel-message",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-receipt",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-receipt",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-chart-area",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-chart-area",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-player-card",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-player-card",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-event-session",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-event-session",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-notify-confirm",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-notify-confirm",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-chart-line",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-chart-line",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-create-task",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-create-task",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-software-purchase",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-software-purchase",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    },
+    {
+      "slug": "generative-chart-bars",
+      "category": "Generative",
+      "folder": "gathered-elements/generative/generative-chart-bars",
+      "hasCode": true,
+      "hasShowcase": true,
+      "files": [
+        "card-dom.html",
+        "extracted-code.txt",
+        "meta.json",
+        "showcase-snippet.html"
+      ]
+    }
+  ]
+}

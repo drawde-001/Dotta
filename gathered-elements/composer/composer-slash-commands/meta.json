@@ -1,0 +1,14 @@
+{
+  "slug": "composer-slash-commands",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/composer-slash-commands",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "composer.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "agent-plan",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/agent-plan",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "agent-plan.aui.jsx",
+    "agent-plan.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

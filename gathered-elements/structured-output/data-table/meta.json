@@ -1,0 +1,14 @@
+{
+  "slug": "data-table",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/data-table",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "data-table.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

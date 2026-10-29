@@ -1,0 +1,14 @@
+{
+  "slug": "option-list",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/option-list",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "option-list.tsx",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

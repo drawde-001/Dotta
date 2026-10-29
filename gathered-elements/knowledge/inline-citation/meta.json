@@ -1,0 +1,14 @@
+{
+  "slug": "inline-citation",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/inline-citation",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "inline-citation.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

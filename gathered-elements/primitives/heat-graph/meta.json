@@ -1,0 +1,14 @@
+{
+  "slug": "heat-graph",
+  "category": "Primitives",
+  "folder": "gathered-elements/primitives/heat-graph",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "heat-graph.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "useIsomorphicLayoutEffect.ts"
+  ]
+}

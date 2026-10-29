@@ -1,0 +1,14 @@
+{
+  "slug": "code-runner",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/code-runner",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "code-runner.aui.jsx",
+    "code-runner.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

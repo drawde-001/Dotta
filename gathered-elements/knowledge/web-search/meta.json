@@ -1,0 +1,14 @@
+{
+  "slug": "web-search",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/web-search",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "web-search.tsx"
+  ]
+}

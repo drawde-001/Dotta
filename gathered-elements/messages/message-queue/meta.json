@@ -1,0 +1,14 @@
+{
+  "slug": "message-queue",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/message-queue",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "message-queue.aui.jsx",
+    "message-queue.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

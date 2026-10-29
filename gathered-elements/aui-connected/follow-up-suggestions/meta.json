@@ -1,0 +1,13 @@
+{
+  "slug": "follow-up-suggestions",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/follow-up-suggestions",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "follow-up-suggestions.aui.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

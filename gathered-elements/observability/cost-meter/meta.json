@@ -1,0 +1,14 @@
+{
+  "slug": "cost-meter",
+  "category": "Observability",
+  "folder": "gathered-elements/observability/cost-meter",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "cost-meter.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

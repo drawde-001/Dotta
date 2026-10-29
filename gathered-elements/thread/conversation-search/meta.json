@@ -1,0 +1,14 @@
+{
+  "slug": "conversation-search",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/conversation-search",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "conversation-search.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

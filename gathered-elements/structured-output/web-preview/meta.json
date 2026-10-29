@@ -1,0 +1,14 @@
+{
+  "slug": "web-preview",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/web-preview",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "web-preview.tsx"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "timeline",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/timeline",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "timeline.tsx"
+  ]
+}

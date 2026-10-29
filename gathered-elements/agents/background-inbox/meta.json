@@ -1,0 +1,14 @@
+{
+  "slug": "background-inbox",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/background-inbox",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "background-inbox.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

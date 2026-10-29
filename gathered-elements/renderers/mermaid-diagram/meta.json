@@ -1,0 +1,14 @@
+{
+  "slug": "mermaid-diagram",
+  "category": "Renderers",
+  "folder": "gathered-elements/renderers/mermaid-diagram",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "mermaid-diagram.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

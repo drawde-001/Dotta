@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-guardrail-notice",
+  "type": "registry:component",
+  "title": "Guardrail notice",
+  "description": "A refusal in its own shape, with the nearest thing it can do instead.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/guardrail-notice.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/guardrail-notice.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ShieldIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nexport function GuardrailNotice({\n  title,\n  explanation,\n  policy,\n  alternatives,\n  onPick,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"title\" | \"explanation\" | \"policy\" | \"alternatives\" | \"onPick\"\n> & {\n  title: string;\n  explanation: string;\n  policy: string;\n  alternatives: readonly string[];\n  onPick?: (alternative: string) => void;\n}) {\n  return (\n    <div\n      data-slot=\"guardrail-notice\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3 rounded-[20px] p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-center gap-2.5\">\n        <span className=\"flex size-7 shrink-0 items-center justify-center rounded-lg bg-amber-500/12 text-amber-600 dark:text-amber-400\">\n          <ShieldIcon className=\"size-3.5\" />\n        </span>\n        <span className=\"min-w-0 flex-1 truncate text-[13.5px] font-medium\">\n          {title}\n        </span>\n        <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n          {policy}\n        </span>\n      </div>\n\n      <p className=\"text-foreground/60 text-xs leading-relaxed\">\n        {explanation}\n      </p>\n\n      {alternatives.length > 0 && (\n        <div className=\"flex flex-col gap-1.5\">\n          <span className={cn(mono, \"text-muted-foreground\")}>try instead</span>\n          {alternatives.map((alternative) =>\n            onPick ? (\n              <button\n                key={alternative}\n                type=\"button\"\n                onClick={() => onPick(alternative)}\n                className=\"hover:bg-foreground/[0.04] text-foreground/70 hover:text-foreground/95 -mx-1.5 rounded-lg px-1.5 py-1 text-start text-[13px] transition-colors\"\n              >\n                {alternative}\n              </button>\n            ) : (\n              <span\n                key={alternative}\n                className=\"text-foreground/70 -mx-1.5 rounded-lg px-1.5 py-1 text-start text-[13px]\"\n              >\n                {alternative}\n              </span>\n            ),\n          )}\n        </div>\n      )}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

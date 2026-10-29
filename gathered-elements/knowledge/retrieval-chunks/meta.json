@@ -1,0 +1,14 @@
+{
+  "slug": "retrieval-chunks",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/retrieval-chunks",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "retrieval-chunks.tsx",
+    "showcase-snippet.html"
+  ]
+}

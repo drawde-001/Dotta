@@ -1,0 +1,14 @@
+{
+  "slug": "settings-panel",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/settings-panel",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "settings-panel.tsx",
+    "showcase-snippet.html"
+  ]
+}

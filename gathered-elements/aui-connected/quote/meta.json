@@ -1,0 +1,13 @@
+{
+  "slug": "quote",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/quote",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "quote.aui.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "guardrail-notice",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/guardrail-notice",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "guardrail-notice.aui.jsx",
+    "guardrail-notice.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

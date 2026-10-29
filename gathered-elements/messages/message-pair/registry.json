@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-message-pair",
+  "type": "registry:component",
+  "title": "Message pair",
+  "description": "A user bubble and a streaming assistant reply, with actions that appear on hover.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/message-pair.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/message-pair.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { CopyIcon, RefreshCwIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { ghostButton, paper } from \"./surfaces\";\nimport { take } from \"../utils/range\";\n\nexport interface MessagePairProps extends Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"onCopy\"\n> {\n  userMessage: string;\n  words: readonly string[];\n  visibleWords: number;\n  streaming: boolean;\n  variant?: \"bubble\" | \"flat\";\n  onCopy?: () => void;\n  onRegenerate?: () => void;\n}\n\nexport function MessagePair({\n  userMessage,\n  words,\n  visibleWords,\n  streaming,\n  variant = \"bubble\",\n  onCopy,\n  onRegenerate,\n  className,\n  ...props\n}: MessagePairProps) {\n  const shown = take(words, visibleWords);\n\n  return (\n    <div\n      data-slot=\"message-pair\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-5\", className)}\n\n      {...props}\n    >\n      <p\n        className={cn(\n          \"max-w-[85%] self-end text-sm\",\n          variant === \"bubble\"\n            ? cn(paper, \"rounded-2xl px-3.5 py-2\")\n            : \"text-foreground/90 text-end\",\n        )}\n      >\n        {userMessage}\n      </p>\n      <div className=\"group/message flex flex-col items-start\">\n        <p className=\"min-h-[4.25rem] text-sm leading-relaxed\">\n          {shown.map((word, index) => {\n            const fresh = streaming && shown.length - 1 - index < 2;\n\n            return (\n              <span\n                key={`${word}-${index}`}\n                className=\"fade-in animate-in fill-mode-both duration-500 motion-reduce:animate-none\"\n              >\n                <span\n                  className={cn(\n                    \"transition-colors duration-700 motion-reduce:transition-none\",\n                    fresh && \"text-blue-500 dark:text-blue-400\",\n                  )}\n                >\n                  {word}\n                </span>{\" \"}\n              </span>\n            );\n          })}\n          {streaming && shown.length > 0 && (\n            <span\n              aria-hidden\n              className=\"-mb-0.5 ml-0.5 inline-block h-4 w-0.5 animate-pulse rounded-full bg-blue-500 motion-reduce:animate-none dark:bg-blue-400\"\n            />\n          )}\n        </p>\n        {(onCopy || onRegenerate) && (\n          <div className=\"flex items-center gap-1 pt-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 motion-reduce:transition-none\">\n            {onCopy && (\n              <button\n                type=\"button\"\n                aria-label=\"Copy response\"\n                onClick={onCopy}\n                className={cn(ghostButton, \"size-7\")}\n              >\n                <CopyIcon className=\"size-3.5\" />\n              </button>\n            )}\n            {onRegenerate && (\n              <button\n                type=\"button\"\n                aria-label=\"Regenerate response\"\n                onClick={onRegenerate}\n                className={cn(ghostButton, \"size-7\")}\n              >\n                <RefreshCwIcon className=\"size-3.5\" />\n              </button>\n            )}\n          </div>\n        )}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

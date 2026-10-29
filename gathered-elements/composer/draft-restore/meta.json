@@ -1,0 +1,14 @@
+{
+  "slug": "draft-restore",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/draft-restore",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "draft-restore.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "error-state",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/error-state",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "error-state.aui.jsx",
+    "error-state.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

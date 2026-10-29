@@ -1,0 +1,14 @@
+{
+  "slug": "trace-waterfall",
+  "category": "Observability",
+  "folder": "gathered-elements/observability/trace-waterfall",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "trace-waterfall.tsx"
+  ]
+}

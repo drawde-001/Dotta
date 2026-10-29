@@ -1,0 +1,14 @@
+{
+  "slug": "research-report",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/research-report",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "research-report.tsx",
+    "showcase-snippet.html"
+  ]
+}

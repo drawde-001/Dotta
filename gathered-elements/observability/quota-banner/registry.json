@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-quota-banner",
+  "type": "registry:component",
+  "title": "Quota",
+  "description": "How much is left, when it comes back, and the way to get more.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/quota-banner.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/quota-banner.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { inkButton, mono, paper } from \"./surfaces\";\nimport { announced, pct } from \"../utils/range\";\n\nexport function QuotaBanner({\n  used,\n  limit,\n  unit,\n  resetsIn,\n  upgradeLabel,\n  onUpgrade,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  | \"children\"\n  | \"used\"\n  | \"limit\"\n  | \"unit\"\n  | \"resetsIn\"\n  | \"upgradeLabel\"\n  | \"onUpgrade\"\n> & {\n  used: number;\n  limit: number;\n  unit: string;\n  resetsIn: string;\n  upgradeLabel: string;\n  onUpgrade?: () => void;\n}) {\n  const left = Math.max(0, limit - used);\n  const ratio = limit === 0 ? 0 : used / limit;\n  const exhausted = limit > 0 && left === 0;\n  const tight = !exhausted && ratio >= 0.9;\n\n  return (\n    <div\n      data-slot=\"quota-banner\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-2.5 rounded-2xl p-3.5\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-baseline gap-2\">\n        <span\n          className={cn(\n            \"text-[13.5px] font-medium\",\n            exhausted && \"text-red-600 dark:text-red-400\",\n            tight && \"text-amber-700 dark:text-amber-400\",\n          )}\n        >\n          {left} {unit} left\n        </span>\n        <span\n          className={cn(mono, \"text-muted-foreground ms-auto tabular-nums\")}\n        >\n          resets in {resetsIn}\n        </span>\n      </div>\n\n      <span\n        role=\"meter\"\n        aria-label={`${unit} used`}\n        aria-valuemin={0}\n        aria-valuemax={100}\n        aria-valuenow={announced(pct(used, limit))}\n        aria-valuetext={`${used} of ${limit} ${unit} used`}\n        className=\"bg-foreground/[0.06] inset-ring-border h-1 w-full overflow-hidden rounded-full inset-ring forced-colors:border\"\n      >\n        <span\n          className={cn(\n            \"block h-full rounded-full transition-[width] duration-500 forced-color-adjust-none motion-reduce:transition-none\",\n            exhausted\n              ? \"bg-red-500\"\n              : tight\n                ? \"bg-amber-500\"\n                : \"bg-foreground/40\",\n          )}\n          style={{ width: `${pct(used, limit)}%` }}\n        />\n      </span>\n\n      <div className=\"flex items-center gap-2\">\n        <span className={cn(mono, \"text-muted-foreground tabular-nums\")}>\n          {used} of {limit} used\n        </span>\n        <button\n          type=\"button\"\n          onClick={onUpgrade}\n          className={cn(\n            inkButton,\n            \"ms-auto flex h-7 items-center rounded-full px-3 text-xs font-medium\",\n          )}\n        >\n          {upgradeLabel}\n        </button>\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

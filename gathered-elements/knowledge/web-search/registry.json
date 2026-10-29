@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-web-search",
+  "type": "registry:component",
+  "title": "Web search",
+  "description": "A search query and its results landing one by one as the agent reads.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/web-search.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/web-search.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { SearchIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, mono, ShimmerLabel } from \"./surfaces\";\nimport { take } from \"../utils/range\";\n\nexport interface WebSearchResult {\n  title: string;\n  domain: string;\n}\n\nexport function WebSearch({\n  query,\n  results,\n  visibleResults,\n  searching,\n  cycle,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"query\" | \"results\" | \"visibleResults\" | \"searching\" | \"cycle\"\n> & {\n  query: string;\n  results: readonly WebSearchResult[];\n  visibleResults: number;\n  searching: boolean;\n  cycle: number;\n}) {\n  return (\n    <div\n      data-slot=\"web-search\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2.5\", className)}\n\n      {...props}\n    >\n      <span\n        className={cn(\n          field,\n          \"text-foreground/70 inline-flex w-fit items-center gap-1.5 rounded-full px-3.5 py-2 text-xs\",\n        )}\n      >\n        <SearchIcon className=\"text-muted-foreground size-3\" />\n        {query}\n      </span>\n      <div className=\"text-muted-foreground text-xs\">\n        {searching ? (\n          <ShimmerLabel className=\"relative inline-block leading-none\">\n            Searching\n          </ShimmerLabel>\n        ) : (\n          <span className=\"fade-in animate-in duration-300\">\n            Read 3 sources\n          </span>\n        )}\n      </div>\n      <div className=\"flex min-h-[5.75rem] flex-col\">\n        {take(results, visibleResults).map((result) => (\n          <div\n            key={`${cycle}-${result.domain}`}\n            className=\"fade-in slide-in-from-bottom-1 animate-in fill-mode-both hover:bg-foreground/[0.03] -mx-2.5 flex items-center gap-2.5 rounded-xl px-2.5 py-1.5 transition-colors duration-300\"\n          >\n            <span className=\"bg-foreground/[0.06] text-muted-foreground flex size-4 shrink-0 items-center justify-center rounded text-[9px] font-medium\">\n              {result.domain.charAt(0).toUpperCase()}\n            </span>\n            <span className=\"text-foreground/90 min-w-0 flex-1 truncate text-[13.5px]\">\n              {result.title}\n            </span>\n            <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n              {result.domain}\n            </span>\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "tooltip-icon-button",
+  "category": "Primitives",
+  "folder": "gathered-elements/primitives/tooltip-icon-button",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tooltip-icon-button.jsx",
+    "tooltip-icon-button.tsx"
+  ]
+}

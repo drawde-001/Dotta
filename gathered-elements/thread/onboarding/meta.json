@@ -1,0 +1,14 @@
+{
+  "slug": "onboarding",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/onboarding",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "onboarding.tsx",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

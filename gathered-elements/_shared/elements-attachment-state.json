@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-attachment-state",
+  "type": "registry:component",
+  "title": "Elements Attachment State",
+  "description": "Shared attachment status and preview state.",
+  "dependencies": [
+    "@assistant-ui/react@^0.15.32"
+  ],
+  "registryDependencies": [
+    "https://r.assistant-ui.com/use-attachment-src.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/attachment-state.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/attachment-state.ts",
+      "content": "\"use client\";\n\nimport { useAui, useAuiState } from \"@assistant-ui/react\";\nimport { useAttachmentSrc } from \"@/hooks/use-attachment-src\";\n\nexport function useAttachmentState() {\n  const aui = useAui();\n  const isComposer = aui.attachment.source !== \"message\";\n  const src = useAttachmentSrc();\n\n  const isImage = useAuiState((s) => s.attachment.type === \"image\");\n  const name = useAuiState((s) => s.attachment.name);\n  const typeLabel = useAuiState((s) => {\n    const type = s.attachment.type;\n    switch (type) {\n      case \"image\":\n        return \"Image\";\n      case \"document\":\n        return \"Document\";\n      case \"file\":\n        return \"File\";\n      default:\n        return type;\n    }\n  });\n\n  // An attachment on a submission is still being prepared, whether or not the\n  // adapter reports progress while it uploads.\n  const uploadState = useAuiState((s) =>\n    s.attachment.status.type === \"incomplete\" &&\n    s.attachment.status.reason === \"error\"\n      ? \"error\"\n      : s.attachment.status.type === \"running\" ||\n          (s.optional.message?.submission !== undefined &&\n            s.attachment.status.type !== \"complete\")\n        ? \"uploading\"\n        : undefined,\n  );\n  const isUploading = uploadState === \"uploading\";\n  const isError = uploadState === \"error\";\n\n  const errorMessage = useAuiState((s) =>\n    s.attachment.status.type === \"incomplete\" &&\n    s.attachment.status.reason === \"error\"\n      ? (s.attachment.status.message ?? \"Upload failed\")\n      : undefined,\n  );\n\n  return {\n    isComposer,\n    src,\n    isImage,\n    name,\n    typeLabel,\n    isUploading,\n    isError,\n    errorMessage,\n  };\n}\n"
+    }
+  ]
+}

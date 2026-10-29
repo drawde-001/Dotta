@@ -1,0 +1,14 @@
+{
+  "slug": "mcp-server-panel",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/mcp-server-panel",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "mcp-server-panel.aui.jsx",
+    "mcp-server-panel.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

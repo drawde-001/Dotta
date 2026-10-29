@@ -1,0 +1,13 @@
+{
+  "slug": "voice-conversation",
+  "category": "Voice",
+  "folder": "gathered-elements/voice/voice-conversation",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "voice-conversation.tsx"
+  ]
+}

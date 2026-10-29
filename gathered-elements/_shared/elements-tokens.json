@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-tokens",
+  "type": "registry:component",
+  "title": "Elements Tokens",
+  "description": "Token count formatting for the elements family: a count in the unit that keeps it short, such as 48.2k or 912.5M.",
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/utils/tokens.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/utils/tokens.ts",
+      "content": "/**\n * Token counts as the elements print them: `950`, `48.2k`, `912.5M`.\n */\n\nconst UNITS = [\n  { size: 1_000, suffix: \"k\" },\n  { size: 1_000_000, suffix: \"M\" },\n  { size: 1_000_000_000, suffix: \"B\" },\n  { size: 1_000_000_000_000, suffix: \"T\" },\n] as const;\n\nconst tenths = (value: number) => Math.round(value * 10) / 10;\n\n/**\n * `tokens` to one decimal in the first unit that keeps it under a thousand, so\n * `999_950` reads `1M` rather than `1000k`.\n */\nexport function formatTokenCount(tokens: number): string {\n  if (!(tokens >= 1_000)) return `${tokens}`;\n  let label = \"\";\n  for (const { size, suffix } of UNITS) {\n    const value = tenths(tokens / size);\n    label = `${value}${suffix}`;\n    if (value < 1_000) break;\n  }\n  return label;\n}\n"
+    }
+  ]
+}

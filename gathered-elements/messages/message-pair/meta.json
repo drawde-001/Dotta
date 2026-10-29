@@ -1,0 +1,14 @@
+{
+  "slug": "message-pair",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/message-pair",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "message-pair.aui.jsx",
+    "message-pair.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

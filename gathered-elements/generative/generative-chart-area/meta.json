@@ -1,0 +1,13 @@
+{
+  "slug": "generative-chart-area",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-chart-area",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

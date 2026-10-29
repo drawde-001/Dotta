@@ -1,0 +1,14 @@
+{
+  "slug": "document-reference",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/document-reference",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "document-reference.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

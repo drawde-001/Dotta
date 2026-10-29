@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-confidence-marker",
+  "type": "registry:component",
+  "title": "Confidence",
+  "description": "Which claims came from a source, which were inferred, and which are guesses.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/confidence-marker.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/confidence-marker.tsx",
+      "content": "\"use client\";\n\nimport { useId } from \"react\";\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { floating, mono } from \"./surfaces\";\n\nexport type Confidence = \"grounded\" | \"inferred\" | \"uncertain\";\n\nexport interface ConfidenceClaim {\n  id: string;\n  text: string;\n  confidence: Confidence;\n  basis: string;\n}\n\nconst UNDERLINE: Record<Confidence, string> = {\n  grounded: \"decoration-emerald-500/50\",\n  inferred: \"decoration-amber-500/60\",\n  uncertain: \"decoration-red-500/50 decoration-dotted\",\n};\n\nconst LABEL: Record<Confidence, string> = {\n  grounded: \"from a source\",\n  inferred: \"inferred\",\n  uncertain: \"unverified\",\n};\n\nexport function ConfidenceMarker({\n  claims,\n  hoveredId,\n  onHover,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"claims\" | \"hoveredId\" | \"onHover\"\n> & {\n  claims: readonly ConfidenceClaim[];\n  hoveredId: string;\n  onHover?: (id: string) => void;\n}) {\n  const basisId = useId();\n  const hovered = claims.find((claim) => claim.id === hoveredId);\n\n  return (\n    <div\n      data-slot=\"confidence-marker\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2.5\", className)}\n\n      {...props}\n    >\n      <p className=\"text-[13.5px] leading-relaxed\">\n        {claims.map((claim) => (\n          <button\n            key={claim.id}\n            type=\"button\"\n            aria-describedby={hoveredId === claim.id ? basisId : undefined}\n            onMouseEnter={() => onHover?.(claim.id)}\n            onMouseLeave={() => onHover?.(\"\")}\n            onFocus={() => onHover?.(claim.id)}\n            onBlur={() => onHover?.(\"\")}\n            className={cn(\n              \"focus-visible:ring-foreground/20 inline cursor-help rounded text-start underline decoration-2 underline-offset-[3px] transition-colors outline-none focus-visible:ring-1\",\n              UNDERLINE[claim.confidence],\n              hoveredId === claim.id\n                ? \"text-foreground/95\"\n                : \"text-foreground/70\",\n            )}\n          >\n            {claim.text}{\" \"}\n          </button>\n        ))}\n      </p>\n\n      <div className=\"flex h-9 items-start\">\n        {hovered && (\n          <span\n            id={basisId}\n            role=\"status\"\n            className={cn(\n              floating,\n              mono,\n              \"fade-in zoom-in-95 animate-in text-muted-foreground flex items-center gap-1.5 rounded-full px-2.5 py-1.5 duration-150\",\n            )}\n          >\n            <span\n              aria-hidden\n              className={cn(\n                \"size-1.5 rounded-full\",\n                hovered.confidence === \"grounded\" && \"bg-emerald-500\",\n                hovered.confidence === \"inferred\" && \"bg-amber-500\",\n                hovered.confidence === \"uncertain\" && \"bg-red-500\",\n              )}\n            />\n            {LABEL[hovered.confidence]} · {hovered.basis}\n          </span>\n        )}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

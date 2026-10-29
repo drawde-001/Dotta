@@ -1,0 +1,13 @@
+{
+  "slug": "thread-list",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/thread-list",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "thread-list.tsx"
+  ]
+}

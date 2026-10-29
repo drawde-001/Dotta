@@ -1,0 +1,14 @@
+{
+  "slug": "directive-text",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/directive-text",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "directive-text.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

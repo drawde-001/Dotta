@@ -1,0 +1,13 @@
+{
+  "slug": "composer-trigger-popover",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/composer-trigger-popover",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "composer-trigger-popover.aui.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-checkpoint-history",
+  "type": "registry:component",
+  "title": "Checkpoints",
+  "description": "Points you can fall back to, with what each one would give back.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/checkpoint-history.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/checkpoint-history.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { RotateCcwIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nexport interface Checkpoint {\n  id: string;\n  label: string;\n  at: string;\n  files: number;\n}\n\nexport function CheckpointHistory({\n  checkpoints,\n  currentId,\n  onRestore,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"checkpoints\" | \"currentId\" | \"onRestore\"\n> & {\n  checkpoints: readonly Checkpoint[];\n  currentId: string;\n  onRestore?: (id: string) => void;\n}) {\n  const currentIndex = checkpoints.findIndex(\n    (checkpoint) => checkpoint.id === currentId,\n  );\n\n  return (\n    <div\n      data-slot=\"checkpoint-history\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-1 rounded-2xl p-3\",\n        className,\n      )}\n\n      {...props}\n    >\n      <span className=\"px-1.5 pb-1 text-[13.5px] font-medium\">Checkpoints</span>\n\n      {checkpoints.map((checkpoint, i) => {\n        const ahead = currentIndex >= 0 && i > currentIndex;\n        const current = checkpoint.id === currentId;\n\n        return (\n          <div\n            key={checkpoint.id}\n            className={cn(\n              \"group flex items-center gap-2.5 rounded-xl px-1.5 py-1.5 transition-colors\",\n              current ? \"bg-foreground/[0.05]\" : \"hover:bg-foreground/[0.03]\",\n              ahead && \"opacity-40\",\n            )}\n          >\n            <span\n              aria-hidden\n              className={cn(\n                \"size-1.5 shrink-0 rounded-full\",\n                current\n                  ? \"bg-blue-500 dark:bg-blue-400\"\n                  : ahead\n                    ? \"border-foreground/25 border\"\n                    : \"bg-foreground/25\",\n              )}\n            />\n\n            <span className=\"flex min-w-0 flex-1 flex-col\">\n              <span className=\"truncate text-[13px]\">{checkpoint.label}</span>\n              <span className={cn(mono, \"text-muted-foreground\")}>\n                {checkpoint.at} · {checkpoint.files} files\n              </span>\n            </span>\n\n            {current ? (\n              <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n                current\n              </span>\n            ) : onRestore ? (\n              <button\n                type=\"button\"\n                aria-label={`Restore to ${checkpoint.label}`}\n                onClick={() => onRestore(checkpoint.id)}\n                className=\"text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground/90 flex h-6 shrink-0 items-center gap-1 rounded-full px-2 text-[11px] font-medium opacity-0 transition-[background-color,color,opacity,scale] duration-150 group-hover:opacity-100 focus-visible:opacity-100 active:scale-[0.96]\"\n              >\n                <RotateCcwIcon className=\"size-2.5\" />\n                Restore\n              </button>\n            ) : null}\n          </div>\n        );\n      })}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

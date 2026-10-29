@@ -1,0 +1,1 @@
+npm install @assistant-ui/generative-ui zod

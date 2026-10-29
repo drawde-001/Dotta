@@ -1,0 +1,14 @@
+{
+  "slug": "thinking-indicator",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/thinking-indicator",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "thinking-indicator.aui.jsx",
+    "thinking-indicator.tsx"
+  ]
+}

@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeReceiptHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><span data-aui=\"badge\" data-aui-variant=\"success\">Purchase complete<svg data-aui=\"icon\" data-aui-name=\"check\" data-aui-size=\"sm\" viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12.5l5 5.5 11-12\"></path></svg></span><div data-aui=\"row\" data-aui-gap=\"3\" data-aui-align=\"center\"><img data-aui=\"image\" data-aui-size=\"sm\" src=\"https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=640&amp;q=80\" alt=\"Mechanical keyboard\"/><div data-aui=\"col\" data-aui-gap=\"0\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Mechanical Keyboard, Tactile</span><p data-aui=\"caption\">Qty 1</p></div></div><hr data-aui=\"divider\"/><div data-aui=\"col\" data-aui-gap=\"2\"><dl data-aui=\"fact\"><dt data-aui=\"fact-label\">Estimated delivery</dt><dd data-aui=\"fact-value\">July 29 to August 1</dd></dl><dl data-aui=\"fact\"><dt data-aui=\"fact-label\">Sold by</dt><dd data-aui=\"fact-value\">Northwind Supply Co.</dd></dl><dl data-aui=\"fact\"><dt data-aui=\"fact-label\">Paid</dt><dd data-aui=\"fact-value\">$149.00</dd></dl></div><button type=\"button\" data-aui=\"button\" data-aui-style=\"outline\" data-aui-action=\"{&quot;type&quot;:&quot;view_order_details&quot;}\">View details</button></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeReceipt({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-receipt"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeReceiptHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeReceipt;

@@ -1,0 +1,14 @@
+{
+  "slug": "markdown-text",
+  "category": "Renderers",
+  "folder": "gathered-elements/renderers/markdown-text",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "markdown-text.jsx",
+    "markdown-text.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

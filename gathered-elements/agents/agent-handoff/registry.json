@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-agent-handoff",
+  "type": "registry:component",
+  "title": "Handoff",
+  "description": "Control passing between agents, with the reason and what came along.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/agent-handoff.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/agent-handoff.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { ArrowRightIcon, BotIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, mono } from \"./surfaces\";\n\nexport function AgentHandoff({\n  from,\n  to,\n  reason,\n  carried,\n  settled,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"from\" | \"to\" | \"reason\" | \"carried\" | \"settled\"\n> & {\n  from: string;\n  to: string;\n  reason: string;\n  carried: readonly string[];\n  settled: boolean;\n}) {\n  return (\n    <div\n      data-slot=\"agent-handoff\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2\", className)}\n\n      {...props}\n    >\n      <div className=\"flex items-center gap-2\">\n        <span\n          className={cn(\n            field,\n            \"text-muted-foreground flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-opacity duration-500\",\n            settled && \"opacity-45\",\n          )}\n        >\n          <BotIcon className=\"size-3\" />\n          {from}\n        </span>\n\n        <ArrowRightIcon\n          className={cn(\n            \"size-3.5 shrink-0 transition-colors duration-500\",\n            settled\n              ? \"text-muted-foreground\"\n              : \"text-blue-500 dark:text-blue-400\",\n          )}\n        />\n\n        <span\n          className={cn(\n            \"flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs transition-colors duration-500\",\n            settled\n              ? cn(field, \"text-foreground/80\")\n              : \"bg-blue-500/12 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300\",\n          )}\n        >\n          <BotIcon className=\"size-3\" />\n          {to}\n        </span>\n      </div>\n\n      <p className=\"text-muted-foreground text-xs leading-relaxed\">{reason}</p>\n\n      {carried.length > 0 && (\n        <div className=\"flex flex-col gap-1\">\n          <span className={cn(mono, \"text-muted-foreground\")}>\n            carried over\n          </span>\n          {carried.map((item) => (\n            <span\n              key={item}\n              className=\"text-foreground/60 border-foreground/12 border-s ps-2.5 text-xs leading-relaxed\"\n            >\n              {item}\n            </span>\n          ))}\n        </div>\n      )}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

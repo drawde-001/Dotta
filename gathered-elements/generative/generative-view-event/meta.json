@@ -1,0 +1,13 @@
+{
+  "slug": "generative-view-event",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-view-event",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

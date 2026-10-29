@@ -1,0 +1,13 @@
+{
+  "slug": "model-selector",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/model-selector",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "model-selector.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

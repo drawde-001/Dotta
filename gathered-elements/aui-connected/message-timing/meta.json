@@ -1,0 +1,13 @@
+{
+  "slug": "message-timing",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/message-timing",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "message-timing.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

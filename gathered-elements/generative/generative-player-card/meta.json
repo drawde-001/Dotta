@@ -1,0 +1,13 @@
+{
+  "slug": "generative-player-card",
+  "category": "Generative",
+  "folder": "gathered-elements/generative/generative-player-card",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "card-dom.html",
+    "extracted-code.txt",
+    "meta.json",
+    "showcase-snippet.html"
+  ]
+}

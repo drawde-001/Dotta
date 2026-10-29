@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-memory-chips",
+  "type": "registry:component",
+  "title": "Memory",
+  "description": "What it now remembers about you, written during the turn and removable.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/memory-chips.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/memory-chips.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { BrainIcon, XIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, ghostButton, mono } from \"./surfaces\";\n\nexport type MemoryChange = \"added\" | \"updated\" | \"existing\";\n\nexport interface MemoryChip {\n  id: string;\n  text: string;\n  change: MemoryChange;\n}\n\nexport function MemoryChips({\n  chips,\n  onForget,\n  className,\n  ...props\n}: Omit<ComponentProps<\"div\">, \"children\" | \"chips\" | \"onForget\"> & {\n  chips: readonly MemoryChip[];\n  onForget?: (id: string) => void;\n}) {\n  const fresh = chips.filter((chip) => chip.change !== \"existing\").length;\n\n  return (\n    <div\n      data-slot=\"memory-chips\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2\", className)}\n\n      {...props}\n    >\n      <div className=\"flex items-center gap-1.5\">\n        <BrainIcon className=\"text-muted-foreground size-3.5\" />\n        <span className={cn(mono, \"text-muted-foreground\")}>\n          {fresh > 0 ? `remembered ${fresh}` : \"memory\"}\n        </span>\n      </div>\n\n      <div className=\"flex flex-wrap gap-1.5\">\n        {chips.map((chip) => (\n          <span\n            key={chip.id}\n            className={cn(\n              \"fade-in zoom-in-95 animate-in fill-mode-both group flex items-center gap-1 rounded-full py-1 pr-1 pl-2.5 text-xs duration-300\",\n              chip.change === \"existing\"\n                ? cn(field, \"text-muted-foreground\")\n                : \"bg-blue-500/12 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300\",\n            )}\n          >\n            {chip.text}\n            {onForget && (\n              <button\n                type=\"button\"\n                aria-label={`Forget \"${chip.text}\"`}\n                onClick={() => onForget(chip.id)}\n                className={cn(ghostButton, \"size-4\")}\n              >\n                <XIcon className=\"size-2.5\" />\n              </button>\n            )}\n          </span>\n        ))}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

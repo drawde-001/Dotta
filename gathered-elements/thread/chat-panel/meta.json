@@ -1,0 +1,13 @@
+{
+  "slug": "chat-panel",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/chat-panel",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "chat-panel.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

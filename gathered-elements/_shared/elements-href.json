@@ -1,0 +1,15 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-href",
+  "type": "registry:component",
+  "title": "Elements Href",
+  "description": "Link safety for the elements family: reducing a model's or a tool's URL to a target a browser can follow without running script.",
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/utils/href.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/utils/href.ts",
+      "content": "/**\n * Link targets the elements take from a model or a tool.\n *\n * React 19 refuses a `javascript:` href but React 18 only warns, and neither\n * blocks `data:` or `vbscript:`, so an element passes a caller's URL through\n * here before it becomes an `href` or a navigation target.\n */\n\nconst RELATIVE = /^(?:[/?#]|\\.{1,2}\\/)/;\n\nconst ALLOWED_PROTOCOLS = new Set([\"http:\", \"https:\", \"mailto:\"]);\n\nconst parse = (url: string) => {\n  try {\n    return new URL(url);\n  } catch {\n    return undefined;\n  }\n};\n\n/**\n * `url` when a browser following it runs no script: an `http:`, `https:`, or\n * `mailto:` URL, or one relative to the page. Anything else, including a\n * string that is not a URL at all, is `undefined`.\n */\nexport function safeHref(url: string | undefined): string | undefined {\n  if (typeof url !== \"string\") return undefined;\n  const trimmed = url.trim();\n  if (trimmed === \"\") return undefined;\n  const parsed = parse(trimmed);\n  if (parsed) {\n    return ALLOWED_PROTOCOLS.has(parsed.protocol) ? trimmed : undefined;\n  }\n  return RELATIVE.test(trimmed) ? trimmed : undefined;\n}\n\n/** The host `url` points at, without a leading `www.`, or `undefined`. */\nexport function hostOf(url: string | undefined): string | undefined {\n  const href = safeHref(url);\n  const hostname = href === undefined ? \"\" : (parse(href)?.hostname ?? \"\");\n  return hostname.replace(/^www\\./, \"\") || undefined;\n}\n"
+    }
+  ]
+}

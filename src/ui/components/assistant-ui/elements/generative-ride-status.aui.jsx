@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeRideStatusHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><h2 data-aui=\"header\" data-aui-size=\"3xl\">Arriving in 4 min</h2><span data-aui=\"text\" data-aui-size=\"md\" data-aui-color=\"secondary\">Toyota Camry · ABC 1234</span><hr data-aui=\"divider\"/><div data-aui=\"row\" data-aui-gap=\"6\"><div data-aui=\"row\" data-aui-align=\"start\"><svg data-aui=\"icon\" data-aui-name=\"map-pin\" data-aui-size=\"sm\" viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 21s7-6.7 7-12.2A7 7 0 1 0 5 8.8C5 14.3 12 21 12 21z\"></path><circle cx=\"12\" cy=\"8.8\" r=\"2.3\"></circle></svg><dl data-aui=\"fact\"><dt data-aui=\"fact-label\">Pick up</dt><dd data-aui=\"fact-value\">123 Market St</dd></dl></div><dl data-aui=\"fact\"><dt data-aui=\"fact-label\">Driver</dt><dd data-aui=\"fact-value\">Alex · 4.98 ★</dd></dl></div></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeRideStatus({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-ride-status"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeRideStatusHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeRideStatus;

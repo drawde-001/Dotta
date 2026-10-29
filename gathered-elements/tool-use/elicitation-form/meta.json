@@ -1,0 +1,14 @@
+{
+  "slug": "elicitation-form",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/elicitation-form",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "elicitation-form.aui.jsx",
+    "elicitation-form.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

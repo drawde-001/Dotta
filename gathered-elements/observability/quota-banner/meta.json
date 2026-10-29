@@ -1,0 +1,14 @@
+{
+  "slug": "quota-banner",
+  "category": "Observability",
+  "folder": "gathered-elements/observability/quota-banner",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "quota-banner.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "diagram",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/diagram",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "diagram.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

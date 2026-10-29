@@ -1,0 +1,14 @@
+{
+  "slug": "feedback-dialog",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/feedback-dialog",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "feedback-dialog.aui.jsx",
+    "feedback-dialog.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

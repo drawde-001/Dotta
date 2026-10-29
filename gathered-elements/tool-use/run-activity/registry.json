@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-run-activity",
+  "type": "registry:component",
+  "title": "Run activity",
+  "description": "Ordered commentary and tools, with a live summary and a final answer that stays visible.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-collapsible-root.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/run-activity.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/run-activity.tsx",
+      "content": "\"use client\";\n\nimport type { ReactNode } from \"react\";\nimport { ChevronRightIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport {\n  CollapsibleRoot as Collapsible,\n  CollapsibleContent,\n  CollapsibleTrigger,\n} from \"./collapsible-root\";\nimport { collapsePanel } from \"./surfaces\";\n\nexport type RunActivityStatus =\n  | \"running\"\n  | \"requires-action\"\n  | \"complete\"\n  | \"cancelled\"\n  | \"incomplete\"\n  | \"error\";\n\nexport type RunActivityEntry = {\n  id: string;\n  kind: \"commentary\" | \"tool\";\n  label: string;\n  content: ReactNode;\n};\n\nexport type RunActivityProps = {\n  status: RunActivityStatus;\n  statusLabel: string;\n  /** Formatted from the caller's persisted run timing. */\n  durationLabel?: ReactNode;\n  entries: readonly RunActivityEntry[];\n  open: boolean;\n  onOpenChange: (open: boolean) => void;\n  /** Pending decisions and recovery controls remain outside the disclosure. */\n  attention?: ReactNode;\n  /** Final-answer content remains outside the disclosure. */\n  children?: ReactNode;\n  className?: string;\n};\n\nexport function RunActivity({\n  status,\n  statusLabel,\n  durationLabel,\n  entries,\n  open,\n  onOpenChange,\n  attention,\n  children,\n  className,\n}: RunActivityProps) {\n  const latestActivity =\n    status === \"running\"\n      ? entries.findLast((entry) => entry.label.trim())?.label\n      : undefined;\n\n  const summary = (\n    <span className=\"text-start tabular-nums\">\n      {statusLabel}\n      {durationLabel != null && <> {durationLabel}</>}\n    </span>\n  );\n\n  return (\n    <div\n      data-slot=\"run-activity\"\n      data-status={status}\n      className={cn(\"flex min-w-0 flex-col gap-3\", className)}\n    >\n      {entries.length > 0 ? (\n        <Collapsible open={open} onOpenChange={onOpenChange}>\n          <CollapsibleTrigger\n            aria-busy={status === \"running\"}\n            className=\"group/trigger text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 flex max-w-full items-center gap-1.5 rounded-md py-1 text-sm outline-none focus-visible:ring-[3px]\"\n          >\n            <ChevronRightIcon\n              aria-hidden=\"true\"\n              className=\"size-3.5 shrink-0 transition-transform duration-200 group-data-open/trigger:rotate-90 group-data-panel-open/trigger:rotate-90 motion-reduce:transition-none\"\n            />\n            {summary}\n          </CollapsibleTrigger>\n          <CollapsibleContent className={cn(collapsePanel, \"peer\")}>\n            <ol className=\"border-border ms-1.5 flex min-w-0 flex-col gap-3 border-s ps-3.5 pt-2 text-sm wrap-anywhere\">\n              {entries.map((entry) => (\n                <li key={entry.id} data-activity-kind={entry.kind}>\n                  {entry.content}\n                </li>\n              ))}\n            </ol>\n          </CollapsibleContent>\n          {!open && latestActivity && (\n            // The panel stays mounted during its exit transition.\n            <p className=\"text-muted-foreground ps-5 text-sm wrap-anywhere peer-[:not([hidden])]:hidden\">\n              {latestActivity}\n            </p>\n          )}\n        </Collapsible>\n      ) : (\n        <p className=\"text-muted-foreground py-1 text-sm\">{summary}</p>\n      )}\n      {/* Announce the settled duration without announcing streaming timer ticks. */}\n      <span role=\"status\" aria-atomic=\"true\" className=\"sr-only\">\n        {statusLabel}\n        {status !== \"running\" && durationLabel != null && <> {durationLabel}</>}\n      </span>\n      {attention}\n      {children}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

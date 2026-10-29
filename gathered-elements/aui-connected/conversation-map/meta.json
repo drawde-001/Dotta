@@ -1,0 +1,13 @@
+{
+  "slug": "conversation-map",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/conversation-map",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "conversation-map.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

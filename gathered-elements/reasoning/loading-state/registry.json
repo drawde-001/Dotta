@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-loading-state",
+  "type": "registry:component",
+  "title": "Loading state",
+  "description": "A pixel matrix that keeps time while the model has nothing to show yet.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/loading-state.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/loading-state.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { ShimmerLabel } from \"./surfaces\";\n\nexport type GenerationLoaderVariant = \"dots\" | \"squares\" | \"rounded\";\n\nexport interface GenerationLoaderProps extends Omit<\n  ComponentProps<\"div\">,\n  \"children\"\n> {\n  label: string;\n  tick: number;\n  variant?: GenerationLoaderVariant;\n}\n\nconst CELL_SHAPES: Record<GenerationLoaderVariant, string> = {\n  dots: \"rounded-full\",\n  squares: \"rounded-[1px]\",\n  rounded: \"rounded-[3px]\",\n};\n\nexport function GenerationLoader({\n  label,\n  tick,\n  variant = \"dots\",\n  className,\n  ...props\n}: GenerationLoaderProps) {\n  const pixelOffset = Math.floor(tick / 3);\n\n  return (\n    <div\n      data-slot=\"generation-loader\"\n      className={cn(\"flex flex-col items-center gap-4\", className)}\n\n      {...props}\n    >\n      <div aria-hidden className=\"grid grid-cols-3 gap-1\">\n        {Array.from({ length: 9 }, (_, index) => {\n          const active = (index * 2 + pixelOffset) % 9 < 3;\n\n          return (\n            <span\n              key={index}\n              className={cn(\n                \"bg-foreground size-2 transition-opacity duration-300 motion-reduce:transition-none\",\n                CELL_SHAPES[variant],\n                active ? \"opacity-90\" : \"opacity-15\",\n              )}\n            />\n          );\n        })}\n      </div>\n      <ShimmerLabel className=\"text-muted-foreground relative inline-block text-sm\">\n        {label}\n      </ShimmerLabel>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

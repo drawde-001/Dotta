@@ -1,0 +1,14 @@
+{
+  "slug": "score-breakdown",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/score-breakdown",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "score-breakdown.tsx",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-math-block",
+  "type": "registry:component",
+  "title": "Math",
+  "description": "Rendered expressions with the working shown, one step at a time.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/math-block.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/math-block.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\nimport { take } from \"../utils/range\";\n\nexport interface MathStep {\n  expression: React.ReactNode;\n  note?: string;\n}\n\nexport function MathBlock({\n  label,\n  steps,\n  visibleSteps,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"label\" | \"steps\" | \"visibleSteps\"\n> & {\n  label?: string;\n  steps: readonly MathStep[];\n  visibleSteps: number;\n}) {\n  return (\n    <div\n      data-slot=\"math-block\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-2.5 rounded-2xl p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      {label && (\n        <span className={cn(mono, \"text-muted-foreground\")}>{label}</span>\n      )}\n\n      {take(steps, visibleSteps).map((step, i) => (\n        <div\n          key={i}\n          className=\"fade-in slide-in-from-bottom-1 animate-in fill-mode-both flex flex-col gap-1 duration-300\"\n        >\n          <span className=\"text-foreground/90 overflow-x-auto py-1 text-center font-serif text-[17px] leading-relaxed italic\">\n            {step.expression}\n          </span>\n          {step.note && (\n            <span className={cn(mono, \"text-muted-foreground text-center\")}>\n              {step.note}\n            </span>\n          )}\n        </div>\n      ))}\n    </div>\n  );\n}\n\nexport function Frac({\n  over,\n  under,\n}: {\n  over: React.ReactNode;\n  under: React.ReactNode;\n}) {\n  return (\n    <span\n      data-slot=\"frac\"\n      className=\"inline-flex flex-col items-center align-middle text-[0.85em] leading-tight\"\n    >\n      <span className=\"px-1\">{over}</span>\n      <span className=\"border-foreground/40 w-full border-t px-1\">{under}</span>\n    </span>\n  );\n}\n\nexport function Sup({ children }: { children: React.ReactNode }) {\n  return <sup className=\"text-[0.65em] not-italic\">{children}</sup>;\n}\n\nexport function Sub({ children }: { children: React.ReactNode }) {\n  return <sub className=\"text-[0.65em] not-italic\">{children}</sub>;\n}\n"
+    }
+  ]
+}

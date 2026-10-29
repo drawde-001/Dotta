@@ -1,0 +1,15 @@
+{
+  "slug": "reasoning",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/reasoning",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "reasoning.aui.jsx",
+    "reasoning.tsx",
+    "registry.json",
+    "showcase-snippet.html",
+    "useIsomorphicLayoutEffect.ts"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "slug": "assistant-sidebar",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/assistant-sidebar",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "assistant-sidebar.aui.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

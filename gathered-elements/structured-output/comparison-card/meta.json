@@ -1,0 +1,14 @@
+{
+  "slug": "comparison-card",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/comparison-card",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "comparison-card.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "sources",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/sources",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "sources.aui.jsx",
+    "sources.tsx"
+  ]
+}

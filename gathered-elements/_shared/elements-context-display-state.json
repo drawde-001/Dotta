@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-context-display-state",
+  "type": "registry:component",
+  "title": "Elements Context Display State",
+  "description": "Shared context display state and reset behavior.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-context-usage.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/utils/context-display-state.ts",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/utils/context-display-state.ts",
+      "content": "\"use client\";\n\nimport { createContext, useContext, useMemo, useState } from \"react\";\nimport { getUsagePercent, type TokenUsage } from \"./context-usage\";\n\ntype ContextDisplayContextValue = {\n  usage: TokenUsage | undefined;\n  totalTokens: number;\n  percent: number;\n  modelContextWindow: number;\n};\n\nexport const ContextDisplayContext =\n  createContext<ContextDisplayContextValue | null>(null);\n\nexport function useContextDisplay(): ContextDisplayContextValue {\n  const ctx = useContext(ContextDisplayContext);\n  if (!ctx) {\n    throw new Error(\"ContextDisplay.* must be used within ContextDisplay.Root\");\n  }\n  return ctx;\n}\n\nexport function useContextDisplayState(\n  usage: TokenUsage | undefined,\n  resetKey: string | undefined,\n  modelContextWindow: number,\n) {\n  const rawTokens = usage?.totalTokens ?? 0;\n  const [tokenState, setTokenState] = useState({\n    resetKey,\n    totalTokens: rawTokens > 0 ? rawTokens : 0,\n    usage,\n  });\n\n  if (\n    tokenState.resetKey !== resetKey ||\n    (rawTokens > 0 && rawTokens !== tokenState.totalTokens) ||\n    usage !== tokenState.usage\n  ) {\n    setTokenState((prev) => {\n      if (prev.resetKey !== resetKey) {\n        return {\n          resetKey,\n          totalTokens: rawTokens > 0 ? rawTokens : 0,\n          usage,\n        };\n      }\n      if (rawTokens > 0 && rawTokens !== prev.totalTokens) {\n        return { ...prev, totalTokens: rawTokens, usage };\n      }\n      if (usage !== prev.usage) {\n        return { ...prev, usage };\n      }\n      return prev;\n    });\n  }\n\n  const current =\n    tokenState.resetKey === resetKey\n      ? tokenState\n      : { totalTokens: rawTokens > 0 ? rawTokens : 0, usage };\n  const totalTokens = current.totalTokens;\n  const percent = getUsagePercent(totalTokens, modelContextWindow);\n  const hasUsage = current.usage !== undefined || totalTokens > 0;\n\n  const contextValue = useMemo(\n    () => ({\n      usage: current.usage,\n      totalTokens,\n      percent,\n      modelContextWindow,\n    }),\n    [current.usage, totalTokens, percent, modelContextWindow],\n  );\n\n  return { contextValue, hasUsage };\n}\n"
+    }
+  ]
+}

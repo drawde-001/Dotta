@@ -1,0 +1,14 @@
+{
+  "slug": "math-block",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/math-block",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "math-block.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

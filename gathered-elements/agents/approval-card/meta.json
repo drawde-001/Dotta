@@ -1,0 +1,14 @@
+{
+  "slug": "approval-card",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/approval-card",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "approval-card.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

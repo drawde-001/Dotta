@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-collapsible-root",
+  "type": "registry:component",
+  "title": "Collapsible Root",
+  "description": "Ref-bearing disclosure root for assistant-ui components.",
+  "dependencies": [
+    "radix-ui"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/collapsible-root.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/collapsible-root.radix.tsx",
+      "content": "\"use client\";\n\nimport { Collapsible } from \"radix-ui\";\nimport { forwardRef } from \"react\";\n\nexport const CollapsibleRoot = forwardRef<\n  React.ComponentRef<typeof Collapsible.Root>,\n  React.ComponentPropsWithoutRef<typeof Collapsible.Root>\n>(function CollapsibleRoot(props, ref) {\n  return <Collapsible.Root ref={ref} data-slot=\"collapsible\" {...props} />;\n});\n\nexport function CollapsibleTrigger({\n  ...props\n}: React.ComponentProps<typeof Collapsible.CollapsibleTrigger>) {\n  return (\n    <Collapsible.CollapsibleTrigger\n      data-slot=\"collapsible-trigger\"\n      {...props}\n    />\n  );\n}\n\nexport function CollapsibleContent({\n  ...props\n}: React.ComponentProps<typeof Collapsible.CollapsibleContent>) {\n  return (\n    <Collapsible.CollapsibleContent\n      data-slot=\"collapsible-content\"\n      {...props}\n    />\n  );\n}\n"
+    }
+  ]
+}

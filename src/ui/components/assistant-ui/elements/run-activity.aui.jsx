@@ -8,7 +8,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "./collapsible-root";
-import { collapsePanel } from "./surfaces";
+import { collapsePanel, ShimmerLabel, mono } from "./surfaces";
 
 export function RunActivity({
   status = "running",
@@ -31,11 +31,16 @@ export function RunActivity({
     controlledOnOpenChange?.(next);
   };
 
+  const latestActivity =
+    status === "running"
+      ? [...entries].reverse().find((entry) => entry?.label?.trim())?.label
+      : undefined;
+
   const resolvedStatusLabel =
     statusLabel ??
     title ??
     (status === "running"
-      ? "Working"
+      ? latestActivity || "Thinking"
       : status === "requires-action"
         ? "Needs your input"
         : status === "cancelled"
@@ -50,17 +55,37 @@ export function RunActivity({
               ? "Worked for"
               : "Completed");
 
-  const latestActivity =
+  const activeHeaderLabel =
     status === "running"
-      ? [...entries].reverse().find((entry) => entry?.label?.trim())?.label
-      : undefined;
+      ? latestActivity || resolvedStatusLabel || "Thinking"
+      : resolvedStatusLabel;
 
-  const summary = (
-    <span className="text-start tabular-nums">
-      {resolvedStatusLabel}
-      {durationLabel != null && <> {durationLabel}</>}
-    </span>
-  );
+  const summary =
+    status === "running" ? (
+      <span className="inline-flex min-w-0 items-center gap-2 text-start tabular-nums">
+        <span
+          aria-hidden
+          className="size-1.5 shrink-0 animate-pulse rounded-full bg-blue-500 motion-reduce:animate-none dark:bg-blue-400"
+        />
+        <ShimmerLabel
+          key={activeHeaderLabel}
+          active
+          className="fade-in slide-in-from-bottom-1 animate-in relative inline-block min-w-0 truncate leading-tight duration-300"
+        >
+          {activeHeaderLabel}
+        </ShimmerLabel>
+        {durationLabel != null && (
+          <span className={cn(mono, "text-muted-foreground shrink-0 tabular-nums")}>
+            {durationLabel}
+          </span>
+        )}
+      </span>
+    ) : (
+      <span className="text-start tabular-nums">
+        {resolvedStatusLabel}
+        {durationLabel != null && <> {durationLabel}</>}
+      </span>
+    );
 
   return (
     <div
@@ -96,10 +121,10 @@ export function RunActivity({
           )}
         </Collapsible>
       ) : (
-        <p className="text-muted-foreground py-1 text-sm">{summary}</p>
+        <div className="text-muted-foreground py-1 text-sm">{summary}</div>
       )}
       <span role="status" aria-atomic="true" className="sr-only">
-        {resolvedStatusLabel}
+        {activeHeaderLabel}
         {status !== "running" && durationLabel != null && <> {durationLabel}</>}
       </span>
       {attention}
@@ -109,3 +134,4 @@ export function RunActivity({
 }
 
 export default RunActivity;
+

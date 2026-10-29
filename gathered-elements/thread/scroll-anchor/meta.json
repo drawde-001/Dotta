@@ -1,0 +1,13 @@
+{
+  "slug": "scroll-anchor",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/scroll-anchor",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "scroll-anchor.tsx",
+    "showcase-snippet.html"
+  ]
+}

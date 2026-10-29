@@ -1,0 +1,14 @@
+{
+  "slug": "attachment",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/attachment",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "attachment.aui.jsx",
+    "attachment.aui.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

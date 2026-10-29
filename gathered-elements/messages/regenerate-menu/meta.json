@@ -1,0 +1,14 @@
+{
+  "slug": "regenerate-menu",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/regenerate-menu",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "regenerate-menu.aui.jsx",
+    "regenerate-menu.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

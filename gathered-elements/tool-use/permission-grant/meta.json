@@ -1,0 +1,14 @@
+{
+  "slug": "permission-grant",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/permission-grant",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "permission-grant.aui.jsx",
+    "permission-grant.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

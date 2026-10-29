@@ -1,0 +1,14 @@
+{
+  "slug": "agent-handoff",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/agent-handoff",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "agent-handoff.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

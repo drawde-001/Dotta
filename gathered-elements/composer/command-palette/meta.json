@@ -1,0 +1,13 @@
+{
+  "slug": "command-palette",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/command-palette",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "command-palette.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

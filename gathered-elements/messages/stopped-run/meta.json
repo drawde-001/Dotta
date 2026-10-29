@@ -1,0 +1,14 @@
+{
+  "slug": "stopped-run",
+  "category": "Messages",
+  "folder": "gathered-elements/messages/stopped-run",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "stopped-run.aui.jsx",
+    "stopped-run.tsx"
+  ]
+}

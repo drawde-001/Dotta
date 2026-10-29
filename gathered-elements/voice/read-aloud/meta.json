@@ -1,0 +1,13 @@
+{
+  "slug": "read-aloud",
+  "category": "Voice",
+  "folder": "gathered-elements/voice/read-aloud",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "read-aloud.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

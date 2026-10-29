@@ -1,0 +1,14 @@
+{
+  "slug": "map-answer",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/map-answer",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "map-answer.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

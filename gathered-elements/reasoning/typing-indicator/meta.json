@@ -1,0 +1,14 @@
+{
+  "slug": "typing-indicator",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/typing-indicator",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "typing-indicator.aui.jsx",
+    "typing-indicator.tsx"
+  ]
+}

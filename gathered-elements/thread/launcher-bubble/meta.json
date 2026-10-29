@@ -1,0 +1,14 @@
+{
+  "slug": "launcher-bubble",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/launcher-bubble",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "launcher-bubble.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

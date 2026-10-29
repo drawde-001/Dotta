@@ -1,0 +1,18 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-number-ticker",
+  "type": "registry:component",
+  "title": "Number ticker",
+  "description": "Digits that roll into place as a count updates in real time.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/number-ticker.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/number-ticker.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono } from \"./surfaces\";\n\nfunction RollingDigit({ digit }: { digit: number }) {\n  return (\n    <span className=\"inline-flex h-[1.15em] overflow-hidden\">\n      <span\n        className=\"flex flex-col transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none\"\n        style={{ transform: `translateY(-${digit * 1.15}em)` }}\n      >\n        {Array.from({ length: 10 }, (_, i) => (\n          <span key={i} className=\"h-[1.15em] leading-[1.15]\">\n            {i}\n          </span>\n        ))}\n      </span>\n    </span>\n  );\n}\n\nexport function NumberTicker({\n  value,\n  label,\n  className,\n  ...props\n}: Omit<ComponentProps<\"div\">, \"children\" | \"value\" | \"label\"> & {\n  value: number;\n  label: string;\n}) {\n  const formatted = value.toLocaleString(\"en-US\");\n\n  return (\n    <div\n      data-slot=\"number-ticker\"\n      className={cn(\"flex flex-col items-center gap-2.5\", className)}\n\n      {...props}\n    >\n      <span\n        className=\"flex text-3xl font-medium tracking-tight tabular-nums\"\n        aria-label={formatted}\n      >\n        {formatted.split(\"\").map((char, i) =>\n          /\\d/.test(char) ? (\n            <RollingDigit key={i} digit={Number(char)} />\n          ) : (\n            <span key={i} className=\"h-[1.15em] leading-[1.15]\">\n              {char}\n            </span>\n          ),\n        )}\n      </span>\n      <span className={cn(mono, \"text-muted-foreground\")}>{label}</span>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

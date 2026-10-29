@@ -1,0 +1,25 @@
+"use client";
+import React from "react";
+import { cn } from "@/lib/utils";
+import { paper } from "./surfaces";
+
+export const GenerativeEventSessionHtml = "<div data-aui-theme=\"elements\" class=\"aui-gallery w-full max-w-sm origin-center scale-[0.85]\"><section data-aui=\"card\"><p data-aui=\"caption\">TRACK 2 · AI ENGINEERING</p><h2 data-aui=\"header\" data-aui-size=\"md\">Building Reliable Agent Loops</h2><span data-aui=\"text\" data-aui-size=\"sm\" data-aui-color=\"secondary\">A practical look at retries, tool-call verification, and human-in-the-loop patterns for production agents.</span><div data-aui=\"row\" data-aui-gap=\"3\"><p data-aui=\"caption\">Hall B</p><p data-aui=\"caption\">2:30 PM to 3:15 PM</p></div><hr data-aui=\"divider\"/><div data-aui=\"row\" data-aui-align=\"center\" data-aui-justify=\"between\"><div data-aui=\"row\" data-aui-align=\"center\"><img data-aui=\"image\" data-aui-size=\"sm\" data-aui-round=\"true\" src=\"https://i.pravatar.cc/150?img=47\" alt=\"Priya Nair\"/><div data-aui=\"col\" data-aui-gap=\"0\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Priya Nair</span><p data-aui=\"caption\">Staff Engineer, Agentbase</p></div></div><button type=\"button\" data-aui=\"button\" data-aui-style=\"outline\" data-aui-action=\"{&quot;type&quot;:&quot;view_speaker&quot;,&quot;speakerId&quot;:&quot;priya-nair&quot;}\">View</button></div><div data-aui=\"row\" data-aui-align=\"center\" data-aui-justify=\"between\"><div data-aui=\"row\" data-aui-align=\"center\"><img data-aui=\"image\" data-aui-size=\"sm\" data-aui-round=\"true\" src=\"https://i.pravatar.cc/150?img=33\" alt=\"Devon Brooks\"/><div data-aui=\"col\" data-aui-gap=\"0\"><span data-aui=\"text\" data-aui-size=\"md\" data-aui-weight=\"medium\">Devon Brooks</span><p data-aui=\"caption\">Founding Engineer, Agentbase</p></div></div><button type=\"button\" data-aui=\"button\" data-aui-style=\"outline\" data-aui-action=\"{&quot;type&quot;:&quot;view_speaker&quot;,&quot;speakerId&quot;:&quot;devon-brooks&quot;}\">View</button></div></section></div></div></div><figcaption class=\"text-muted-foreground mt-2.5 text-xs\">fig. 01";
+
+export function GenerativeEventSession({ className, children, ...props }) {
+  return (
+    <div
+      data-slot="generative-event-session"
+      data-aui-theme="elements"
+      className={cn(paper, "aui-gallery w-full max-w-sm rounded-2xl p-4", className)}
+      {...props}
+    >
+      {children ? (
+        children
+      ) : (
+        <div dangerouslySetInnerHTML={{ __html: GenerativeEventSessionHtml }} />
+      )}
+    </div>
+  );
+}
+
+export default GenerativeEventSession;

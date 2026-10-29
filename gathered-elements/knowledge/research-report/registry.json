@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-research-report",
+  "type": "registry:component",
+  "title": "Research report",
+  "description": "An outline that fills in section by section, each carrying the sources behind it.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/research-report.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/research-report.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { CheckIcon, Loader2Icon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nexport type SectionState = \"pending\" | \"writing\" | \"done\";\n\nexport interface ReportSection {\n  id: string;\n  heading: string;\n  state: SectionState;\n  sources: number;\n  preview?: string;\n}\n\nexport function ResearchReport({\n  title,\n  sections,\n  sourcesRead,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"title\" | \"sections\" | \"sourcesRead\"\n> & {\n  title: string;\n  sections: readonly ReportSection[];\n  sourcesRead: number;\n}) {\n  const done = sections.filter((section) => section.state === \"done\").length;\n\n  return (\n    <div\n      data-slot=\"research-report\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-3 rounded-2xl p-4\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex flex-col gap-1\">\n        <span className=\"text-[13.5px] font-medium\">{title}</span>\n        <span className={cn(mono, \"text-muted-foreground tabular-nums\")}>\n          {done}/{sections.length} sections · {sourcesRead} sources read\n        </span>\n      </div>\n\n      <div className=\"flex flex-col\">\n        {sections.map((section) => (\n          <div\n            key={section.id}\n            className=\"border-foreground/[0.06] flex flex-col gap-1 border-t py-2 first:border-t-0 first:pt-0\"\n          >\n            <div className=\"flex items-center gap-2\">\n              <span className=\"flex size-3.5 shrink-0 items-center justify-center\">\n                {section.state === \"done\" ? (\n                  <CheckIcon className=\"text-muted-foreground size-3\" />\n                ) : section.state === \"writing\" ? (\n                  <Loader2Icon className=\"size-3 animate-spin text-blue-500 motion-reduce:animate-none dark:text-blue-400\" />\n                ) : (\n                  <span\n                    aria-hidden\n                    className=\"bg-foreground/15 size-1.5 rounded-full\"\n                  />\n                )}\n              </span>\n              <span\n                className={cn(\n                  \"min-w-0 flex-1 truncate text-[13px]\",\n                  section.state === \"pending\"\n                    ? \"text-muted-foreground\"\n                    : \"text-foreground/85\",\n                )}\n              >\n                {section.heading}\n              </span>\n              {section.sources > 0 && (\n                <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n                  {section.sources} src\n                </span>\n              )}\n            </div>\n            {section.preview && (\n              <p className=\"text-muted-foreground fade-in animate-in ps-5.5 text-xs leading-relaxed duration-300\">\n                {section.preview}\n              </p>\n            )}\n          </div>\n        ))}\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

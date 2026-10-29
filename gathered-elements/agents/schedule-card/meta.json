@@ -1,0 +1,14 @@
+{
+  "slug": "schedule-card",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/schedule-card",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "schedule-card.tsx",
+    "showcase-snippet.html"
+  ]
+}

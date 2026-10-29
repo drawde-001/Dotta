@@ -1,0 +1,14 @@
+{
+  "slug": "todo-list",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/todo-list",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "todo-list.tsx"
+  ]
+}

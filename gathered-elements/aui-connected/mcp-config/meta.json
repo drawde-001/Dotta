@@ -1,0 +1,13 @@
+{
+  "slug": "mcp-config",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/mcp-config",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "mcp-config.aui.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

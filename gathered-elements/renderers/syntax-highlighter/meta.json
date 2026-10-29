@@ -1,0 +1,14 @@
+{
+  "slug": "syntax-highlighter",
+  "category": "Renderers",
+  "folder": "gathered-elements/renderers/syntax-highlighter",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "syntax-highlighter.tsx"
+  ]
+}

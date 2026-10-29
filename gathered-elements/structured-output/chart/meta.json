@@ -1,0 +1,14 @@
+{
+  "slug": "chart",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/chart",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "chart.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

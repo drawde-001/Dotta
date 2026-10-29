@@ -1,0 +1,14 @@
+{
+  "slug": "composer-model-picker",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/composer-model-picker",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "composer.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

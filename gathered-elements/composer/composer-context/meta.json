@@ -1,0 +1,14 @@
+{
+  "slug": "composer-context",
+  "category": "Composer",
+  "folder": "gathered-elements/composer/composer-context",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "composer.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "tool-call",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/tool-call",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tool-call.aui.jsx",
+    "tool-call.tsx"
+  ]
+}

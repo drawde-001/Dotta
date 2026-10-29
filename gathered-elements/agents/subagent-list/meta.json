@@ -1,0 +1,14 @@
+{
+  "slug": "subagent-list",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/subagent-list",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "subagent-list.tsx"
+  ]
+}

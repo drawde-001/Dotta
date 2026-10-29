@@ -1,0 +1,13 @@
+{
+  "slug": "empty-state",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/empty-state",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "empty-state.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

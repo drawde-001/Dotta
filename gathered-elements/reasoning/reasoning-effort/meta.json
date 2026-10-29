@@ -1,0 +1,14 @@
+{
+  "slug": "reasoning-effort",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/reasoning-effort",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "reasoning-effort.aui.jsx",
+    "reasoning-effort.tsx",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

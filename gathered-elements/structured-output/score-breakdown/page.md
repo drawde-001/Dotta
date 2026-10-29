@@ -1,0 +1,259 @@
+# Score breakdown
+URL: /elements/score-breakdown
+
+A verdict with its arithmetic shown: criteria, weights, and what pulled it down.
+
+> For AI agents: a documentation index is available at [llms.txt](/llms.txt). Use `.md` for canonical markdown pages; `.mdx` is kept as a backwards-compatible alias on supported URL paths.
+
+A verdict backed by its own arithmetic: a total out of a max, a colored verdict pill, and the weighted criteria that produced it, each with its own bar and an optional note on why it scored the way it did. With a runtime the score comes from a tool result; standalone you pass the criteria and the total yourself.
+
+## Getting started
+
+**With a runtime:**
+
+No assistant-ui primitive backs this element, so the runtime wiring is a tool renderer. A score usually comes from grading work, such as running tests or comparing against a rubric, so the criteria belong on the tool's `result`, not on its streamed `args`.
+
+1. ### Register the render function
+
+   ```
+   "use client";
+
+   import { defineToolkit } from "@assistant-ui/react";
+   import { ScoreBreakdown } from "@/components/assistant-ui/elements/score-breakdown";
+
+   export const toolkit = defineToolkit({
+     review_change: {
+       type: "backend",
+       render: ({ args, result }) => {
+         if (!result) return <p>Reviewing {args.target}…</p>;
+         return (
+           <ScoreBreakdown
+             verdict={result.verdict}
+             total={result.total}
+             outOf={result.outOf}
+             criteria={result.criteria}
+             visibleCount={result.criteria.length}
+           />
+         );
+       },
+     },
+   });
+   ```
+
+   The whole breakdown arrives as one result, so `visibleCount` is `result.criteria.length`.
+
+2. ### Let the message list render it
+
+   ```
+   import {
+     AssistantRuntimeProvider,
+     AuiConfig,
+     Tools,
+   } from "@assistant-ui/react";
+   import { useChatRuntime } from "@assistant-ui/ai-sdk";
+   import { toolkit } from "./toolkit";
+
+   export function MyRuntimeProvider({
+     children,
+   }: {
+     children: React.ReactNode;
+   }) {
+     const runtime = useChatRuntime();
+     const config = AuiConfig({ tools: Tools({ toolkit }) });
+     return (
+       <AssistantRuntimeProvider runtime={runtime} config={config}>
+         {children}
+       </AssistantRuntimeProvider>
+     );
+   }
+   ```
+
+   Once the toolkit is registered, `Thread` and any message list built on `MessagePrimitive.Parts` or `MessagePrimitive.GroupedParts` render this UI wherever a `review_change` call appears in a message.
+
+**Standalone (no runtime):**
+
+Standalone, the element is a display component with no state of its own. The minimal usage passes a constant set of criteria and shows them all at once.
+
+1. ### Pass the criteria straight through
+
+   ```
+   "use client";
+
+   import {
+     ScoreBreakdown,
+     type ScoreCriterion,
+   } from "@/components/assistant-ui/elements/score-breakdown";
+
+   const criteria: readonly ScoreCriterion[] = [
+     {
+       label: "Fixes the root cause",
+       score: 4.5,
+       weight: 3,
+       note: "Clears the slot at the source rather than at the call site.",
+     },
+     { label: "Test coverage", score: 4, weight: 2 },
+     { label: "Scope discipline", score: 3, weight: 1 },
+   ];
+
+   export function ReviewVerdict() {
+     return (
+       <ScoreBreakdown
+         verdict="approve"
+         total={4.1}
+         outOf={5}
+         criteria={criteria}
+         visibleCount={criteria.length}
+       />
+     );
+   }
+   ```
+
+2. ### Reveal criteria on your own schedule
+
+   ```
+   "use client";
+
+   import { useEffect, useState } from "react";
+
+   export function ReviewVerdict() {
+     const [visibleCount, setVisibleCount] = useState(0);
+
+     useEffect(() => {
+       if (visibleCount >= criteria.length) return;
+       const id = setTimeout(() => setVisibleCount((n) => n + 1), 600);
+       return () => clearTimeout(id);
+     }, [visibleCount]);
+
+     return (
+       <ScoreBreakdown
+         verdict="approve"
+         total={4.1}
+         outOf={5}
+         criteria={criteria}
+         visibleCount={visibleCount}
+       />
+     );
+   }
+   ```
+
+## Anatomy
+
+```
+<div data-slot="score-breakdown">
+  <div>
+    <span>{/* total.toFixed(1) */}</span>
+    <span>{/* "/ outOf" */}</span>
+    <span>{/* verdict pill, colored by the total/outOf ratio */}</span>
+  </div>
+
+  <div>
+    {/* one row per visible criterion */}
+    <div>
+      <span>{/* criterion.label */}</span>
+      <span>{/* "×" + weight */}</span>
+      <span>{/* criterion.score.toFixed(1) */}</span>
+    </div>
+    <span role="meter">{/* per-criterion bar, named from the criterion */}</span>
+    <span>{/* optional criterion.note */}</span>
+  </div>
+</div>
+```
+
+The header (the total, the `/ outOf`, and the verdict pill) renders whatever `visibleCount` is. Only the criteria list is sliced, with `visibleCount` floored and clamped into `0…criteria.length`. The verdict pill's color is a plain threshold on `total / outOf`, treated as `0` when `outOf` is `0`: emerald at `0.75` and above, amber from `0.5` up to just under `0.75`, red below `0.5`. Each criterion's bar is scaled against the overall `outOf`, so two criteria with the same `score` draw the same bar width whatever their weights. `weight` appears only as the `×N` label next to the score. Each criterion bar's track is a named meter with a `0…100` value matching its score width and value text reading the same `score` of `outOf` the row prints; the value sits on the track rather than the fill, which collapses to nothing at zero.
+
+## Examples
+
+### An empty denominator
+
+With `outOf: 0` the component skips the division and treats the ratio as `0`, so the verdict pill is red whatever `total` is.
+
+```
+<ScoreBreakdown
+  verdict="not scored"
+  total={0}
+  outOf={0}
+  criteria={[]}
+  visibleCount={0}
+/>
+```
+
+### Where the score comes from
+
+**With a runtime:**
+
+The backend entry declares only what is being reviewed. The model supplies `target`, your server runs the grading, and the client renderer receives the finished verdict as `result`.
+
+```
+review_change: tool({
+  description: "Grade a proposed change against a rubric.",
+  inputSchema: z.object({ target: z.string() }),
+  execute: async ({ target }) => gradeChange(target),
+}),
+```
+
+**Standalone (no runtime):**
+
+When the criteria come from your own request rather than a fixed constant, fetch them once and reset the reveal count so the animation plays from the start.
+
+```
+async function loadReview(target: string) {
+  const verdict = await gradeChange(target);
+  setCriteria(verdict.criteria);
+  setVisibleCount(0);
+}
+```
+
+### Restyle the breakdown
+
+Both lanes take `className` on the root. The weight and score labels use the shared `mono` surface from `surfaces.tsx`, so restyling that token restyles every element that uses it.
+
+```
+<ScoreBreakdown className="max-w-none gap-4" /* ... */ />
+```
+
+## API reference
+
+**With a runtime:**
+
+### Render props
+
+| Prop     | Type                                                                                         | Description                                                          |
+| -------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `args`   | `{ target: string }`                                                                         | The tool's arguments, naming what is being reviewed.                 |
+| `result` | `{ verdict: string; total: number; outOf: number; criteria: ScoreCriterion[] } \| undefined` | The finished verdict, undefined until the backend executor resolves. |
+
+### review_change result
+
+| Field               | Type     | Description                                                                               |
+| ------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `verdict`           | `string` | Short label shown in the pill.                                                            |
+| `total`             | `number` | The overall score, shown to one decimal place.                                            |
+| `outOf`             | `number` | The maximum possible score, also the denominator every criterion's bar is scaled against. |
+| `criteria[].label`  | `string` | The criterion's name.                                                                     |
+| `criteria[].score`  | `number` | That criterion's own score, shown to one decimal place.                                   |
+| `criteria[].weight` | `number` | Shown as `×weight`, has no effect on the bar width.                                       |
+| `criteria[].note`   | `string` | Optional caption under the bar.                                                           |
+
+**Standalone (no runtime):**
+
+### ScoreBreakdown
+
+| Prop           | Type                        | Default  | Description                                                                               |
+| -------------- | --------------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `verdict`      | `string`                    | required | Short label shown in the pill.                                                            |
+| `total`        | `number`                    | required | The overall score, shown to one decimal place.                                            |
+| `outOf`        | `number`                    | required | The maximum possible score, also the denominator every criterion's bar is scaled against. |
+| `criteria`     | `readonly ScoreCriterion[]` | required | The full list of criteria, only the first `visibleCount` render.                          |
+| `visibleCount` | `number`                    | required | How many criteria to show, floored and clamped into `0…criteria.length`.                  |
+| `className`    | `string`                    |          | Merged onto the root.                                                                     |
+
+All other `div` props are forwarded to the root.
+
+### ScoreCriterion
+
+| Field    | Type     | Description                                             |
+| -------- | -------- | ------------------------------------------------------- |
+| `label`  | `string` | The criterion's name.                                   |
+| `score`  | `number` | That criterion's own score, shown to one decimal place. |
+| `weight` | `number` | Shown as `×weight`, has no effect on the bar width.     |
+| `note`   | `string` | Optional caption under the bar.                         |

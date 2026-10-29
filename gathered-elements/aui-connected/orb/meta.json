@@ -1,0 +1,14 @@
+{
+  "slug": "orb",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/orb",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html",
+    "voice.aui.tsx"
+  ]
+}

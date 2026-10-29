@@ -1,0 +1,14 @@
+{
+  "slug": "thread-list-sidebar",
+  "category": "AUI connected",
+  "folder": "gathered-elements/aui-connected/thread-list-sidebar",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "github.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "threadlist-sidebar.aui.tsx"
+  ]
+}

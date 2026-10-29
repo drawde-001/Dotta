@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-background-inbox",
+  "type": "registry:component",
+  "title": "Background runs",
+  "description": "Work still going somewhere else, and the results waiting to be collected.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/background-inbox.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/background-inbox.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { CheckIcon, Loader2Icon, XIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono, paper } from \"./surfaces\";\n\nexport type BackgroundState = \"running\" | \"ready\" | \"failed\";\n\nexport interface BackgroundRun {\n  id: string;\n  title: string;\n  state: BackgroundState;\n  elapsed: string;\n  summary?: string;\n}\n\nexport function BackgroundInbox({\n  runs,\n  onCollect,\n  className,\n  ...props\n}: Omit<ComponentProps<\"div\">, \"children\" | \"runs\" | \"onCollect\"> & {\n  runs: readonly BackgroundRun[];\n  onCollect?: (id: string) => void;\n}) {\n  const ready = runs.filter((run) => run.state === \"ready\").length;\n  const running = runs.filter((run) => run.state === \"running\").length;\n\n  return (\n    <div\n      data-slot=\"background-inbox\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-1 rounded-2xl p-3\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-baseline justify-between px-1 pb-1\">\n        <span className=\"text-[13.5px] font-medium\">Running elsewhere</span>\n        <span\n          className={cn(\n            mono,\n            \"tabular-nums\",\n            ready > 0\n              ? \"text-blue-600 dark:text-blue-400\"\n              : \"text-muted-foreground\",\n          )}\n        >\n          {ready > 0 ? `${ready} ready` : `${running} in flight`}\n        </span>\n      </div>\n\n      {runs.map((run) => {\n        const className = cn(\n          \"flex items-center gap-2.5 rounded-xl px-1.5 py-2 text-start transition-colors\",\n          run.state === \"running\"\n            ? \"cursor-default\"\n            : onCollect\n              ? \"hover:bg-foreground/[0.04]\"\n              : undefined,\n        );\n        const content = (\n          <>\n            <span className=\"flex size-3.5 shrink-0 items-center justify-center\">\n              {run.state === \"running\" ? (\n                <Loader2Icon className=\"text-muted-foreground size-3 animate-spin motion-reduce:animate-none\" />\n              ) : run.state === \"failed\" ? (\n                <XIcon className=\"size-3 text-red-500\" />\n              ) : (\n                <CheckIcon className=\"size-3 text-emerald-500\" />\n              )}\n            </span>\n\n            <span className=\"flex min-w-0 flex-1 flex-col gap-0.5\">\n              <span\n                className={cn(\n                  \"truncate text-[13px]\",\n                  run.state === \"running\"\n                    ? \"text-muted-foreground\"\n                    : \"text-foreground/90\",\n                )}\n              >\n                {run.title}\n              </span>\n              {run.summary && (\n                <span className={cn(mono, \"text-muted-foreground truncate\")}>\n                  {run.summary}\n                </span>\n              )}\n            </span>\n\n            <span\n              className={cn(\n                mono,\n                \"text-muted-foreground shrink-0 tabular-nums\",\n              )}\n            >\n              {run.elapsed}\n            </span>\n          </>\n        );\n\n        return onCollect ? (\n          <button\n            key={run.id}\n            type=\"button\"\n            disabled={run.state === \"running\"}\n            onClick={() => onCollect(run.id)}\n            className={className}\n          >\n            {content}\n          </button>\n        ) : (\n          <div key={run.id} className={className}>\n            {content}\n          </div>\n        );\n      })}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

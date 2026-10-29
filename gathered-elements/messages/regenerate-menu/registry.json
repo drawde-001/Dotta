@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-regenerate-menu",
+  "type": "registry:component",
+  "title": "Regenerate with",
+  "description": "Fork the same turn to a different model instead of rolling the same dice.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/regenerate-menu.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/regenerate-menu.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { RefreshCwIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { floating, ghostButton, mono } from \"./surfaces\";\n\nexport interface RegenerateOption {\n  id: string;\n  label: string;\n  detail: string;\n}\n\nexport function RegenerateMenu({\n  options,\n  open,\n  currentId,\n  onOpenChange,\n  onPick,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"options\" | \"open\" | \"currentId\" | \"onOpenChange\" | \"onPick\"\n> & {\n  options: readonly RegenerateOption[];\n  open: boolean;\n  currentId: string;\n  onOpenChange?: (open: boolean) => void;\n  onPick?: (id: string) => void;\n}) {\n  return (\n    <div\n      data-slot=\"regenerate-menu\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-2\", className)}\n\n      {...props}\n    >\n      {onOpenChange && (\n        <button\n          type=\"button\"\n          aria-expanded={open}\n          aria-label=\"Regenerate with a different model\"\n          onClick={() => onOpenChange(!open)}\n          className={cn(\n            ghostButton,\n            \"size-7 self-start\",\n            open && \"bg-foreground/[0.06] text-foreground/90\",\n          )}\n        >\n          <RefreshCwIcon className=\"size-3.5\" />\n        </button>\n      )}\n\n      {open && (\n        <div\n          className={cn(\n            floating,\n            \"fade-in zoom-in-95 slide-in-from-top-1 animate-in flex flex-col gap-0.5 rounded-2xl p-1.5 duration-200\",\n          )}\n        >\n          {options.map((option) => {\n            const content = (\n              <>\n                <span className=\"min-w-0 flex-1 truncate text-[13px]\">\n                  {option.label}\n                </span>\n                <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n                  {option.id === currentId ? \"current\" : option.detail}\n                </span>\n              </>\n            );\n            const className = onPick\n              ? \"hover:bg-foreground/[0.05] flex items-baseline gap-2 rounded-xl px-2.5 py-1.5 text-start transition-colors\"\n              : \"flex items-baseline gap-2 rounded-xl px-2.5 py-1.5 text-start\";\n\n            return onPick ? (\n              <button\n                key={option.id}\n                type=\"button\"\n                onClick={() => onPick(option.id)}\n                className={className}\n              >\n                {content}\n              </button>\n            ) : (\n              <div key={option.id} className={className}>\n                {content}\n              </div>\n            );\n          })}\n        </div>\n      )}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "slug": "tool-timeline",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/tool-timeline",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "tool-timeline.aui.jsx",
+    "tool-timeline.tsx"
+  ]
+}

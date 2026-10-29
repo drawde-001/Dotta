@@ -1,0 +1,14 @@
+{
+  "slug": "reviewable-diff",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/reviewable-diff",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "reviewable-diff.aui.jsx",
+    "reviewable-diff.tsx",
+    "showcase-snippet.html"
+  ]
+}

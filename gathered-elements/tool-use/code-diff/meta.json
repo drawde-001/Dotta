@@ -1,0 +1,14 @@
+{
+  "slug": "code-diff",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/code-diff",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "code-diff.aui.jsx",
+    "code-diff.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

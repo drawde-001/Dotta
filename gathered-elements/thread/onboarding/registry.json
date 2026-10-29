@@ -1,0 +1,19 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-onboarding",
+  "type": "registry:component",
+  "title": "Onboarding",
+  "description": "First run: three moves that teach what this assistant is actually for.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/onboarding.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/onboarding.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, inkButton, mono, paper } from \"./surfaces\";\nimport { indexIn } from \"../utils/range\";\n\nexport interface OnboardingStep {\n  title: string;\n  body: string;\n  example: string;\n}\n\nexport function Onboarding({\n  steps,\n  index,\n  onNext,\n  onSkip,\n  className,\n  ...props\n}: Omit<\n  ComponentProps<\"div\">,\n  \"children\" | \"steps\" | \"index\" | \"onNext\" | \"onSkip\"\n> & {\n  steps: readonly OnboardingStep[];\n  index: number;\n  onNext?: () => void;\n  onSkip?: () => void;\n}) {\n  const current = indexIn(steps, index);\n  const step = steps[current];\n  if (!step) return null;\n  const last = current >= steps.length - 1;\n\n  return (\n    <div\n      data-slot=\"onboarding\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-sm flex-col gap-4 rounded-[20px] p-5\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div\n        key={current}\n        className=\"fade-in animate-in flex flex-col gap-2 duration-300\"\n      >\n        <span className={cn(mono, \"text-muted-foreground tabular-nums\")}>\n          {current + 1} of {steps.length}\n        </span>\n        <span className=\"text-[15px] font-medium tracking-tight\">\n          {step.title}\n        </span>\n        <p className=\"text-muted-foreground text-[13px] leading-relaxed break-words\">\n          {step.body}\n        </p>\n        <span\n          className={cn(\n            field,\n            \"text-foreground/60 rounded-xl px-3 py-2 text-[13px] leading-relaxed\",\n          )}\n        >\n          {step.example}\n        </span>\n      </div>\n\n      <div className=\"flex items-center gap-2\">\n        <span className=\"flex gap-1.5\">\n          {steps.map((_, i) => (\n            <span\n              key={i}\n              aria-hidden\n              className={cn(\n                \"h-1 rounded-full transition-all duration-300 motion-reduce:transition-none\",\n                i === current ? \"bg-foreground/60 w-4\" : \"bg-foreground/15 w-1\",\n              )}\n            />\n          ))}\n        </span>\n\n        <button\n          type=\"button\"\n          onClick={onSkip}\n          className=\"text-muted-foreground hover:bg-foreground/[0.06] hover:text-foreground/90 ms-auto h-8 rounded-full px-3 text-xs font-medium transition-[background-color,color,scale] duration-150 active:scale-[0.96]\"\n        >\n          Skip\n        </button>\n        <button\n          type=\"button\"\n          onClick={onNext}\n          className={cn(\n            inkButton,\n            \"flex h-8 items-center rounded-full px-3.5 text-xs font-medium\",\n          )}\n        >\n          {last ? \"Start\" : \"Next\"}\n        </button>\n      </div>\n    </div>\n  );\n}\n"
+    }
+  ]
+}

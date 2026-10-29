@@ -1,0 +1,14 @@
+{
+  "slug": "agent-status",
+  "category": "Agents",
+  "folder": "gathered-elements/agents/agent-status",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "agent-status.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

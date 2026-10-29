@@ -1,0 +1,14 @@
+{
+  "slug": "shared-conversation",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/shared-conversation",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "shared-conversation.tsx",
+    "showcase-snippet.html"
+  ]
+}

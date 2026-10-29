@@ -1,0 +1,21 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-speaker-identity",
+  "type": "registry:component",
+  "title": "Speaker identity",
+  "description": "Who is talking, once a thread holds more than a user and one model.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/speaker-identity.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/speaker-identity.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { BotIcon, UserIcon, WrenchIcon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { mono } from \"./surfaces\";\n\nexport type SpeakerKind = \"user\" | \"agent\" | \"subagent\" | \"tool\";\n\nexport interface SpeakerTurn {\n  id: string;\n  kind: SpeakerKind;\n  name: string;\n  detail?: string;\n  text: string;\n}\n\nconst TONE: Record<SpeakerKind, string> = {\n  user: \"bg-foreground/[0.06] text-muted-foreground\",\n  agent: \"bg-blue-500/12 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400\",\n  subagent: \"bg-foreground/[0.06] text-muted-foreground\",\n  tool: \"bg-foreground/[0.04] text-muted-foreground\",\n};\n\nexport function SpeakerIdentity({\n  turns,\n  className,\n  ...props\n}: Omit<ComponentProps<\"div\">, \"children\" | \"turns\"> & {\n  turns: readonly SpeakerTurn[];\n}) {\n  return (\n    <div\n      data-slot=\"speaker-identity\"\n      className={cn(\"flex w-full max-w-sm flex-col gap-3.5\", className)}\n\n      {...props}\n    >\n      {turns.map((turn) => (\n        <div key={turn.id} className=\"flex gap-2.5\">\n          <span\n            className={cn(\n              \"flex size-6 shrink-0 items-center justify-center rounded-lg\",\n              TONE[turn.kind],\n              turn.kind === \"subagent\" && \"rounded-full\",\n            )}\n          >\n            {turn.kind === \"user\" ? (\n              <UserIcon className=\"size-3\" />\n            ) : turn.kind === \"tool\" ? (\n              <WrenchIcon className=\"size-3\" />\n            ) : (\n              <BotIcon className=\"size-3\" />\n            )}\n          </span>\n\n          <div className=\"flex min-w-0 flex-1 flex-col gap-0.5\">\n            <span className=\"flex items-baseline gap-1.5\">\n              <span className=\"text-[13px] font-medium\">{turn.name}</span>\n              {turn.detail && (\n                <span className={cn(mono, \"text-muted-foreground\")}>\n                  {turn.detail}\n                </span>\n              )}\n            </span>\n            <span className=\"text-foreground/65 text-[13.5px] leading-relaxed break-words\">\n              {turn.text}\n            </span>\n          </div>\n        </div>\n      ))}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

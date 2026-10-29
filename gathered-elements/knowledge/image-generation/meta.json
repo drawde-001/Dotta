@@ -1,0 +1,14 @@
+{
+  "slug": "image-generation",
+  "category": "Knowledge",
+  "folder": "gathered-elements/knowledge/image-generation",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "image-generation.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

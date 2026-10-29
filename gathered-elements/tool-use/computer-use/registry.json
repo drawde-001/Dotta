@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "elements-computer-use",
+  "type": "registry:component",
+  "title": "Computer use",
+  "description": "The screen the agent is driving, with a cursor trail and what it is doing right now.",
+  "registryDependencies": [
+    "https://r.assistant-ui.com/elements-surfaces.json",
+    "https://r.assistant-ui.com/elements-range.json"
+  ],
+  "dependencies": [
+    "lucide-react"
+  ],
+  "files": [
+    {
+      "type": "registry:component",
+      "path": "components/assistant-ui/elements/computer-use.tsx",
+      "sourcePath": "packages/ui/src/components/react/assistant-ui/elements/computer-use.tsx",
+      "content": "\"use client\";\n\nimport type { ComponentProps } from \"react\";\nimport { MousePointer2Icon } from \"lucide-react\";\nimport { cn } from \"@/lib/utils\";\nimport { field, mono, paper } from \"./surfaces\";\nimport { at, indexIn } from \"../utils/range\";\n\nexport interface ComputerStep {\n  id: string;\n  action: string;\n  target: string;\n  x: number;\n  y: number;\n}\n\nexport function ComputerUse({\n  url,\n  steps,\n  activeIndex,\n  children,\n  className,\n  ...props\n}: Omit<ComponentProps<\"div\">, \"url\" | \"steps\" | \"activeIndex\" | \"children\"> & {\n  url: string;\n  steps: readonly ComputerStep[];\n  activeIndex: number;\n  children: React.ReactNode;\n}) {\n  const index = indexIn(steps, activeIndex);\n  const active = at(steps, index);\n  const trail = steps.slice(Math.max(0, index - 2), index + 1);\n\n  return (\n    <div\n      data-slot=\"computer-use\"\n      className={cn(\n        paper,\n        \"flex w-full max-w-md flex-col overflow-hidden rounded-2xl\",\n        className,\n      )}\n\n      {...props}\n    >\n      <div className=\"flex items-center gap-2 px-3 py-2\">\n        <span className=\"flex shrink-0 gap-1\">\n          {[\"bg-red-500/50\", \"bg-amber-500/50\", \"bg-emerald-500/50\"].map(\n            (tint) => (\n              <span\n                key={tint}\n                aria-hidden\n                className={cn(\"size-2 rounded-full\", tint)}\n              />\n            ),\n          )}\n        </span>\n        <span\n          className={cn(\n            field,\n            mono,\n            \"text-muted-foreground min-w-0 flex-1 truncate rounded-full px-2.5 py-1\",\n          )}\n        >\n          {url}\n        </span>\n      </div>\n\n      <div className=\"border-foreground/[0.07] relative min-h-[8.5rem] overflow-hidden border-t\">\n        {children}\n\n        {trail.map((step, i) => (\n          <span\n            key={step.id}\n            aria-hidden\n            className=\"pointer-events-none absolute size-2 rounded-full bg-blue-500 transition-opacity duration-300 dark:bg-blue-400\"\n            style={{\n              left: `${step.x}%`,\n              top: `${step.y}%`,\n              opacity: 0.18 * (i + 1),\n            }}\n          />\n        ))}\n\n        {active && (\n          <MousePointer2Icon\n            aria-hidden\n            className=\"pointer-events-none absolute size-4 fill-blue-500 text-blue-500 transition-[left,top] duration-500 ease-out motion-reduce:transition-none dark:fill-blue-400 dark:text-blue-400\"\n            style={{ left: `${active.x}%`, top: `${active.y}%` }}\n          />\n        )}\n      </div>\n\n      {active && (\n        <div className=\"border-foreground/[0.07] flex items-center gap-2 border-t px-3.5 py-2\">\n          <span className={cn(mono, \"text-muted-foreground shrink-0\")}>\n            {active.action}\n          </span>\n          <span className=\"text-foreground/80 min-w-0 flex-1 truncate text-[13px]\">\n            {active.target}\n          </span>\n          <span\n            className={cn(mono, \"text-muted-foreground shrink-0 tabular-nums\")}\n          >\n            {index + 1}/{steps.length}\n          </span>\n        </div>\n      )}\n    </div>\n  );\n}\n"
+    }
+  ]
+}

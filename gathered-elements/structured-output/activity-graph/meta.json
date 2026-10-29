@@ -1,0 +1,14 @@
+{
+  "slug": "activity-graph",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/activity-graph",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "activity-graph.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

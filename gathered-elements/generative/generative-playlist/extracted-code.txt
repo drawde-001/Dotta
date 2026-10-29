@@ -1,0 +1,9 @@
+npm install @assistant-ui/generative-ui zod
+
+// ---
+
+import { renderGenerativeUI } from "@assistant-ui/generative-ui/react";
+
+<div data-aui-theme="elements">
+  {renderGenerativeUI(spec, library, { status: "done" })}
+</div>

@@ -1,0 +1,13 @@
+{
+  "slug": "canvas-split",
+  "category": "Thread",
+  "folder": "gathered-elements/thread/canvas-split",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "canvas-split.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

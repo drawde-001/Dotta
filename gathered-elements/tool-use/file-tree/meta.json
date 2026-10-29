@@ -1,0 +1,14 @@
+{
+  "slug": "file-tree",
+  "category": "Tool use",
+  "folder": "gathered-elements/tool-use/file-tree",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "file-tree.aui.jsx",
+    "file-tree.tsx",
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}

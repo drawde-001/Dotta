@@ -1,0 +1,14 @@
+{
+  "slug": "streaming-text",
+  "category": "Reasoning",
+  "folder": "gathered-elements/reasoning/streaming-text",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "meta.json",
+    "registry.json",
+    "showcase-snippet.html",
+    "streaming-text.aui.jsx",
+    "streaming-text.tsx"
+  ]
+}

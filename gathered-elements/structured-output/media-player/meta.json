@@ -1,0 +1,14 @@
+{
+  "slug": "media-player",
+  "category": "Structured output",
+  "folder": "gathered-elements/structured-output/media-player",
+  "hasCode": true,
+  "hasShowcase": true,
+  "files": [
+    "media-player.tsx",
+    "meta.json",
+    "page.md",
+    "registry.json",
+    "showcase-snippet.html"
+  ]
+}
