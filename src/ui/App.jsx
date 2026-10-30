@@ -34,7 +34,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [view, setView] = useState('bio');
+  const [view, setView] = useState('home');
   const [openFiles, setOpenFiles] = useState([]);
   const [activeTabId, setActiveTabId] = useState('plus');
 
@@ -759,7 +759,7 @@ export default function App() {
               onClick={() => setSidebarOpen(true)}
               aria-label="Open threads panel"
               title="Open threads"
-              className="absolute left-[64px] top-[20px] z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+              className="absolute left-2 top-[20px] z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
             >
               <PanelLeftOpen size={16} />
             </button>

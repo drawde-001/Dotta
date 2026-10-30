@@ -16,12 +16,6 @@ import {
 import { LiveBrowserStream } from './LiveBrowserStream';
 import { FileCodeViewer, getFileIcon } from './FileCodeViewer';
 
-const FALLBACK_FILE = {
-  name: 'task-card.tsx',
-  path: 'src/ui/components/assistant-ui/elements/task-card.tsx',
-  content: `import React from 'react';\n\nexport function TaskCard({\n  title,\n  status,\n  steps,\n  className\n}) {\n  return (\n    <div className={className}>\n      <h3>{title}</h3>\n      <span>Status: {status}</span>\n    </div>\n  );\n}`
-};
-
 export function WorkspacePanel({
   streamState,
   onSimulateUrlChange,
@@ -65,7 +59,9 @@ export function WorkspacePanel({
   // File explorer (preview logic): Browser tab -> tree takes the full panel;
   // file tab -> tree shares the panel at 210px beside the file.
   const effectiveTreeLayout = treeLayout === 'split' && !activeFile ? 'tree' : treeLayout;
-  const treeFiles = openFiles.length > 0 ? openFiles : [FALLBACK_FILE];
+  // Sandboxed workspace only: the explorer lists files from the user's own
+  // workspace (opened artifacts). Root/system files are never listed here.
+  const treeFiles = openFiles;
   const normalizedFilter = filter.trim().toLowerCase();
   const visibleTreeFiles = treeFiles.filter((f) => {
     const n = (f.name || '').toLowerCase();
@@ -76,6 +72,23 @@ export function WorkspacePanel({
   const selectTab = (id) => {
     setTreeLayout('closed');
     onSelectTab(id);
+  };
+
+  // Spin up the live browser (server auto-launches Chromium on any WS
+  // message and starts streaming frames back) when the Browser tab opens.
+  const spinUpBrowser = () => {
+    if (!streamState?.liveFrame && onSendWsMessage) {
+      const target =
+        streamState?.url && streamState.url !== 'about:blank'
+          ? streamState.url
+          : 'https://duckduckgo.com';
+      onSendWsMessage({ type: 'navigate', url: target });
+    }
+  };
+
+  const handleBrowserTabClick = () => {
+    selectTab('browser');
+    spinUpBrowser();
   };
 
   const handleTreeToggle = () => {
@@ -96,9 +109,9 @@ export function WorkspacePanel({
     setTreeLayout('split');
   };
 
+  // Safe display name only: never render root/system directory paths.
   const rawRelPath = activeFile ? activeFile.path || activeFile.name || '' : '';
   const pathParts = rawRelPath.replace(/\\/g, '/').split('/').filter(Boolean);
-  const pathDirs = pathParts.slice(0, -1);
   const pathFileName = pathParts.length > 0 ? pathParts[pathParts.length - 1] : '';
 
   const handleSelectFilesFromLauncher = () => {
@@ -106,8 +119,8 @@ export function WorkspacePanel({
       const firstId = openFiles[0].id || openFiles[0].path || openFiles[0].name;
       onSelectTab(firstId);
     } else {
-      // If no file opened yet, open default visual file card
-      onSelectTab(FALLBACK_FILE.path);
+      // No sandboxed workspace files yet: stay on the launcher, show no directory.
+      onSelectTab('plus');
     }
   };
 
@@ -116,7 +129,7 @@ export function WorkspacePanel({
       className={`h-full flex flex-col bg-[#141417] border-l border-white/[0.06] text-zinc-200 font-sans transition-all duration-200 z-20 overflow-hidden ${
         isMaximized
           ? 'w-full absolute inset-0 z-50'
-          : 'w-full md:w-[480px] lg:w-[560px] xl:w-[620px] shrink-0'
+          : 'w-full md:w-[560px] lg:w-[680px] xl:w-[760px] shrink-0'
       }`}
     >
       {/* Top Tab Bar ("Button Cards" on the right workspace side) */}
@@ -138,19 +151,35 @@ export function WorkspacePanel({
             <FolderTree size={15} />
           </button>
           {/* 1. Browser Button Card */}
-          <button
-            type="button"
-            onClick={() => selectTab('browser')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans transition cursor-pointer shrink-0 ${
+          <div
+            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-sans transition shrink-0 ${
               activeTabId === 'browser'
                 ? 'bg-white/[0.07] border border-white/10 shadow-sm text-zinc-100 font-medium'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
             }`}
             title="Browser Viewport"
           >
-            <Globe size={13} className="text-zinc-400" />
-            <span>Browser</span>
-          </button>
+            <button
+              type="button"
+              onClick={handleBrowserTabClick}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <Globe size={13} className="text-zinc-400" />
+              <span>Browser</span>
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                selectTab('plus');
+              }}
+              className="p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-zinc-200 opacity-60 group-hover:opacity-100 transition cursor-pointer ml-0.5"
+              title="Close browser tab"
+              aria-label="Close browser tab"
+            >
+              <X size={11} />
+            </button>
+          </div>
 
           {/* 2. Open File Button Cards (Strictly active open windows only) */}
           {openFiles.map((f) => {
@@ -227,13 +256,7 @@ export function WorkspacePanel({
       {/* File path bar (file view only) */}
       {activeFile && effectiveTreeLayout !== 'tree' && (
         <div className="flex h-8 shrink-0 items-center gap-1.5 overflow-hidden border-b border-white/[0.06] px-3 text-[11px] select-none">
-          <span className="shrink-0 text-zinc-500">omni-agent</span>
-          {pathDirs.map((seg, idx) => (
-            <span key={idx} className="flex shrink-0 items-center gap-1.5">
-              <ChevronRight size={12} className="text-zinc-600" />
-              <span className="text-zinc-500">{seg}</span>
-            </span>
-          ))}
+          <span className="shrink-0 text-zinc-500">Workspace</span>
           <ChevronRight size={12} className="shrink-0 text-zinc-600" />
           <FileText size={13} className="shrink-0 text-zinc-500" />
           <span className="truncate font-medium text-zinc-300">{pathFileName}</span>
@@ -252,7 +275,7 @@ export function WorkspacePanel({
           >
             <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[13px] font-semibold text-zinc-100">
               <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-              omni-agent
+              Workspace
             </div>
             <div className="px-2.5 pb-2">
               <div className="flex h-8 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2 transition-colors focus-within:border-zinc-600">
@@ -289,7 +312,11 @@ export function WorkspacePanel({
                 );
               })}
               {visibleTreeFiles.length === 0 && (
-                <p className="px-2 py-1.5 text-xs text-zinc-500">No files match.</p>
+                <p className="px-2 py-1.5 text-xs text-zinc-500">
+                  {openFiles.length === 0
+                    ? 'No files in your workspace yet.'
+                    : 'No files match.'}
+                </p>
               )}
             </div>
           </div>
@@ -306,7 +333,7 @@ export function WorkspacePanel({
                   onManualNavigate={onManualNavigate}
                   onSendWsMessage={onSendWsMessage}
                   onOpenFiles={handleSelectFilesFromLauncher}
-                  onSelectBrowser={() => selectTab('browser')}
+                  onSelectBrowser={handleBrowserTabClick}
                   forceIdle={activeTabId === 'plus'}
                 />
               </div>

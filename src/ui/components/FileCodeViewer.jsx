@@ -49,23 +49,6 @@ export function FileCodeViewer({ file }) {
   const filename = file?.name || (file?.path ? file.path.split(/[/\\]/).pop() : 'untitled');
   const langMeta = file?.langMeta || getFileLanguageMeta(filename);
 
-  // Compute visual breadcrumb strictly matching Screenshot 2 (e.g. agent > src > ui > components > ...)
-  const rawPath = file?.path || filename;
-  const cleanTrail = useMemo(() => {
-    const scrubbed = rawPath
-      .replace(/\\/g, '/')
-      .replace(/^.*?[/\\](?:omni-agent|workspace|project|home\/[^\/]+)[/\\]/i, '')
-      .replace(/^[a-zA-Z]:[/\\][^/\\]+[/\\]*/, '')
-      .replace(/^([./\\])+/, '');
-    const segments = scrubbed.split('/').filter(Boolean);
-    // Remove filename from directory segments if present
-    if (segments.length > 0 && segments[segments.length - 1] === filename) {
-      segments.pop();
-    }
-    // Prefix with agent if not root
-    return ['agent', ...segments];
-  }, [rawPath, filename]);
-
   const rawCode = file?.content || file?.newText || '';
   const lines = useMemo(() => {
     if (!rawCode) return ['// Empty file or no content loaded'];
@@ -115,16 +98,9 @@ export function FileCodeViewer({ file }) {
 
   return (
     <div className="h-full flex flex-col bg-[#0b0e0b] text-zinc-200 font-mono overflow-hidden">
-      {/* Visual Breadcrumb Row (Matching Screenshot 2 Row 2 exactly) */}
+      {/* File header row: filename only (directory paths are never displayed) */}
       <div className="h-9 px-3 flex items-center justify-between shrink-0 bg-[#0d100d] border-b border-[#182018] text-xs select-none">
-        {/* Strictly visual breadcrumb: agent > src > ui > ... > [icon] filename */}
         <div className="flex items-center gap-1.5 text-zinc-400 font-sans truncate pointer-events-none select-none">
-          {cleanTrail.map((seg, idx) => (
-            <React.Fragment key={idx}>
-              <span className="text-zinc-400">{seg}</span>
-              <span className="text-zinc-600">&gt;</span>
-            </React.Fragment>
-          ))}
           {getFileIcon(filename)}
           <span className="text-zinc-200 font-medium truncate">
             {filename}
