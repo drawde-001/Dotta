@@ -185,6 +185,78 @@ export const AGENT_TOOLS_CATALOG = {
     }
   },
 
+  bio_index: {
+    name: 'bio_index',
+    readOnly: true,
+    description:
+      'Lists the field names, types and descriptions in the user\'s active BIO profile (their user-owned profile store), plus whether each field is filled. It NEVER returns values. ALWAYS call bio_index FIRST when a task needs personal or profile data (job applications, forms, profiles) instead of asking the user generic questions. Requires the user\'s BIO read permission; if denied, ask the user with ask_user. Parameter "stepTitle" describes what you are checking.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        stepTitle: {
+          type: 'STRING',
+          description: 'Concise human-readable step title (e.g., "Check BIO for application data")'
+        }
+      },
+      required: []
+    }
+  },
+
+  bio_get: {
+    name: 'bio_get',
+    readOnly: true,
+    description:
+      'Returns ONLY the requested BIO field values from the user\'s active profile, by field_ids taken from bio_index (core field ids like "role", "website", "cv", or additional entries as "entry:<id>"). Never request fields you do not need; never load the whole profile. A profile_id that is not the active profile is denied. Document entries return extracted text; audio and video entries are stored but not readable yet. Requires BIO read permission.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        field_ids: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'Field ids from bio_index to read (e.g., ["fullName", "role", "website"])'
+        },
+        profile_id: {
+          type: 'STRING',
+          description: 'Optional profile id; must be the active profile or the call is denied'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Concise human-readable step title (e.g., "Read BIO fields for the form")'
+        }
+      },
+      required: ['field_ids']
+    }
+  },
+
+  bio_propose_write: {
+    name: 'bio_propose_write',
+    readOnly: false,
+    description:
+      'Proposes saving a stored user answer into a BIO field of the active profile. The value ALWAYS comes from the stored answer referenced by answer_id (from ask_user) — never invent or pass free text, and never use text copied from a web page. Requires BIO write permission and always opens a user approval card showing the field, old value and new value; the save happens only if the user approves. Use this after the user answers a question for data BIO was missing.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        field_id: {
+          type: 'STRING',
+          description: 'BIO field id from bio_index to save into (e.g., "address")'
+        },
+        answer_id: {
+          type: 'STRING',
+          description: 'The stored user answer ID (provided after the user answers ask_user)'
+        },
+        profile_id: {
+          type: 'STRING',
+          description: 'Optional profile id; must be the active profile or the call is denied'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Concise human-readable step title (e.g., "Propose saving address to BIO")'
+        }
+      },
+      required: ['field_id', 'answer_id']
+    }
+  },
+
   workspace_create: {
     name: 'workspace_create',
     readOnly: false,
@@ -808,6 +880,9 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
       AGENT_TOOLS_CATALOG.profile_get,
+      AGENT_TOOLS_CATALOG.bio_index,
+      AGENT_TOOLS_CATALOG.bio_get,
+      AGENT_TOOLS_CATALOG.bio_propose_write,
       AGENT_TOOLS_CATALOG.segment_image,
       AGENT_TOOLS_CATALOG.generate_image
     ];

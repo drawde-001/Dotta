@@ -66,7 +66,7 @@ export function validateToolSchema(schema, args) {
  * 4. ALLOW: safe read-only actions
  * Fail closed: returns 'deny' for any unknown tool
  */
-export function checkPermission(toolName, input = {}, mode = 'turbo', approvals = null) {
+export function checkPermission(toolName, input = {}, mode = 'turbo', approvals = null, context = {}) {
   const normTool = String(toolName || '').trim();
   const args = input && typeof input === 'object' ? input : {};
 
@@ -136,6 +136,34 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
       decision: 'deny',
       reason: `Tool "${normTool}" is on the restricted security deny list`
     };
+  }
+
+  // STEP 1.25: BIO PERMISSION GATE (enforced in code, deny wins, runs before
+  // any approval cache so BIO writes can never bypass the approval card)
+  if (normTool === 'bio_index' || normTool === 'bio_get' || normTool === 'bio_propose_write') {
+    const bio = context?.bio || {};
+    if (!bio.userId) {
+      return { decision: 'deny', reason: 'BIO requires an identified user' };
+    }
+    if ((normTool === 'bio_index' || normTool === 'bio_get') && !bio.read) {
+      return {
+        decision: 'deny',
+        reason: 'BIO read access is off for the active profile. Ask the user instead.'
+      };
+    }
+    if (normTool === 'bio_propose_write') {
+      if (!bio.write) {
+        return {
+          decision: 'deny',
+          reason: 'BIO write access is off for the active profile. The save was not proposed.'
+        };
+      }
+      return {
+        decision: 'ask',
+        reason: 'BIO writes always require user approval (field, old value, new value)'
+      };
+    }
+    return { decision: 'allow', reason: 'BIO read permission granted for active profile' };
   }
 
   // STEP 1.5: PRIOR HUMAN APPROVALS CACHE
