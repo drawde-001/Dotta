@@ -14,7 +14,11 @@ function hasValue(v) {
 }
 
 function entryReadable(entry) {
-  return entry.type === 'document';
+  if (entry.type === 'document') return true;
+  // Audio/video need a tailored, per-entry grant from the user — the general
+  // BIO read switch alone never exposes them.
+  if (entry.type === 'audio' || entry.type === 'video') return entry.agentReadable === true;
+  return false;
 }
 
 /**
@@ -72,12 +76,19 @@ export function executeBioGet({ userId, fieldIds = [], profileId = null } = {}) 
         continue;
       }
       if (!entryReadable(entry)) {
-        values[id] = `[Stored ${entry.type} entry "${entry.name}". ${entry.type === 'image' ? 'Image content is not returned as text.' : 'Audio/video are stored but not readable by the agent yet.'}]`;
+        values[id] =
+          entry.type === 'audio' || entry.type === 'video'
+            ? `[Stored ${entry.type} entry "${entry.name}". The user has not granted agent access to this entry.]`
+            : `[Stored ${entry.type} entry "${entry.name}". Image content is not returned as text.]`;
         continue;
       }
-      values[id] = entry.textContent
-        ? entry.textContent
-        : `[Document "${entry.name}" is stored${entry.file?.name ? ` as ${entry.file.name}` : ''} but has no extractable text.]`;
+      if (entry.type === 'document') {
+        values[id] = entry.textContent
+          ? entry.textContent
+          : `[Document "${entry.name}" is stored${entry.file?.name ? ` as ${entry.file.name}` : ''} but has no extractable text.]`;
+      } else {
+        values[id] = `[${entry.type} entry "${entry.name}" — the user granted agent access to this entry. Stored file: ${entry.file?.name || 'none'}${entry.file?.mime ? ` (${entry.file.mime})` : ''}. Media bytes are not inlined as text.]`;
+      }
       continue;
     }
     if (!BIO_FIELD_MAP[id]) {

@@ -144,6 +144,7 @@ function seedProfile() {
         id: `entry-${crypto.randomUUID().slice(0, 8)}`,
         name: 'Name Pronunciation',
         type: 'audio',
+        agentReadable: false,
         description: 'Short recording demonstrating proper pronunciation of full legal name and short self-intro.',
         file: null,
         textContent: '',
@@ -153,6 +154,7 @@ function seedProfile() {
         id: `entry-${crypto.randomUUID().slice(0, 8)}`,
         name: 'Elevator Pitch Video',
         type: 'video',
+        agentReadable: false,
         description: '60-second video introduction explaining recent agent architecture achievements.',
         file: null,
         textContent: '',
@@ -296,6 +298,7 @@ export function addEntry(userId, profileId, { name, type, description, file = nu
     id: `entry-${crypto.randomUUID().slice(0, 8)}`,
     name: String(name).trim().slice(0, 120),
     type,
+    agentReadable: false,
     description: String(description).trim().slice(0, 1000),
     file,
     textContent: String(textContent || '').slice(0, 20000),
@@ -316,6 +319,9 @@ export function updateEntry(userId, profileId, entryId, patch = {}) {
   if (typeof patch.name === 'string' && patch.name.trim()) entry.name = patch.name.trim().slice(0, 120);
   if (typeof patch.description === 'string' && patch.description.trim()) {
     entry.description = patch.description.trim().slice(0, 1000);
+  }
+  if (typeof patch.agentReadable === 'boolean') {
+    entry.agentReadable = patch.agentReadable;
   }
   profile.updatedAt = Date.now();
   saveUserBio(userId, doc);

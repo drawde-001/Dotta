@@ -60,6 +60,21 @@ store.createBioProposal(A, { threadId: THREAD, profileId: activeA.id, fieldId: '
 store.applyBioProposal(A, THREAD);
 check('approved proposal saved the user answer', store.getActiveProfile(A).fields.address === '12 Demo Street, Lagos');
 
+// Audio/video: tailored per-entry grant (general read switch is not enough)
+const audioEntry = store.addEntry(A, activeA.id, {
+  name: 'Voice Intro',
+  type: 'audio',
+  description: 'Name pronunciation'
+});
+const idxAudio = JSON.parse(executeBioIndex({ userId: A }));
+const audioIdx = idxAudio.entries.find((e) => e.id === `entry:${audioEntry.id}`);
+check('audio not readable by default', audioIdx && audioIdx.readable === false);
+const beforeGrant = executeBioGet({ userId: A, fieldIds: [`entry:${audioEntry.id}`] });
+check('audio blocked without entry grant', beforeGrant.includes('has not granted agent access'));
+store.updateEntry(A, activeA.id, audioEntry.id, { agentReadable: true });
+const afterGrant = executeBioGet({ userId: A, fieldIds: [`entry:${audioEntry.id}`] });
+check('audio readable with tailored grant', afterGrant.includes('granted agent access'));
+
 // Cross-user isolation: B never sees A's saved value
 check('user B cannot see user A data', store.getActiveProfile(B).fields.address !== '12 Demo Street, Lagos');
 store.setField(B, activeBId(), 'address', '99 Other Road');
