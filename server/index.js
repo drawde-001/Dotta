@@ -34,6 +34,7 @@ import {
   updateEntry as bioUpdateEntry,
   deleteEntry as bioDeleteEntry
 } from '../src/core/bio/store.js';
+import { resolveStagedFile } from '../src/core/bio/staging.js';
 import {
   initLiveBrowser,
   handleBrowserWsMessage,
@@ -290,6 +291,14 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
       }
       if (pressEnter) await page.keyboard.press('Enter');
       return `Typed "${text}" into "${target || 'focused element'}".${pressEnter ? ' Pressed Enter.' : ''} Take a snapshot_read to confirm before continuing.`;
+    } else if (action === 'upload') {
+      const stagedFile = resolveStagedFile(String(value || '').trim());
+      if (!stagedFile) {
+        return 'Browser action error: Unknown upload reference. Call bio_get first to stage the BIO file, then upload with its uploadRef. Nothing was uploaded.';
+      }
+      await page.locator(String(selectorOrText || '')).first().setInputFiles(stagedFile.absPath, { timeout: 6000 });
+      await page.waitForTimeout(350);
+      return `Uploaded "${stagedFile.name}" into "${selectorOrText}". Take a snapshot_read to confirm the form state before continuing.`;
     } else if (action === 'scroll') {
       const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
       await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);

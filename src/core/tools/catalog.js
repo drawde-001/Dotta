@@ -81,13 +81,13 @@ export const AGENT_TOOLS_CATALOG = {
     name: 'browser_action',
     readOnly: false,
     description:
-      'Interacts with the currently loaded webpage in Chromium by clicking an element, typing text into an input field, scrolling the page, or hovering over elements. Use this tool to click buttons, select options, fill text inputs, scroll to view more page content, or hover over menus. Do NOT use this tool if you only need to read page text or perform a search. Parameter "action" is "click", "type", "scroll", or "hover"; "selectorOrText" is the CSS selector, visible text, or scroll container; "value" is text to type; "direction" is "down", "up", "top", or "bottom" for scrolling; "amount" is pixels to scroll (default 500); "pressEnter" presses Enter after typing (leave false for forms); "stepTitle" summarizes the action.',
+      'Interacts with the currently loaded webpage in Chromium by clicking an element, typing text into an input field, scrolling the page, hovering over elements, or uploading a staged BIO file. Use this tool to click buttons, select options, fill text inputs, scroll to view more page content, or hover over menus. For action "upload": set "selectorOrText" to the file input selector (e.g. "input[type=file]") and "value" to a BIO uploadRef returned by bio_get — this attaches the user\'s actual BIO file (CV, photo, audio, video). Do NOT use this tool if you only need to read page text or perform a search. Parameter "action" is "click", "type", "scroll", "hover", or "upload"; "selectorOrText" is the CSS selector, visible text, or scroll container; "value" is text to type or a BIO uploadRef; "direction" is "down", "up", "top", or "bottom" for scrolling; "amount" is pixels to scroll (default 500); "pressEnter" presses Enter after typing (leave false for forms); "stepTitle" summarizes the action.',
     parameters: {
       type: 'OBJECT',
       properties: {
         action: {
           type: 'STRING',
-          description: 'Action type: "click", "type", "scroll", or "hover"'
+          description: 'Action type: "click", "type", "scroll", "hover", or "upload"'
         },
         selectorOrText: {
           type: 'STRING',
@@ -858,8 +858,7 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.browser_read_page,
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
-      AGENT_TOOLS_CATALOG.browser_screenshot,
-      AGENT_TOOLS_CATALOG.profile_get
+      AGENT_TOOLS_CATALOG.browser_screenshot
     ];
   } else {
     tools = [
@@ -879,7 +878,6 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
-      AGENT_TOOLS_CATALOG.profile_get,
       AGENT_TOOLS_CATALOG.bio_index,
       AGENT_TOOLS_CATALOG.bio_get,
       AGENT_TOOLS_CATALOG.bio_propose_write,

@@ -13,7 +13,12 @@ import {
   getInterruptAnswer
 } from './state/store.js';
 import { checkPermission, executeToolWithRetry, appendAuditLog, checkToolRunCap } from './tools/policy.js';
-import { executeBioIndex, executeBioGet, resolveBioWrite } from './bio/executors.js';
+import {
+  executeBioIndex,
+  executeBioGet,
+  resolveBioWrite,
+  collectBioMediaParts
+} from './bio/executors.js';
 import {
   getActiveProfile as getActiveBioProfile,
   recordBioAnswer,
@@ -58,7 +63,6 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - "browser_action": Click, type, scroll, or hover on webpage elements in the live Chromium browser session. Use ONLY when interactive form filling, button clicking, or menu navigation is genuinely required.
 - "snapshot_read": Inspect current page DOM and interactive elements without navigating.
 - "browser_screenshot": Capture a visual screenshot of the live page.
-- "profile_get": Retrieve user applicant profile and credentials.
 2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
 - "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text.
 - "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
@@ -80,6 +84,8 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - "bio_index": List field names, types and descriptions in the user's active BIO profile. It NEVER returns values. ALWAYS call bio_index FIRST when a task needs personal or profile data (job applications, forms, profiles) instead of asking the user generic questions.
 - "bio_get": Fetch ONLY the field values you need, by field_ids from bio_index. Requires the user's BIO read permission; if it is denied, ask the user with "ask_user" instead.
 - "bio_propose_write": Propose saving a stored user answer (referenced by its Answer ID) into a BIO field. Requires BIO write permission and ALWAYS opens a user approval card (field, old value, new value). NEVER invent values and NEVER save text copied from a web page; writes may only come from stored user answers.
+- To upload a BIO file (CV, photo, audio, video) into a form: first call "bio_get" for that field or entry to stage it, then use "browser_action" with action "upload", selectorOrText as the file input selector, and value as the returned uploadRef. Never ask the user to upload a file BIO already holds.
+- If BIO access is denied, do NOT use "ask_user" to request access. Politely explain in plain text that you need BIO access (BIO page, Agent Access switches) or ask for the specific information in plain text.
 - A run uses exactly one active BIO profile. You cannot switch profiles. If BIO lacks a field you need, ask the user with "ask_user", then propose saving that answer with "bio_propose_write" using the Answer ID provided to you.
 
 6. Structured UI Components & Execution Plans:
@@ -147,18 +153,30 @@ export class OmniEngine extends EventEmitter {
       case 'browser_screenshot':
         return await executeBrowserScreenshot(toolArgs);
 
-      case 'profile_get':
+      case 'profile_get': {
+        // Legacy alias — BIO is now the only profile source (no hardcoded data).
+        const bioProfile = context.userId ? getActiveBioProfile(context.userId) : null;
+        if (!bioProfile) {
+          return 'No BIO profile is available. Ask the user for the information or to set up BIO.';
+        }
+        if (!bioProfile.grants?.read) {
+          return 'BIO read access is off. Do NOT use ask_user for this. Politely ask the user in plain text to grant BIO read access (BIO page, Agent Access, Read switch) or to provide the information.';
+        }
         return JSON.stringify({
-          fullName: 'Edward',
-          role: 'Full Stack Engineer & AI Architect',
-          skills: ['TypeScript', 'React', 'Node.js', 'Playwright', 'Python', 'DevOps']
+          fullName: bioProfile.fields.fullName || '',
+          role: bioProfile.fields.role || bioProfile.fields.headline || '',
+          skills: bioProfile.fields.interests || [],
+          email: bioProfile.fields.email || '',
+          phone: bioProfile.fields.phone || '',
+          website: bioProfile.fields.website || ''
         });
+      }
 
       case 'bio_index':
         return executeBioIndex({ userId: context.userId });
 
       case 'bio_get':
-        return executeBioGet({
+        return await executeBioGet({
           userId: context.userId,
           fieldIds: toolArgs.field_ids,
           profileId: toolArgs.profile_id
@@ -417,6 +435,22 @@ export class OmniEngine extends EventEmitter {
       }
     }
 
+    // Deterministic BIO awareness for this run: check BIO before asking
+    // generic questions; when access is off, ask politely in plain text
+    // (never via ask_user).
+    if (userId) {
+      contents.push({
+        role: 'user',
+        parts: [
+          {
+            text: bioAccess.read
+              ? '[System note: BIO read access is ON for the active profile. Before asking the user for any personal or profile information (name, role, what jobs to apply for, email, phone, CV, website), call bio_index and bio_get to check BIO first. Only ask the user for information BIO does not have.]'
+              : '[System note: BIO read access is OFF. Do not use ask_user to request access. If you need profile information, politely ask the user in plain text to either grant BIO read access (BIO page, Agent Access, Read switch) or provide the specific information.]'
+          }
+        ]
+      });
+    }
+
     let isCompleted = false;
     let turnCount = 0;
 
@@ -479,6 +513,7 @@ export class OmniEngine extends EventEmitter {
 
         if (callsToExecute && callsToExecute.length > 0) {
           const toolResults = [];
+          const bioMediaParts = [];
 
           for (const fc of callsToExecute) {
             const toolName = fc.name;
@@ -746,6 +781,7 @@ export class OmniEngine extends EventEmitter {
               toolName,
               toolArgs,
               toolDef,
+              maxOutputChars: toolName === 'bio_get' ? 24000 : 4000,
               executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId })
             });
 
@@ -790,6 +826,17 @@ export class OmniEngine extends EventEmitter {
               id: fc.id,
               response: { result: modelOutput }
             });
+
+            // Attach permissible BIO images so the model actually sees them
+            if (toolName === 'bio_get') {
+              try {
+                const media = await collectBioMediaParts({
+                  userId,
+                  fieldIds: toolArgs.field_ids
+                });
+                bioMediaParts.push(...media);
+              } catch {}
+            }
           }
 
           // Append model turn with functionCalls and user turn with functionResponses to conversation contents
@@ -798,9 +845,11 @@ export class OmniEngine extends EventEmitter {
             parts: streamResult.modelParts
           });
 
+          const responseParts = buildFunctionResponseParts(toolResults);
+          if (bioMediaParts.length > 0) responseParts.push(...bioMediaParts);
           contents.push({
             role: 'user',
-            parts: buildFunctionResponseParts(toolResults)
+            parts: responseParts
           });
 
           persistTurn(threadId, {

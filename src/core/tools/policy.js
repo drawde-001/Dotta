@@ -148,14 +148,16 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     if ((normTool === 'bio_index' || normTool === 'bio_get') && !bio.read) {
       return {
         decision: 'deny',
-        reason: 'BIO read access is off for the active profile. Ask the user instead.'
+        reason:
+          'BIO read access is off for the active profile. Do NOT use ask_user for this. Politely tell the user in plain text that you need BIO read access (BIO page, Agent Access, Read switch), or ask for the specific information in plain text.'
       };
     }
     if (normTool === 'bio_propose_write') {
       if (!bio.write) {
         return {
           decision: 'deny',
-          reason: 'BIO write access is off for the active profile. The save was not proposed.'
+          reason:
+            'BIO write access is off for the active profile. The save was not proposed. Do NOT use ask_user for this; if it matters, mention it politely in plain text.'
         };
       }
       return {
