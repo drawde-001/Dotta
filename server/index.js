@@ -1,4 +1,5 @@
 import http from 'http';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -17,8 +18,21 @@ import { createAgUiHandler } from './ag-ui-bridge.js';
 import {
   sanitizeUserId,
   listUserWorkspaceFiles,
-  readUserWorkspaceFile
+  readUserWorkspaceFile,
+  getUserWorkspaceRoot,
+  validateAndResolvePath
 } from '../src/core/execution/workspace.js';
+import {
+  loadUserBio,
+  createProfile as bioCreateProfile,
+  setActiveProfile as bioSetActiveProfile,
+  updateProfile as bioUpdateProfile,
+  deleteProfile as bioDeleteProfile,
+  setField as bioSetField,
+  addEntry as bioAddEntry,
+  updateEntry as bioUpdateEntry,
+  deleteEntry as bioDeleteEntry
+} from '../src/core/bio/store.js';
 import {
   initLiveBrowser,
   handleBrowserWsMessage,
@@ -451,6 +465,228 @@ app.get('/api/workspace/file', (req, res) => {
     res.json({ ok: true, file });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// Raw sandbox file bytes (photos, entry files) — ownership checked via sandbox.
+app.get('/api/workspace/raw', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const root = getUserWorkspaceRoot(userId);
+    const resolved = validateAndResolvePath(root, String(req.query.path || ''));
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      return res.status(404).json({ ok: false, error: 'File not found' });
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    const mime =
+      {
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.webp': 'image/webp',
+        '.gif': 'image/gif',
+        '.svg': 'image/svg+xml',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain',
+        '.md': 'text/markdown'
+      }[ext] || 'application/octet-stream';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.send(fs.readFileSync(resolved));
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ---- BIO (user-owned profile store) ----
+function bioFail(res, err) {
+  res.status(400).json({ ok: false, error: err.message || 'BIO request failed' });
+}
+
+app.get('/api/bio', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const doc = loadUserBio(userId);
+    res.json({
+      ok: true,
+      profiles: doc.profiles,
+      activeProfileId: (doc.profiles.find((p) => p.isActive) || {}).id || null
+    });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.put('/api/bio/fields', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, fieldId, value } = req.body || {};
+    const profile = bioSetField(userId, String(profileId || ''), String(fieldId || ''), value);
+    res.json({ ok: true, profile });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.patch('/api/bio/profile', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, name, grants } = req.body || {};
+    const profile = bioUpdateProfile(userId, String(profileId || ''), { name, grants });
+    res.json({ ok: true, profile });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.post('/api/bio/profiles', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const profile = bioCreateProfile(userId, (req.body || {}).name);
+    res.json({ ok: true, profile });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.post('/api/bio/profiles/:id/activate', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const profile = bioSetActiveProfile(userId, req.params.id);
+    res.json({ ok: true, profile });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.delete('/api/bio/profiles/:id', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const profiles = bioDeleteProfile(userId, req.params.id);
+    res.json({ ok: true, profiles });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+function decodeBioUpload(file, maxBytes, label) {
+  if (!file || !file.dataBase64) return null;
+  const buffer = Buffer.from(String(file.dataBase64), 'base64');
+  if (buffer.length > maxBytes) {
+    throw new Error(`${label} exceeds the ${Math.round(maxBytes / 1000000)}MB limit`);
+  }
+  return buffer;
+}
+
+function writeSandboxUpload(userId, file, buffer) {
+  const root = getUserWorkspaceRoot(userId);
+  const safeBase = String(file.name || 'file')
+    .split(/[/\\]/)
+    .pop()
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .slice(0, 80);
+  const rel = `bio/${Date.now()}-${safeBase}`;
+  const resolved = validateAndResolvePath(root, rel);
+  fs.mkdirSync(path.dirname(resolved), { recursive: true });
+  fs.writeFileSync(resolved, buffer);
+  return rel;
+}
+
+app.post('/api/bio/entries', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, name, type, description, file } = req.body || {};
+    let entryFile = null;
+    let textContent = '';
+    if (file && file.dataBase64) {
+      const buffer = decodeBioUpload(file, 15 * 1024 * 1024, 'File');
+      const mime = String(file.mime || '');
+      if (type === 'image' && !mime.startsWith('image/')) throw new Error('Expected an image file');
+      if (type === 'audio' && !mime.startsWith('audio/')) throw new Error('Expected an audio file');
+      if (type === 'video' && !mime.startsWith('video/')) throw new Error('Expected a video file');
+      const rel = writeSandboxUpload(userId, file, buffer);
+      entryFile = { name: String(file.name || 'file'), size: buffer.length, mime, path: rel };
+      if (type === 'document' && (mime.startsWith('text/') || /\.(txt|md|json|csv)$/i.test(file.name || ''))) {
+        textContent = buffer.toString('utf8').slice(0, 20000);
+      }
+    }
+    const entry = bioAddEntry(userId, String(profileId || ''), {
+      name,
+      type,
+      description,
+      file: entryFile,
+      textContent
+    });
+    res.json({ ok: true, entry });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.patch('/api/bio/entries/:id', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, name, description } = req.body || {};
+    const entry = bioUpdateEntry(userId, String(profileId || ''), req.params.id, { name, description });
+    res.json({ ok: true, entry });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.delete('/api/bio/entries/:id', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const entries = bioDeleteEntry(userId, String(req.query.profileId || ''), req.params.id);
+    res.json({ ok: true, entries });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.post('/api/bio/photo', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, file } = req.body || {};
+    if (!file || !String(file.mime || '').startsWith('image/')) {
+      throw new Error('Photo must be an image file');
+    }
+    const buffer = decodeBioUpload(file, 5 * 1024 * 1024, 'Photo');
+    const rel = writeSandboxUpload(userId, file, buffer);
+    const profile = bioSetField(userId, String(profileId || ''), 'photo', rel);
+    res.json({ ok: true, path: rel, profile });
+  } catch (err) {
+    bioFail(res, err);
+  }
+});
+
+app.post('/api/bio/cv', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const { profileId, file } = req.body || {};
+    if (!file) throw new Error('CV file is required');
+    if (!/\.(pdf|doc|docx|txt|md)$/i.test(file.name || '')) {
+      throw new Error('CV must be a PDF, DOC, DOCX, TXT or MD file');
+    }
+    const buffer = decodeBioUpload(file, 10 * 1024 * 1024, 'CV');
+    const rel = writeSandboxUpload(userId, file, buffer);
+    const cv = { name: String(file.name), size: buffer.length, mime: String(file.mime || ''), path: rel };
+    const profile = bioSetField(userId, String(profileId || ''), 'cv', cv);
+    res.json({ ok: true, cv, profile });
+  } catch (err) {
+    bioFail(res, err);
   }
 });
 
