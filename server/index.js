@@ -1,4 +1,5 @@
 import http from 'http';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';
@@ -349,6 +350,73 @@ app.post('/api/attachments/process', async (req, res) => {
     });
   } catch (err) {
     console.error('[API /api/attachments/process error]', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Safe workspace files endpoints for File Browser & File Viewer
+app.get('/api/workspace/files', async (req, res) => {
+  try {
+    const rootDir = path.resolve(__dirname, '..');
+    const ignoreDirs = new Set(['node_modules', '.git', 'dist', 'others', '.agent', '.agents', '.system_generated', 'coverage', '.cache']);
+    
+    function scanDir(currentPath, relativePath = '') {
+      const items = [];
+      try {
+        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (ignoreDirs.has(entry.name.toLowerCase())) continue;
+          const entryRel = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+          if (entry.isDirectory()) {
+            items.push({
+              type: 'folder',
+              name: entry.name,
+              path: entryRel,
+              children: scanDir(path.join(currentPath, entry.name), entryRel)
+            });
+          } else {
+            items.push({
+              type: 'file',
+              name: entry.name,
+              path: entryRel
+            });
+          }
+        }
+      } catch {}
+      return items;
+    }
+    
+    const tree = scanDir(rootDir);
+    res.json({ ok: true, files: tree });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/workspace/file', async (req, res) => {
+  try {
+    const rootDir = path.resolve(__dirname, '..');
+    const relPath = req.query.path;
+    if (!relPath || typeof relPath !== 'string') {
+      return res.status(400).json({ ok: false, error: 'Path is required' });
+    }
+    const resolved = path.resolve(rootDir, relPath);
+    // Security boundary: strictly verify path is inside rootDir and never accesses others
+    const rel = path.relative(rootDir, resolved);
+    if (rel.startsWith('..') || path.isAbsolute(rel) || rel.toLowerCase().includes('others')) {
+      return res.status(403).json({ ok: false, error: 'Access denied' });
+    }
+    if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
+      return res.status(404).json({ ok: false, error: 'File not found' });
+    }
+    // Cap read size to 500KB
+    const stat = fs.statSync(resolved);
+    if (stat.size > 500 * 1024) {
+      return res.status(400).json({ ok: false, error: 'File exceeds 500KB limit for web viewer' });
+    }
+    const content = fs.readFileSync(resolved, 'utf-8');
+    res.json({ ok: true, path: relPath, content });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
