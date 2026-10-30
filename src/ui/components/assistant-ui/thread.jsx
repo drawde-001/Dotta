@@ -719,13 +719,24 @@ function AssistantMessageBody() {
     ? custom.rawParts
     : (content || []).filter((p) => !(p.type === "text" && !p.text));
 
+  // Helper to identify submitted QA parts across standard and normalized formats
+  const isSubmittedQAPart = (p) =>
+    Boolean(
+      p &&
+      (p.type === "submitted-ask-user" ||
+        p.type === "ask-user-response" ||
+        p.type === "data-submitted-ask-user" ||
+        p.name === "submitted-ask-user" ||
+        (p.type === "data" && (p.name === "submitted-ask-user" || p.data?.questions)))
+    );
+
   // Find last non-text activity part (tool-call, reasoning, plan, data)
   let lastActivityIdx = -1;
   let activityCount = 0;
   let hasFinalAnswerText = false;
   for (let i = 0; i < rawParts.length; i++) {
     const p = rawParts[i];
-    if (p && p.type !== "text" && p.type !== "source") {
+    if (p && p.type !== "text" && p.type !== "source" && !isSubmittedQAPart(p)) {
       lastActivityIdx = i;
       activityCount++;
     }
@@ -889,6 +900,18 @@ function AssistantMessageBody() {
           />
         ),
       });
+    } else if (isSubmittedQAPart(part)) {
+      const qData =
+        part.questions ||
+        part.questionsAndAnswers ||
+        part.data?.questions ||
+        part.data?.questionsAndAnswers ||
+        [];
+      promotedVisualNodes.push(
+        <div key={part.id || `submitted-qa-${idx}`} className="my-2">
+          <SubmittedAskUserCard questions={qData} />
+        </div>
+      );
     } else if (part.type === "plan" || part.type === "data") {
       entries.push({
         id: part.id || `data-${idx}`,
@@ -900,12 +923,6 @@ function AssistantMessageBody() {
       });
     } else if (part.type === "source") {
       sourceParts.push(part);
-    } else if (part.type === "submitted-ask-user" || part.type === "ask-user-response") {
-      promotedVisualNodes.push(
-        <div key={part.id || `submitted-qa-${idx}`} className="my-2">
-          <SubmittedAskUserCard questions={part.questions || part.questionsAndAnswers || []} />
-        </div>
-      );
     } else if (part.type === "text") {
       const trimmed = (part.text || "").trim();
       if (!trimmed) return;
