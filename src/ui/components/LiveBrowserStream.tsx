@@ -20,13 +20,17 @@ interface LiveBrowserStreamProps {
   isConnectedToBackend?: boolean;
   onSendWsMessage?: (msg: any) => void;
   onOpenFiles?: () => void;
+  onSelectBrowser?: () => void;
+  forceIdle?: boolean;
 }
 
 export const LiveBrowserStream: React.FC<LiveBrowserStreamProps> = ({
   streamState,
   onManualNavigate,
   onSendWsMessage,
-  onOpenFiles
+  onOpenFiles,
+  onSelectBrowser,
+  forceIdle = false
 }) => {
   const [inputUrl, setInputUrl] = useState(
     streamState.url === 'about:blank' ? '' : streamState.url
@@ -146,7 +150,7 @@ export const LiveBrowserStream: React.FC<LiveBrowserStreamProps> = ({
   };
 
   // Minimalist Idle Workspace State (matching Screenshot 2)
-  if (!browserOpen && !streamState.liveFrame) {
+  if (forceIdle || (!browserOpen && !streamState.liveFrame)) {
     return (
       <div
         style={{
@@ -173,7 +177,10 @@ export const LiveBrowserStream: React.FC<LiveBrowserStreamProps> = ({
         >
           {/* Browser Button */}
           <button
-            onClick={() => setBrowserOpen(true)}
+            onClick={() => {
+              setBrowserOpen(true);
+              if (onSelectBrowser) onSelectBrowser();
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
