@@ -183,6 +183,7 @@ export class OmniEngine extends EventEmitter {
 
       case 'agent_plan':
       case 'create_plan':
+      case 'update_plan':
         return {
           ok: true,
           title: toolArgs.title || 'Execution Plan',

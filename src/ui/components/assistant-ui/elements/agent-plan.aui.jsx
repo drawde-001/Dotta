@@ -14,13 +14,39 @@ const DEFAULT_STEPS = [
 ];
 
 export function AgentPlan({
-  title = 'Composer draft',
+  title = 'Plan',
   steps = DEFAULT_STEPS,
+  activeIndex,
   className = '',
   ...props
 }) {
-  const completedCount = steps.filter((s) => s.status === 'completed' || s.status === 'done').length;
-  const progressPercent = steps.length > 0 ? Math.round((completedCount / steps.length) * 100) : 0;
+  const normalizedSteps = (Array.isArray(steps) ? steps : []).map((st, i) => {
+    const item = typeof st === 'string' ? { label: st } : st;
+    const label = item.label || item.title || `Step ${i + 1}`;
+    let status = item.status;
+    if (activeIndex !== undefined && activeIndex !== null && !isNaN(Number(activeIndex))) {
+      const idx = Number(activeIndex);
+      if (i < idx) status = 'completed';
+      else if (i === idx) status = 'running';
+      else status = 'pending';
+    } else if (!status) {
+      status = i === 0 ? 'running' : 'pending';
+    }
+    return {
+      ...item,
+      title: label,
+      label,
+      status
+    };
+  });
+
+  const completedCount = normalizedSteps.filter(
+    (s) => s.status === 'completed' || s.status === 'done'
+  ).length;
+  const progressPercent =
+    normalizedSteps.length > 0
+      ? Math.round((completedCount / normalizedSteps.length) * 100)
+      : 0;
 
   return (
     <div
@@ -31,7 +57,7 @@ export function AgentPlan({
       <div className="flex items-center justify-between">
         <span className="text-[13.5px] font-medium text-foreground">{title}</span>
         <span className="font-mono text-[11px] tracking-tight text-muted-foreground tabular-nums">
-          {completedCount} of {steps.length}
+          {completedCount} of {normalizedSteps.length}
         </span>
       </div>
 
@@ -41,7 +67,7 @@ export function AgentPlan({
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={progressPercent}
-        aria-valuetext={`${completedCount} of ${steps.length} steps`}
+        aria-valuetext={`${completedCount} of ${normalizedSteps.length} steps`}
         className="bg-foreground/[0.06] inset-ring-border h-[3px] w-full overflow-hidden rounded-full inset-ring forced-colors:outline"
       >
         <span
@@ -52,8 +78,8 @@ export function AgentPlan({
       </div>
 
       <ul className="flex flex-col gap-2.5">
-        {steps.map((st, idx) => {
-          const isRunning = st.status === 'running';
+        {normalizedSteps.map((st, idx) => {
+          const isRunning = st.status === 'running' || st.status === 'active';
           const isDone = st.status === 'completed' || st.status === 'done';
 
           return (
