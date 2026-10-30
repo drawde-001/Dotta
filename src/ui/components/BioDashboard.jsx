@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   SlidersHorizontal,
   ChevronDown,
@@ -68,6 +68,38 @@ export function BioDashboard() {
     'Prioritize applications requiring autonomous agent orchestrations, multi-turn tool architectures, and TypeScript/Node backends. Emphasize security posture and RLS isolation.'
   ]);
   const [noteDraft, setNoteDraft] = useState('');
+  const rootRef = useRef(null);
+  const rightGroupRef = useRef(null);
+
+  // Desktop scroll logic: once the last card of the right group is visible,
+  // the group locks in place and only the long basic-info column keeps scrolling.
+  useEffect(() => {
+    const group = rightGroupRef.current;
+    const root = rootRef.current;
+    if (!group || !root) return;
+    const scroller = root.parentElement;
+    if (!scroller) return;
+
+    const update = () => {
+      if (window.innerWidth < 1024) {
+        group.style.top = '';
+        return;
+      }
+      const visible = scroller.clientHeight;
+      const h = group.offsetHeight;
+      group.style.top = h + 28 > visible ? `${visible - h - 28}px` : '1.75rem';
+    };
+
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    const timer = setTimeout(update, 100);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      clearTimeout(timer);
+    };
+  }, []);
 
   const addNote = () => {
     const text = noteDraft.trim();
@@ -77,7 +109,7 @@ export function BioDashboard() {
   };
 
   return (
-    <div className="flex flex-col gap-6">
+    <div ref={rootRef} className="flex flex-col gap-6">
       {/* Global Header: BIO */}
       <header className="flex items-center justify-between border-b border-white/[0.06] pb-3">
         <div className="flex items-center gap-3">
@@ -400,7 +432,10 @@ export function BioDashboard() {
         </div>
 
         {/* Right column */}
-        <div className="flex flex-col gap-6 lg:col-span-7 lg:grid lg:grid-cols-12">
+        <div
+          ref={rightGroupRef}
+          className="flex flex-col gap-6 self-start lg:sticky lg:col-span-7 lg:grid lg:grid-cols-12"
+        >
           <div className="flex flex-col gap-6 lg:col-span-7">
             <section
               aria-label="Profile strength"

@@ -36,7 +36,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [view, setView] = useState('bio');
   const [openFiles, setOpenFiles] = useState([]);
-  const [activeTabId, setActiveTabId] = useState('browser');
+  const [activeTabId, setActiveTabId] = useState('plus');
 
   // Dynamic rotating subtitles for Hero screen
   const heroSubtitles = [
@@ -293,6 +293,7 @@ export default function App() {
     const urlMatch = userText.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
       setWorkspaceMode('work');
+      setActiveTabId('browser');
     }
 
     const controller = new AbortController();
@@ -459,6 +460,7 @@ export default function App() {
                   event.name.startsWith('snapshot_')
                 ) {
                   setWorkspaceMode('work');
+                  setActiveTabId('browser');
                 }
               } else if (event.type === 'TOOL_RESULT') {
                 let tcIdx = -1;
@@ -848,7 +850,7 @@ export default function App() {
             ) : (
               /* Active Message Thread with Bottom Docked InputDock */
               <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                <div className="flex-1 overflow-y-auto">
+                <div className="flex-1 min-h-0">
                   <Thread
                     activeInterrupt={activeInterrupt}
                     onResolveInterrupt={handleResolveInterrupt}
