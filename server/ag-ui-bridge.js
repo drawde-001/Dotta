@@ -1,4 +1,8 @@
 import { OmniEngine } from '../src/core/index.js';
+import {
+  sanitizeUserId,
+  getUserWorkspaceRoot
+} from '../src/core/execution/workspace.js';
 
 export function writeAgUiEvent(res, event) {
   if (res.writableEnded) return;
@@ -34,6 +38,9 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         : '');
     const resume = body.resume || null;
     const mode = body.mode || 'turbo';
+    // Per-user sandbox: agent file tools are confined to this user's folder.
+    const userId = sanitizeUserId(body.userId || req.get('x-user-id'));
+    const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
 
     console.log(
       `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | prompt: "${instruction.slice(0, 100)}"`
@@ -64,7 +71,8 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         runId,
         model,
         mode,
-        resume
+        resume,
+        workspaceRoot
       });
 
       if (result.status === 'interrupted' && !interruptEmitted) {

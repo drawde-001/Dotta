@@ -15,6 +15,11 @@ import {
 } from '../src/core/index.js';
 import { createAgUiHandler } from './ag-ui-bridge.js';
 import {
+  sanitizeUserId,
+  listUserWorkspaceFiles,
+  readUserWorkspaceFile
+} from '../src/core/execution/workspace.js';
+import {
   initLiveBrowser,
   handleBrowserWsMessage,
   getLiveBrowserPage,
@@ -116,9 +121,7 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
     // Fallback to text extract if structured cards not caught
     const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 3000)).catch(() => '');
     return `### Live Browser Search for "${query}":\n\n${bodyText}`;
-  } finally {
-    scheduleBrowserTermination(broadcast, 30000);
-  }
+  } catch {}
 });
 
 engine.registerTool({ name: 'browser_read_page' }, async (args) => {
@@ -137,9 +140,7 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
     const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
 
     return `### Page: ${title}\n**URL**: ${targetUrl}\n\n${text}`;
-  } finally {
-    scheduleBrowserTermination(broadcast, 30000);
-  }
+  } catch {}
 });
 
 engine.registerTool({ name: 'browser_action' }, async (args) => {
@@ -153,22 +154,78 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
     }
 
     if (action === 'click') {
-      try {
-        await page.click(selectorOrText, { timeout: 8000 });
-        return `Successfully clicked "${selectorOrText}". Current URL: ${page.url()}`;
-      } catch {
-        await page.getByText(selectorOrText).first().click({ timeout: 5000 });
-        return `Successfully clicked element with text "${selectorOrText}". Current URL: ${page.url()}`;
+      const target = String(selectorOrText || '').trim();
+      if (!target) {
+        return 'Browser action error: click requires a target (selector or visible text from snapshot_read). Nothing was clicked.';
       }
+      const looksLikeCss = /^[.#\[]/.test(target) || target.includes('>') || target.includes('=');
+      const attempts = [];
+      if (looksLikeCss) {
+        attempts.push(() => page.click(target, { timeout: 3500 }));
+      }
+      attempts.push(() => page.getByRole('radio', { name: target }).first().click({ timeout: 3000 }));
+      attempts.push(() => page.getByRole('checkbox', { name: target }).first().click({ timeout: 3000 }));
+      attempts.push(() => page.getByRole('button', { name: target }).first().click({ timeout: 3000 }));
+      attempts.push(() => page.getByRole('option', { name: target }).first().click({ timeout: 3000 }));
+      attempts.push(() => page.getByText(target, { exact: false }).first().click({ timeout: 3000 }));
+      if (!looksLikeCss) {
+        attempts.push(() => page.click(target, { timeout: 2500 }));
+      }
+      let lastError = null;
+      for (const attempt of attempts) {
+        try {
+          await attempt();
+          await page.waitForTimeout(350);
+          let stateNote = '';
+          try {
+            const checked = await page
+              .getByRole('radio', { name: target })
+              .first()
+              .getAttribute('aria-checked', { timeout: 800 });
+            if (checked !== null) {
+              stateNote = ` Radio state now: ${checked === 'true' ? 'selected' : 'not selected'}.`;
+            }
+          } catch {}
+          return `Clicked "${target}". Current URL: ${page.url()}.${stateNote} Take a snapshot_read to confirm the new page state before continuing.`;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      return `Browser action error: Could not click "${target}". ${lastError ? String(lastError.message || '').split('\n')[0] : ''} Take a snapshot_read and choose a target from the listed interactive elements instead of guessing.`;
     } else if (action === 'type') {
-      try {
-        await page.fill(selectorOrText, value || '', { timeout: 8000 });
-        if (pressEnter) await page.press(selectorOrText, 'Enter');
-        return `Successfully typed "${value}" into "${selectorOrText}".`;
-      } catch {
-        await page.keyboard.type(value || '');
-        return `Typed text via keyboard into active focus.`;
+      const target = String(selectorOrText || '').trim();
+      const text = value || '';
+      const looksLikeCss = /^[.#\[]/.test(target) || target.includes('>') || target.includes('=');
+      const strategies = [];
+      if (target) {
+        if (looksLikeCss) {
+          strategies.push(() => page.locator(target).first().fill(text, { timeout: 3000 }));
+        }
+        strategies.push(() => page.getByLabel(target, { exact: false }).first().fill(text, { timeout: 3000 }));
+        strategies.push(() => page.getByPlaceholder(target, { exact: false }).first().fill(text, { timeout: 3000 }));
+        strategies.push(() => page.getByRole('textbox', { name: target }).first().fill(text, { timeout: 3000 }));
       }
+      let typed = false;
+      let lastError = null;
+      for (const strategy of strategies) {
+        try {
+          await strategy();
+          typed = true;
+          break;
+        } catch (err) {
+          lastError = err;
+        }
+      }
+      if (!typed) {
+        if (!target) {
+          await page.keyboard.type(text);
+          typed = true;
+        } else {
+          return `Browser action error: Could not type into "${target}". ${lastError ? String(lastError.message || '').split('\n')[0] : ''} Take a snapshot_read and target a listed input instead.`;
+        }
+      }
+      if (pressEnter) await page.keyboard.press('Enter');
+      return `Typed "${text}" into "${target || 'focused element'}".${pressEnter ? ' Pressed Enter.' : ''} Take a snapshot_read to confirm before continuing.`;
     } else if (action === 'scroll') {
       const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
       await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);
@@ -180,8 +237,6 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
     return `Browser action "${action}" completed.`;
   } catch (err) {
     return `Browser action error: ${err.message}`;
-  } finally {
-    scheduleBrowserTermination(broadcast, 30000);
   }
 });
 
@@ -197,22 +252,38 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
       .evaluate(() => ({
         title: document.title,
         url: window.location.href,
-        interactives: Array.from(document.querySelectorAll('a, button, input, textarea, select'))
-          .filter((el) => el.offsetParent !== null)
-          .slice(0, 30)
+        interactives: Array.from(
+          document.querySelectorAll(
+            'a, button, input, textarea, select, [role="button"], [role="radio"], [role="checkbox"], [role="option"], [role="link"], [role="tab"], label, [contenteditable="true"]'
+          )
+        )
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return r.width > 0 && r.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+          })
+          .slice(0, 60)
           .map((el) => ({
             tag: el.tagName.toLowerCase(),
-            text: (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || '').trim().slice(0, 50),
+            role: el.getAttribute('role') || undefined,
+            type: el.getAttribute('type') || undefined,
+            text: (el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || '')
+              .trim()
+              .replace(/\s+/g, ' ')
+              .slice(0, 60),
+            checked:
+              typeof el.checked === 'boolean'
+                ? el.checked
+                : el.getAttribute('aria-checked') || undefined,
+            disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
             id: el.id || undefined,
             name: el.getAttribute('name') || undefined,
-            href: el.getAttribute('href') || undefined
+            ariaLabel: el.getAttribute('aria-label') || undefined
           }))
       }))
       .catch((err) => ({ error: err.message }));
     return JSON.stringify(snapshot, null, 2);
-  } finally {
-    scheduleBrowserTermination(broadcast, 30000);
-  }
+  } catch {}
 });
 
 engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
@@ -226,9 +297,7 @@ engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
     const buffer = await page.screenshot({ fullPage: !!args?.fullPage }).catch(() => null);
     if (!buffer) return 'Failed to capture screenshot.';
     return `Captured live screenshot (${buffer.length} bytes). Viewport is streaming live in sidebar.`;
-  } finally {
-    scheduleBrowserTermination(broadcast, 30000);
-  }
+  } catch {}
 });
 
 // Health check endpoints (both /health and /api/health)
@@ -350,6 +419,38 @@ app.post('/api/attachments/process', async (req, res) => {
   } catch (err) {
     console.error('[API /api/attachments/process error]', err);
     res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Per-user sandboxed workspace (one isolated folder per user ID).
+// Only files inside workspaces/user-<userId>/ are ever listed or read.
+function requireSandboxUserId(req, res) {
+  const userId = sanitizeUserId(req.get('x-user-id') || req.query.userId || req.body?.userId);
+  if (!userId) {
+    res.status(400).json({ ok: false, error: 'Missing or invalid user id' });
+    return null;
+  }
+  return userId;
+}
+
+app.get('/api/workspace/files', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    res.json({ ok: true, files: listUserWorkspaceFiles(userId) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/workspace/file', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const file = readUserWorkspaceFile(userId, String(req.query.path || ''));
+    res.json({ ok: true, file });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
   }
 });
 
