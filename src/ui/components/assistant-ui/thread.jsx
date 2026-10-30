@@ -90,7 +90,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
 
   return (
     <ThreadPrimitive.Root
-      className="flex h-full flex-col bg-background text-foreground text-sm"
+      className="flex h-full flex-col bg-transparent text-foreground text-sm"
       style={{
         "--thread-max-width": "46rem",
         "--composer-radius": "1.25rem",
@@ -102,7 +102,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
     >
       <ThreadPrimitive.Viewport
         turnAnchor="top"
-        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth"
+        className="relative flex flex-1 flex-col overflow-x-auto overflow-y-auto scroll-smooth"
       >
         <div
           className={cn(
@@ -127,7 +127,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
           {showComposer && (
             <ThreadPrimitive.ViewportFooter
               className={cn(
-                "flex w-full flex-col gap-4 overflow-visible bg-background pb-4",
+                "flex w-full flex-col gap-4 overflow-visible bg-transparent pb-4",
                 !isEmpty && "sticky bottom-0 mt-auto rounded-t-[var(--composer-radius)]",
               )}
             >
