@@ -31,7 +31,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step description (e.g. "Search web for React 19 documentation")'
         }
       },
-      required: ['query', 'stepTitle']
+      required: ['query']
     }
   },
 
@@ -52,7 +52,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step description (e.g., "Search for remote engineering roles")'
         }
       },
-      required: ['query', 'stepTitle']
+      required: ['query']
     }
   },
 
@@ -73,7 +73,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step description (e.g., "Inspect job listing on Lever")'
         }
       },
-      required: ['url', 'stepTitle']
+      required: ['url']
     }
   },
 
@@ -114,7 +114,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Short human-readable step description (e.g., "Scroll page down to view more content")'
         }
       },
-      required: ['action', 'selectorOrText', 'stepTitle']
+      required: ['action', 'selectorOrText']
     }
   },
 
@@ -135,7 +135,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Short human-readable step description (e.g., "Verify form fields loaded")'
         }
       },
-      required: ['stepTitle']
+      required: []
     }
   },
 
@@ -160,7 +160,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Capture page thumbnail")'
         }
       },
-      required: ['stepTitle']
+      required: []
     }
   },
 
@@ -181,7 +181,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Short human-readable step description (e.g., "Retrieve contact details for application")'
         }
       },
-      required: ['stepTitle']
+      required: []
     }
   },
 
@@ -202,7 +202,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Create workspace for application run")'
         }
       },
-      required: ['stepTitle']
+      required: []
     }
   },
 
@@ -223,7 +223,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Read package.json")'
         }
       },
-      required: ['path', 'stepTitle']
+      required: ['path']
     }
   },
 
@@ -248,7 +248,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "List project files")'
         }
       },
-      required: ['stepTitle']
+      required: []
     }
   },
 
@@ -273,7 +273,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Search for apiUrl in workspace")'
         }
       },
-      required: ['pattern', 'stepTitle']
+      required: ['pattern']
     }
   },
 
@@ -298,7 +298,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Write notes.json")'
         }
       },
-      required: ['path', 'content', 'stepTitle']
+      required: ['path', 'content']
     }
   },
 
@@ -327,7 +327,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Update port number in config.json")'
         }
       },
-      required: ['path', 'old_text', 'new_text', 'stepTitle']
+      required: ['path', 'old_text', 'new_text']
     }
   },
 
@@ -348,7 +348,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Delete temporary draft file")'
         }
       },
-      required: ['path', 'stepTitle']
+      required: ['path']
     }
   },
 
@@ -373,7 +373,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Run npm test")'
         }
       },
-      required: ['command', 'stepTitle']
+      required: ['command']
     }
   },
 
@@ -394,7 +394,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Check test output")'
         }
       },
-      required: ['id', 'stepTitle']
+      required: ['id']
     }
   },
 
@@ -415,7 +415,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Stop background dev server")'
         }
       },
-      required: ['id', 'stepTitle']
+      required: ['id']
     }
   },
   segment_image: {
@@ -465,7 +465,7 @@ export const AGENT_TOOLS_CATALOG = {
           description: 'Concise human-readable step title (e.g., "Generating portrait with Muse Image 1.0")'
         }
       },
-      required: ['prompt', 'stepTitle']
+      required: ['prompt']
     }
   },
 
@@ -739,7 +739,7 @@ export const ASK_USER_TOOL = {
         description: 'Concise human-readable step title (e.g., "Ask user preference")'
       }
     },
-    required: ['question', 'options', 'stepTitle']
+    required: ['question', 'options']
   }
 };
 

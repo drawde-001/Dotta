@@ -68,7 +68,7 @@ export { JobProgress } from './job-progress.tsx';
 export { ScoreBreakdown } from './score-breakdown.tsx';
 
 // === Category: Agents (15) ===
-export { AgentPlan } from './agent-plan.aui.jsx';
+export { AgentPlan } from './agent-plan.tsx';
 export { SubagentList } from './subagent-list.tsx';
 export { TaskStateIcon, TaskCard } from './task-card.tsx';
 export { AgentStatus } from './agent-status.tsx';
