@@ -305,11 +305,11 @@ registerToolComponent(['code_diff', 'patch_preview'], ({ args }) => {
 registerToolComponent(['agent_plan', 'create_plan', 'update_plan'], ({ args, result }) => {
   const planData = result || args || {};
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <AgentPlan
         title={planData.title || 'Plan'}
-        steps={planData.steps}
-        activeIndex={planData.activeIndex}
+        steps={Array.isArray(planData.steps) ? planData.steps : []}
+        activeIndex={planData.activeIndex !== undefined ? Number(planData.activeIndex) : 0}
       />
     </div>
   );
@@ -317,14 +317,22 @@ registerToolComponent(['agent_plan', 'create_plan', 'update_plan'], ({ args, res
 
 registerToolComponent(['task_card', 'create_task_card'], ({ args, result }) => {
   const p = result || args || {};
+  let state = String(p.state || 'done').toLowerCase();
+  if (state === 'completed' || state === 'success' || state === 'finished') state = 'done';
+  if (state === 'running' || state === 'in_progress' || state === 'executing') state = 'working';
+  if (state === 'pending' || state === 'paused') state = 'waiting';
+  if (state === 'error') state = 'failed';
+  if (state === 'aborted') state = 'cancelled';
+  if (!['working', 'waiting', 'done', 'failed', 'cancelled'].includes(state)) state = 'done';
+
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <TaskCard
-        label={p.label || 'Task'}
-        state={p.state || 'done'}
-        meta={p.meta}
-        elapsed={p.elapsed}
-        result={p.result}
+        label={String(p.label || p.title || 'Task')}
+        state={state}
+        meta={p.meta ? String(p.meta) : undefined}
+        elapsed={p.elapsed ? String(p.elapsed) : undefined}
+        result={p.result ? String(p.result) : undefined}
       />
     </div>
   );
@@ -332,12 +340,19 @@ registerToolComponent(['task_card', 'create_task_card'], ({ args, result }) => {
 
 registerToolComponent(['agent_status', 'status_badge'], ({ args, result }) => {
   const p = result || args || {};
+  let state = String(p.state || 'working').toLowerCase();
+  if (state === 'completed' || state === 'done' || state === 'success') state = 'done';
+  if (state === 'running' || state === 'in_progress') state = 'working';
+  if (state === 'pending') state = 'waiting';
+  if (state === 'error') state = 'failed';
+  if (!['working', 'waiting', 'done', 'failed'].includes(state)) state = 'working';
+
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <AgentStatus
-        state={p.state || 'working'}
-        label={p.label || 'Status'}
-        elapsed={p.elapsed}
+        state={state}
+        label={String(p.label || p.message || p.status || 'Status')}
+        elapsed={p.elapsed ? String(p.elapsed) : undefined}
       />
     </div>
   );
@@ -346,15 +361,22 @@ registerToolComponent(['agent_status', 'status_badge'], ({ args, result }) => {
 registerToolComponent(['option_list', 'select_options'], ({ args, result }) => {
   const p = result || args || {};
   const rawOptions = Array.isArray(p.options) ? p.options : [];
-  const normalized = rawOptions.map((opt, i) =>
-    typeof opt === 'string' ? { id: `opt-${i}`, label: opt } : opt
-  );
+  const normalized = rawOptions.map((opt, i) => {
+    if (typeof opt === 'string') return { id: `opt-${i + 1}`, label: opt };
+    if (!opt || typeof opt !== 'object') return { id: `opt-${i + 1}`, label: String(opt) };
+    return {
+      id: String(opt.id || `opt-${i + 1}`),
+      label: String(opt.label || opt.text || opt.title || opt.name || `Option ${i + 1}`),
+      description: opt.description ? String(opt.description) : undefined,
+      disabled: Boolean(opt.disabled)
+    };
+  });
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <OptionList
         options={normalized}
-        selectionMode={p.selectionMode || 'single'}
-        choice={p.choice}
+        selectionMode={p.selectionMode === 'multiple' ? 'multiple' : 'single'}
+        choice={Array.isArray(p.choice) ? p.choice : (p.choice ? [String(p.choice)] : undefined)}
       />
     </div>
   );
@@ -363,50 +385,60 @@ registerToolComponent(['option_list', 'select_options'], ({ args, result }) => {
 registerToolComponent(['recommendation_card', 'recommend_decision'], ({ args, result }) => {
   const p = result || args || {};
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <RecommendationCard
-        state={p.state || 'idle'}
-        question={p.question || 'Recommendation'}
-        confidenceLabel={p.confidenceLabel || '95% confidence'}
-        acceptedLabel={p.acceptedLabel || 'Accepted recommendation'}
+        state={p.state === 'accepted' ? 'accepted' : 'idle'}
+        question={String(p.question || p.title || 'Recommendation')}
+        confidenceLabel={String(p.confidenceLabel || '95% confidence')}
+        acceptedLabel={String(p.acceptedLabel || 'Accepted recommendation')}
       >
-        {p.description || p.children || p.reason || 'Recommended path forward.'}
+        {p.description || p.children || p.reason || p.recommendation || 'Recommended path forward.'}
       </RecommendationCard>
     </div>
   );
 });
 
-registerToolComponent(['artifact_card', 'create_artifact_card'], ({ args, result }) => {
+registerToolComponent(['artifact_card', 'create_artifact_card'], ({ args, result, status }) => {
   const p = result || args || {};
+  const isGenerating = status?.type === 'running' || Boolean(p.generating);
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <ArtifactCard
-        title={p.title || 'Artifact'}
-        meta={p.meta || 'Document'}
-        words={p.words || 0}
-        generating={p.generating || false}
+        title={String(p.title || p.name || 'Artifact')}
+        meta={String(p.meta || p.format || p.type || 'Document')}
+        words={Number(p.words) || 0}
+        generating={isGenerating}
       />
     </div>
   );
 });
 
-registerToolComponent(['todo_list', 'create_todo_list'], ({ args, result }) => {
+registerToolComponent(['todo_list', 'create_todo_list', 'todos'], ({ args, result }) => {
   const p = result || args || {};
   const rawItems = Array.isArray(p.items) ? p.items : [];
-  const normalized = rawItems.map((item, i) =>
-    typeof item === 'string'
-      ? { id: `todo-${i}`, text: item, status: i === 0 ? 'active' : 'pending' }
-      : {
-          id: item.id || `todo-${i}`,
-          text: item.text || item.label || `Item ${i + 1}`,
-          status: item.status || 'pending',
-          description: item.description
-        }
-  );
+  const normalized = rawItems.map((item, i) => {
+    if (typeof item === 'string') {
+      return { id: `todo-${i + 1}`, text: item, status: i === 0 ? 'active' : 'pending' };
+    }
+    let st = String(item.status || 'pending').toLowerCase();
+    if (st === 'completed') st = 'done';
+    if (st === 'running' || st === 'in_progress') st = 'active';
+    if (st === 'error') st = 'failed';
+    if (!['pending', 'active', 'done', 'failed', 'cancelled'].includes(st)) st = 'pending';
+
+    return {
+      id: String(item.id || `todo-${i + 1}`),
+      text: String(item.text || item.label || item.title || item.task || `Item ${i + 1}`),
+      status: st,
+      description: item.description ? String(item.description) : undefined,
+      reason: item.reason ? String(item.reason) : undefined
+    };
+  });
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <TodoList
-        title={p.title || 'Todos'}
+        title={String(p.title || 'Todos')}
+        description={p.description ? String(p.description) : undefined}
         items={normalized}
       />
     </div>
@@ -415,13 +447,18 @@ registerToolComponent(['todo_list', 'create_todo_list'], ({ args, result }) => {
 
 registerToolComponent(['agent_handoff', 'handoff_agent'], ({ args, result }) => {
   const p = result || args || {};
+  const rawCarried = Array.isArray(p.carried)
+    ? p.carried.map(String)
+    : typeof p.carried === 'string' && p.carried
+      ? [p.carried]
+      : ['Task context'];
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <AgentHandoff
-        from={p.from || 'Omni Agent'}
-        to={p.to || 'Specialist Agent'}
-        reason={p.reason || 'Delegating specialized workflow'}
-        carried={Array.isArray(p.carried) ? p.carried : [p.carried || 'Task context']}
+        from={String(p.from || 'Omni Agent')}
+        to={String(p.to || 'Specialist Agent')}
+        reason={String(p.reason || 'Delegating task context')}
+        carried={rawCarried}
         settled={p.settled ?? true}
       />
     </div>
@@ -431,10 +468,25 @@ registerToolComponent(['agent_handoff', 'handoff_agent'], ({ args, result }) => 
 registerToolComponent(['background_inbox', 'background_runs'], ({ args, result }) => {
   const p = result || args || {};
   const rawRuns = Array.isArray(p.runs) ? p.runs : [];
+  const normalizedRuns = rawRuns.map((run, i) => {
+    let state = String(run.state || 'ready').toLowerCase();
+    if (state === 'done' || state === 'completed' || state === 'success') state = 'ready';
+    if (state === 'working' || state === 'in_progress') state = 'running';
+    if (state === 'error') state = 'failed';
+    if (!['running', 'ready', 'failed'].includes(state)) state = 'ready';
+
+    return {
+      id: String(run.id || `run-${i + 1}`),
+      title: String(run.title || run.name || `Background Run ${i + 1}`),
+      state,
+      elapsed: String(run.elapsed || '1.2s'),
+      summary: run.summary ? String(run.summary) : undefined
+    };
+  });
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <BackgroundInbox
-        runs={rawRuns}
+        runs={normalizedRuns}
       />
     </div>
   );
@@ -443,11 +495,23 @@ registerToolComponent(['background_inbox', 'background_runs'], ({ args, result }
 registerToolComponent(['checkpoint_history', 'checkpoints'], ({ args, result }) => {
   const p = result || args || {};
   const rawCheckpoints = Array.isArray(p.checkpoints) ? p.checkpoints : [];
+  const normalizedCheckpoints = rawCheckpoints.map((c, i) => {
+    if (typeof c === 'string') {
+      return { id: `chk-${i + 1}`, label: c, at: 'just now', files: 1 };
+    }
+    return {
+      id: String(c.id || `chk-${i + 1}`),
+      label: String(c.label || c.title || `Checkpoint ${i + 1}`),
+      at: String(c.at || c.time || 'just now'),
+      files: typeof c.files === 'number' ? c.files : (Array.isArray(c.files) ? c.files.length : 1)
+    };
+  });
+  const currentId = String(p.currentId || normalizedCheckpoints[0]?.id || 'chk-1');
   return (
-    <div className="my-1.5">
+    <div className="my-2">
       <CheckpointHistory
-        checkpoints={rawCheckpoints}
-        currentId={p.currentId || (rawCheckpoints[0]?.id ?? 'chk-1')}
+        checkpoints={normalizedCheckpoints}
+        currentId={currentId}
       />
     </div>
   );

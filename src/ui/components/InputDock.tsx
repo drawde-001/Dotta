@@ -86,7 +86,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     name: 'Muse Spark 1.2',
     effort: 'Medium',
     provider: 'muse',
-    isFav: false,
+    isFav: true,
     efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Muse',
     desc: 'Previous Muse Spark release with full multimodal audio/image support',
@@ -97,7 +97,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     name: 'Muse Spark 1.1',
     effort: 'Medium',
     provider: 'muse',
-    isFav: false,
+    isFav: true,
     efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Muse',
     desc: 'Baseline Muse Spark agent model',
@@ -108,7 +108,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     name: 'GPT-5.6 Terra (GPT-4o)',
     effort: 'High',
     provider: 'openai',
-    isFav: true,
+    isFav: false,
     efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'OpenAI API',
     desc: 'Flagship OpenAI reasoning and autonomous execution',
@@ -130,7 +130,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     name: 'Claude 3.5 Sonnet',
     effort: 'High',
     provider: 'spark',
-    isFav: true,
+    isFav: false,
     efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Anthropic',
     desc: 'Frontier Claude agentic reasoning and tool execution',
@@ -566,7 +566,7 @@ export const InputDock: React.FC<InputDockProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Load saved favourite models from localStorage on mount
+  // Load saved favourite models from localStorage on mount (strictly Meta models)
   useEffect(() => {
     try {
       const savedFavs = localStorage.getItem('ai_composer_fav_models');
@@ -576,7 +576,7 @@ export const InputDock: React.FC<InputDockProps> = ({
           setModels((prev) =>
             prev.map((m) => ({
               ...m,
-              isFav: parsed.includes(m.id),
+              isFav: m.provider === 'muse' && parsed.includes(m.id),
             }))
           );
         }
@@ -708,6 +708,9 @@ export const InputDock: React.FC<InputDockProps> = ({
 
   const handleToggleFavStar = (e: React.MouseEvent, targetId: string) => {
     e.stopPropagation();
+    const targetModel = models.find((m) => m.id === targetId);
+    if (!targetModel || targetModel.provider !== 'muse') return;
+
     setModels((prev) => {
       const updated = prev.map((m) => {
         if (m.id !== targetId) return m;
@@ -720,7 +723,7 @@ export const InputDock: React.FC<InputDockProps> = ({
         setAutoMode(false);
       }
       try {
-        const favIds = updated.filter((m) => m.isFav).map((m) => m.id);
+        const favIds = updated.filter((m) => m.isFav && m.provider === 'muse').map((m) => m.id);
         localStorage.setItem('ai_composer_fav_models', JSON.stringify(favIds));
       } catch {
         // Ignore storage errors
@@ -2330,7 +2333,9 @@ export const InputDock: React.FC<InputDockProps> = ({
                         const isSelected = !autoMode && m.id === activeModelId;
                         const isHovered =
                           m.id === hoveredModelId && searchQuery.trim().length === 0;
-                        const isAvailable = m.hasRealApi !== false;
+                        const isSelectable =
+                          m.provider === 'muse' || m.provider === 'google' || m.id.startsWith('gemini');
+                        const isAvailable = isSelectable && m.hasRealApi !== false;
 
                         return (
                           <div
@@ -2361,9 +2366,19 @@ export const InputDock: React.FC<InputDockProps> = ({
                               scheduleHideEffortSubmenu();
                             }}
                             className={`aic-model-row ${isHovered ? 'active-hover' : ''} ${
-                              !isAvailable ? 'opacity-40 cursor-not-allowed select-none' : ''
+                              !isSelectable
+                                ? 'opacity-30 grayscale cursor-not-allowed select-none pointer-events-none'
+                                : !isAvailable
+                                  ? 'opacity-40 cursor-not-allowed select-none'
+                                  : ''
                             }`}
-                            title={!isAvailable ? `${m.name} (API endpoint not configured)` : m.desc || m.name}
+                            title={
+                              !isSelectable
+                                ? `${m.name} (Disabled)`
+                                : !isAvailable
+                                  ? `${m.name} (API endpoint not configured)`
+                                  : m.desc || m.name
+                            }
                           >
                             <div className="flex items-center gap-2 min-w-0 pr-1">
                               <span className="w-[26px] h-[26px] rounded-full bg-[#0c0c0f] flex items-center justify-center flex-shrink-0 border border-white/10">
@@ -2376,7 +2391,14 @@ export const InputDock: React.FC<InputDockProps> = ({
                                 >
                                   {m.name}
                                 </span>
-                                {isAvailable ? (
+                                {!isSelectable ? (
+                                  <span
+                                    className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded bg-white/5 font-mono"
+                                    style={{ color: 'var(--text-muted)' }}
+                                  >
+                                    Disabled
+                                  </span>
+                                ) : isAvailable ? (
                                   <span
                                     className="font-normal ml-1"
                                     style={{ color: 'var(--text-secondary)' }}
@@ -2392,7 +2414,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                                   </span>
                                 )}
                               </span>
-                              {isAvailable && (
+                              {isSelectable && m.provider === 'muse' && (
                                 <button
                                   type="button"
                                   onClick={(e) => handleToggleFavStar(e, m.id)}

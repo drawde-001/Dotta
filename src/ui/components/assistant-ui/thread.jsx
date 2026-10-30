@@ -544,6 +544,28 @@ const PROMOTED_VISUAL_TOOLS = new Set([
   "image_generation",
   "create_image",
   "edit_image",
+  "agent_plan",
+  "create_plan",
+  "update_plan",
+  "task_card",
+  "create_task_card",
+  "agent_status",
+  "status_badge",
+  "option_list",
+  "select_options",
+  "recommendation_card",
+  "recommend_decision",
+  "artifact_card",
+  "create_artifact_card",
+  "todo_list",
+  "create_todo_list",
+  "todos",
+  "agent_handoff",
+  "handoff_agent",
+  "background_inbox",
+  "background_runs",
+  "checkpoint_history",
+  "checkpoints",
 ]);
 
 function generateToolGroupTitle(tools) {
@@ -829,17 +851,6 @@ function AssistantMessageBody() {
             {renderToolCallPart(part)}
           </div>
         );
-        entries.push({
-          id: entryId,
-          kind: "tool",
-          label: getToolActivityLabel(part),
-          content: renderToolCallPart(part, {
-            forceFallback: true,
-            active: isLatestStep,
-            open: isOpen,
-            onOpenChange: (next) => setManualEntryId(next ? entryId : null),
-          }),
-        });
       } else {
         entries.push({
           id: entryId,

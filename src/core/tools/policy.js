@@ -22,6 +22,7 @@ export function validateToolSchema(schema, args) {
 
   const required = Array.isArray(schema.required) ? schema.required : [];
   for (const reqField of required) {
+    if (reqField === 'stepTitle' || reqField === 'step_title') continue;
     if (params[reqField] === undefined || params[reqField] === null || params[reqField] === '') {
       return {
         valid: false,
