@@ -30,7 +30,7 @@ export default function App() {
   const [activeInterrupt, setActiveInterrupt] = useState(null);
   const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [openFiles, setOpenFiles] = useState([]);
   const [activeTabId, setActiveTabId] = useState('browser');
 
@@ -742,33 +742,13 @@ export default function App() {
       {/* Main Split Body wrapped with AssistantRuntimeProvider */}
       <AssistantRuntimeProvider runtime={runtime}>
         <div className="flex-1 flex overflow-hidden relative">
-          {/* Far Left: ThreadListSidebar */}
+          {/* Far Left: ThreadListSidebar - ACTUALLY VISIBLE ON THE LEFT */}
           {sidebarOpen && (
             <ThreadListSidebar className="w-64 shrink-0 h-full border-r border-[#1F1F26] bg-[#0c0c0e] z-30" />
           )}
 
-          {/* Left Workspace Panel (The Browser Space & Opened Files) */}
-          {workspaceMode === 'work' && (
-            <WorkspacePanel
-              streamState={streamState}
-              onSimulateUrlChange={(newUrl) =>
-                setStreamState((prev) => ({ ...prev, url: newUrl }))
-              }
-              onManualNavigate={(targetUrl) =>
-                handleSendMessage(`Navigate to ${targetUrl}`)
-              }
-              onSendWsMessage={handleSendWsMessage}
-              openFiles={openFiles}
-              activeTabId={activeTabId}
-              onSelectTab={(tabId) => setActiveTabId(tabId)}
-              onCloseFileTab={handleCloseFileTab}
-              onOpenFile={handleOpenFileTab}
-              onClosePanel={handleCloseWorkspace}
-            />
-          )}
-
-          {/* Chat Panel (Flex-1 on the Right) */}
-          <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+          {/* Center: Chat Panel (Hero or Message Thread) */}
+          <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
             {messages.length === 0 ? (
               /* Centered Hero View */
               <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
@@ -850,6 +830,25 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* Right: Workspace Panel (Browser and File view on the RIGHT side) */}
+          {workspaceMode === 'work' && (
+            <WorkspacePanel
+              streamState={streamState}
+              onSimulateUrlChange={(newUrl) =>
+                setStreamState((prev) => ({ ...prev, url: newUrl }))
+              }
+              onManualNavigate={(targetUrl) =>
+                handleSendMessage(`Navigate to ${targetUrl}`)
+              }
+              onSendWsMessage={handleSendWsMessage}
+              openFiles={openFiles}
+              activeTabId={activeTabId}
+              onSelectTab={(tabId) => setActiveTabId(tabId)}
+              onCloseFileTab={handleCloseFileTab}
+              onClosePanel={handleCloseWorkspace}
+            />
+          )}
         </div>
       </AssistantRuntimeProvider>
     </div>
