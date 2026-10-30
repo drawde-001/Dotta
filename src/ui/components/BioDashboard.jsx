@@ -157,6 +157,8 @@ export function BioDashboard() {
   const [photoUrl, setPhotoUrl] = useState('');
   const [renaming, setRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState({ fullName: '', headline: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [entryModal, setEntryModal] = useState(false);
   const [entryForm, setEntryForm] = useState({ name: '', type: 'document', description: '' });
@@ -366,6 +368,22 @@ export function BioDashboard() {
         { method: 'DELETE' }
       );
       patchLocalProfile({ ...profile, entries: data.entries });
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const patchEntry = async (entryId, patch) => {
+    if (!profile) return;
+    try {
+      const data = await bioApi(`/api/bio/entries/${encodeURIComponent(entryId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ profileId: profile.id, ...patch })
+      });
+      patchLocalProfile({
+        ...profile,
+        entries: entries.map((e) => (e.id === entryId ? data.entry : e))
+      });
     } catch (err) {
       setError(err.message);
     }
@@ -599,10 +617,26 @@ export function BioDashboard() {
               </button>
               <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
               <div className="absolute inset-x-0 bottom-4 left-5 right-5 z-20 flex flex-col gap-2">
-                <div>
-                  <h2 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-md">
-                    {fields.fullName || 'Your name'}
-                  </h2>
+                <div
+                  className="group/name cursor-pointer"
+                  title="Edit name and headline"
+                  onClick={() => {
+                    setNameDraft({
+                      fullName: fields.fullName || '',
+                      headline: fields.headline || ''
+                    });
+                    setEditingName(true);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-2xl font-bold tracking-tight text-white drop-shadow-md">
+                      {fields.fullName || 'Your name'}
+                    </h2>
+                    <Pencil
+                      size={14}
+                      className="shrink-0 text-zinc-300 opacity-0 transition-opacity group-hover/name:opacity-100"
+                    />
+                  </div>
                   <p className="mt-0.5 truncate text-xs font-medium tracking-wide text-zinc-300 drop-shadow">
                     {fields.headline || 'Add your headline'}
                   </p>
@@ -627,6 +661,43 @@ export function BioDashboard() {
             </div>
 
             <div className="flex flex-col gap-4 p-5 text-sm">
+              {editingName && (
+                <div className="flex flex-col gap-2 rounded-xl border border-zinc-700/60 bg-zinc-900/60 p-3">
+                  <input
+                    value={nameDraft.fullName}
+                    onChange={(e) => setNameDraft((d) => ({ ...d, fullName: e.target.value }))}
+                    placeholder="Full name"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                  />
+                  <input
+                    value={nameDraft.headline}
+                    onChange={(e) => setNameDraft((d) => ({ ...d, headline: e.target.value }))}
+                    placeholder="Headline"
+                    className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-zinc-500"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await saveField('fullName', nameDraft.fullName);
+                        await saveField('headline', nameDraft.headline);
+                        setEditingName(false);
+                      }}
+                      className="flex items-center gap-1 rounded-lg bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-950 hover:bg-white"
+                    >
+                      <Check size={13} /> Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingName(false)}
+                      className="rounded-lg bg-zinc-800 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-3">
                 <span className="text-xs font-medium text-zinc-400">Full name &amp; headline</span>
                 <Editable
@@ -938,10 +1009,24 @@ export function BioDashboard() {
                           {entry.file?.name
                             ? `${entry.file.name}${entry.file.size ? ` · ${formatSize(entry.file.size)}` : ''}`
                             : entry.type === 'audio' || entry.type === 'video'
-                              ? 'Stored only · Agent cannot read yet'
+                              ? entry.agentReadable
+                                ? 'Agent access granted by you'
+                                : 'Stored only · Agent cannot read yet'
                               : 'No file attached'}
                         </span>
                       </div>
+                      {(entry.type === 'audio' || entry.type === 'video') && (
+                        <div className="flex items-center justify-between border-t border-white/[0.04] pt-2">
+                          <span className="text-[11px] text-zinc-500">
+                            Agent can read this {entry.type}
+                          </span>
+                          <Toggle
+                            label="Grant"
+                            checked={!!entry.agentReadable}
+                            onChange={(v) => patchEntry(entry.id, { agentReadable: v })}
+                          />
+                        </div>
+                      )}
                     </div>
                   );
                 })}

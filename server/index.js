@@ -1,6 +1,7 @@
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import express from 'express';
 import cors from 'cors';
@@ -50,6 +51,55 @@ const PORT = process.env.PORT || 3001;
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
 app.use(cookieParser());
+
+// Server-issued anonymous session: the user ID is bound by the server into a
+// signed httpOnly cookie. On first contact an existing client ID is adopted
+// (preserving the user's sandbox/BIO data); after that the signed cookie is
+// authoritative and client-supplied IDs are ignored. Real auth can replace
+// this later without changing any route.
+const SESSION_COOKIE = 'omni_session';
+function getSessionSecret() {
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  const secretPath = path.resolve(__dirname, '../src/data/.session-secret');
+  try {
+    if (fs.existsSync(secretPath)) return fs.readFileSync(secretPath, 'utf8').trim();
+  } catch {}
+  const secret = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.mkdirSync(path.dirname(secretPath), { recursive: true });
+    fs.writeFileSync(secretPath, secret, 'utf8');
+  } catch {}
+  return secret;
+}
+const SESSION_SECRET = getSessionSecret();
+function signUserId(id) {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(id).digest('hex').slice(0, 32);
+}
+
+app.use((req, res, next) => {
+  const raw = String(req.cookies?.[SESSION_COOKIE] || '');
+  const dot = raw.lastIndexOf('.');
+  let userId = null;
+  if (dot > 0) {
+    const candidate = raw.slice(0, dot);
+    const sig = raw.slice(dot + 1);
+    if (sanitizeUserId(candidate) && sig === signUserId(candidate)) {
+      userId = candidate;
+    }
+  }
+  if (!userId) {
+    userId = sanitizeUserId(req.get('x-user-id')) || `user-${crypto.randomUUID()}`;
+    res.cookie(SESSION_COOKIE, `${userId}.${signUserId(userId)}`, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 1000 * 60 * 60 * 24 * 365
+    });
+  }
+  req.userId = userId;
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 
 const server = http.createServer(app);
@@ -439,7 +489,10 @@ app.post('/api/attachments/process', async (req, res) => {
 // Per-user sandboxed workspace (one isolated folder per user ID).
 // Only files inside workspaces/user-<userId>/ are ever listed or read.
 function requireSandboxUserId(req, res) {
-  const userId = sanitizeUserId(req.get('x-user-id') || req.query.userId || req.body?.userId);
+  // Server session is authoritative; header/body IDs are only a first-contact fallback.
+  const userId =
+    sanitizeUserId(req.userId) ||
+    sanitizeUserId(req.get('x-user-id') || req.query.userId || req.body?.userId);
   if (!userId) {
     res.status(400).json({ ok: false, error: 'Missing or invalid user id' });
     return null;
@@ -635,8 +688,12 @@ app.patch('/api/bio/entries/:id', (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
-    const { profileId, name, description } = req.body || {};
-    const entry = bioUpdateEntry(userId, String(profileId || ''), req.params.id, { name, description });
+    const { profileId, name, description, agentReadable } = req.body || {};
+    const entry = bioUpdateEntry(userId, String(profileId || ''), req.params.id, {
+      name,
+      description,
+      agentReadable
+    });
     res.json({ ok: true, entry });
   } catch (err) {
     bioFail(res, err);

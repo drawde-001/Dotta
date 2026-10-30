@@ -40,7 +40,8 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
     const resume = body.resume || null;
     const mode = body.mode || 'turbo';
     // Per-user sandbox: agent file tools are confined to this user's folder.
-    const userId = sanitizeUserId(body.userId || req.get('x-user-id'));
+    // The server-issued session (req.userId) wins over any client-supplied ID.
+    const userId = sanitizeUserId(req.userId || body.userId || req.get('x-user-id'));
     const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
 
     console.log(
