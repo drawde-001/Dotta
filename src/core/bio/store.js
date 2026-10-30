@@ -25,6 +25,8 @@ export const BIO_FIELDS = [
   { id: 'address', label: 'Address', type: 'text', description: 'Full postal address. Often missing; ask before using.' },
   { id: 'socialLinks', label: 'Social links', type: 'object', description: 'GitHub, LinkedIn, X and Instagram profile URLs.' },
   { id: 'website', label: 'Personal website', type: 'url', description: 'Personal website or portfolio URL. Core field for applications.' },
+  { id: 'email', label: 'Email', type: 'text', description: 'Contact email used on applications and forms.' },
+  { id: 'phone', label: 'Phone', type: 'text', description: 'Contact phone number used on applications and forms.' },
   { id: 'cv', label: 'CV / Resume', type: 'file', description: 'CV or resume file reference (name and sandbox path). Core field.' },
   { id: 'background', label: 'Background / Biography', type: 'text', description: 'Biography / background summary of the user.' },
   { id: 'interests', label: 'Interests', type: 'list', description: 'Professional interests and focus areas.' },
@@ -70,6 +72,8 @@ function emptyFields() {
     address: '',
     socialLinks: { github: '', linkedin: '', x: '', instagram: '' },
     website: '',
+    email: '',
+    phone: '',
     cv: null,
     background: '',
     interests: [],
@@ -98,6 +102,8 @@ function seedProfile() {
       residence: 'San Francisco, California, US',
       stateOfOrigin: 'Washington, US',
       website: 'https://alexmorgan.dev',
+      email: 'alex.morgan@example.com',
+      phone: '+1 (555) 010-2026',
       socialLinks: {
         github: 'https://github.com',
         linkedin: 'https://linkedin.com',
@@ -322,6 +328,9 @@ export function updateEntry(userId, profileId, entryId, patch = {}) {
   }
   if (typeof patch.agentReadable === 'boolean') {
     entry.agentReadable = patch.agentReadable;
+  }
+  if (typeof patch.textContent === 'string') {
+    entry.textContent = patch.textContent.slice(0, 20000);
   }
   profile.updatedAt = Date.now();
   saveUserBio(userId, doc);

@@ -767,6 +767,24 @@ export function BioDashboard() {
               </div>
 
               <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-3">
+                <span className="text-xs font-medium text-zinc-400">Contact</span>
+                <div className="flex flex-col gap-1 text-xs text-zinc-200">
+                  <div className="flex items-baseline gap-2">
+                    <span className="w-28 shrink-0 font-mono text-zinc-400">Email:</span>
+                    <div className="min-w-0 flex-1">
+                      <Editable value={fields.email} placeholder="Add email" onSave={(v) => saveField('email', v)} />
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="w-28 shrink-0 font-mono text-zinc-400">Phone:</span>
+                    <div className="min-w-0 flex-1">
+                      <Editable value={fields.phone} placeholder="Add phone" onSave={(v) => saveField('phone', v)} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-zinc-400">CV / Resume</span>
                   <label className="flex cursor-pointer items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-100">
