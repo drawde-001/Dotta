@@ -44,7 +44,7 @@ function sandboxAbsPath(userId, relPath) {
   }
 }
 
-async function extractFileText(absPath, mime, name) {
+export async function extractFileText(absPath, mime, name) {
   const buffer = fs.readFileSync(absPath);
   if (/\.pdf$/i.test(name || '') || mime === 'application/pdf') {
     const data = await pdfParse(buffer);
@@ -216,11 +216,30 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
     values[id] = profile.fields[id] ?? null;
   }
 
+  // Narrative text must be reworded per application (never pasted verbatim,
+  // so two applications are not identical). Facts always stay exact.
+  const REWORD_FIELDS = ['background', 'hobbyProjects', 'ideas'];
+  const rewordBeforeUse = ids.filter(
+    (id) =>
+      REWORD_FIELDS.includes(String(id)) ||
+      (String(id).startsWith('entry:') &&
+        (profile.entries || []).some(
+          (e) => `entry:${e.id}` === String(id) && e.type === 'document'
+        ))
+  );
+
   return JSON.stringify(
     {
       profileName: profile.name,
       values,
       ...(Object.keys(uploads).length ? { uploads } : {}),
+      ...(rewordBeforeUse.length
+        ? {
+            rewordBeforeUse,
+            rewordNote:
+              'Rewrite these narrative fields in your own words, tailored to this specific role/company — never paste them word-for-word. Keep all factual data exact (names, email, phone, address, locations, dates, job titles, companies, URLs, skills keywords).'
+          }
+        : {}),
       ...(notes.length ? { notes } : {})
     },
     null,
