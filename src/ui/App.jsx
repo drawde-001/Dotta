@@ -8,6 +8,9 @@ import { Thread } from '@/components/assistant-ui/thread';
 import { InputDock } from '@/components/InputDock';
 import { ThreadListSidebar } from '@/components/assistant-ui/elements/threadlist-sidebar.aui';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
+import { AppRail } from '@/components/AppRail';
+import { BioDashboard } from '@/components/BioDashboard';
+import { AgentChatCard } from '@/components/AgentChatCard';
 import {
   Globe,
   PenLine,
@@ -17,9 +20,9 @@ import {
   Columns,
   Zap,
   Shuffle,
-  PanelLeft,
-  PanelRight,
-  Plus
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightOpen
 } from 'lucide-react';
 
 export default function App() {
@@ -31,6 +34,7 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [view, setView] = useState('bio');
   const [openFiles, setOpenFiles] = useState([]);
   const [activeTabId, setActiveTabId] = useState('browser');
 
@@ -724,80 +728,71 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
-      {/* Top Header Bar */}
-      <header className="h-11 px-4 flex items-center justify-between shrink-0 bg-[#08080A] border-b border-[#1F1F26] z-30">
-        {/* Left: Sidebar Toggle & Brand */}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-            title={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
-          >
-            <PanelLeft size={16} />
-          </button>
-          <span className="font-semibold text-sm text-white tracking-tight">OmniAgent</span>
-        </div>
-
-        {/* Center: Chat | Work Switcher */}
-        <div className="flex items-center bg-[#18181E] border border-[#2C2C35] rounded-full p-0.5 gap-1">
-          <button
-            type="button"
-            onClick={handleCloseWorkspace}
-            className={`px-3.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-              workspaceMode === 'chat'
-                ? 'bg-white/12 text-white font-semibold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setWorkspaceMode('work');
-              if (!activeTabId) setActiveTabId('browser');
-            }}
-            className={`px-3.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
-              workspaceMode === 'work'
-                ? 'bg-white/12 text-white font-semibold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            Work
-          </button>
-        </div>
-
-        {/* Right: Workspace Toggle Button & New Chat */}
-        <div className="flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={handleNewChat}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-            title="New Conversation"
-          >
-            <Plus size={15} />
-          </button>
-          <button
-            type="button"
-            onClick={() => (workspaceMode === 'chat' ? setWorkspaceMode('work') : handleCloseWorkspace())}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
-            title={workspaceMode === 'chat' ? 'Open workspace panel' : 'Hide workspace panel'}
-          >
-            <PanelRight size={15} />
-          </button>
-        </div>
-      </header>
+    <div className="flex h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
+      {/* Left icon rail: Home / BIO are the only clickable tabs */}
+      <AppRail view={view} onSelectView={setView} />
 
       {/* Main Split Body wrapped with AssistantRuntimeProvider */}
       <AssistantRuntimeProvider runtime={runtime}>
         <div className="flex-1 flex overflow-hidden relative">
-          {/* Far Left: ThreadListSidebar - ACTUALLY VISIBLE ON THE LEFT */}
-          {sidebarOpen && (
-            <ThreadListSidebar className="w-64 shrink-0 h-full border-r border-[#1F1F26] bg-[#0c0c0e] z-30" />
+          {/* Threads panel (Home view only): rounded, collapsible */}
+          {view === 'home' && sidebarOpen && (
+            <div className="relative z-30 my-2 mr-2 flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
+              <ThreadListSidebar className="min-h-0 w-full flex-1 border-none bg-transparent" />
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                aria-label="Collapse threads panel"
+                title="Collapse panel"
+                className="absolute right-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200"
+              >
+                <PanelLeftClose size={16} />
+              </button>
+            </div>
           )}
 
+          {view === 'home' && !sidebarOpen && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open threads panel"
+              title="Open threads"
+              className="absolute left-[64px] top-[20px] z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+            >
+              <PanelLeftOpen size={16} />
+            </button>
+          )}
+
+          {/* Rounded canvas */}
+          <div className="min-w-0 flex-1 py-2 pr-2">
+            <div className="relative flex h-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#101013] shadow-xl sm:rounded-[28px]">
+          {view === 'bio' ? (
+            <>
+              <div className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+                <BioDashboard />
+              </div>
+              <AgentChatCard
+                messages={messages}
+                isWorking={isRunning}
+                composer={
+                  <InputDock
+                    heroMode={false}
+                    maxWidth="100%"
+                    onSendMessage={handleSendMessage}
+                    isWorking={isRunning}
+                    onStopWorking={handleCancel}
+                    selectedModel={selectedModel}
+                    onSelectModel={setSelectedModel}
+                    mode={agentMode}
+                    onChangeMode={setAgentMode}
+                    activeInterrupt={activeInterrupt}
+                    onResolveInterrupt={handleResolveInterrupt}
+                  />
+                }
+              />
+            </>
+          ) : (
+          <>
           {/* Center: Chat Panel (Hero or Message Thread) */}
           <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
             {messages.length === 0 ? (
@@ -863,7 +858,7 @@ export default function App() {
                 </div>
 
                 {/* Bottom Docked Composer */}
-                <div className="shrink-0 p-3 bg-[#08080A] border-t border-[#1F1F26] max-w-3xl w-full mx-auto">
+                <div className="shrink-0 p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
                   <InputDock
                     heroMode={false}
                     maxWidth="100%"
@@ -881,9 +876,11 @@ export default function App() {
               </div>
             )}
           </div>
+          </>
+          )}
 
-          {/* Right: Workspace Panel (Browser and File view on the RIGHT side) */}
-          {workspaceMode === 'work' && (
+          {/* Right: Workspace Panel (Home view, right edge of canvas) */}
+          {view === 'home' && workspaceMode === 'work' && (
             <WorkspacePanel
               streamState={streamState}
               onSimulateUrlChange={(newUrl) =>
@@ -900,6 +897,20 @@ export default function App() {
               onClosePanel={handleCloseWorkspace}
             />
           )}
+
+          {view === 'home' && workspaceMode === 'chat' && (
+            <button
+              type="button"
+              onClick={() => setWorkspaceMode('work')}
+              aria-label="Open workspace panel"
+              title="Open workspace panel"
+              className="absolute right-3 top-3 z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+            >
+              <PanelRightOpen size={16} />
+            </button>
+          )}
+            </div>
+          </div>
         </div>
       </AssistantRuntimeProvider>
     </div>

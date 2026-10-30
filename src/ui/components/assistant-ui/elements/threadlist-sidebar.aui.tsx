@@ -30,7 +30,7 @@ export function ThreadListSidebar({
                   </div>
                   <div className="aui-sidebar-header-heading me-6 flex flex-col gap-0.5 leading-none">
                     <span className="aui-sidebar-header-title font-semibold text-sm text-white">
-                      OmniAgent
+                      Omni Agent
                     </span>
                     <span className="text-[11px] text-zinc-400">
                       Threads
