@@ -993,24 +993,80 @@ function AssistantMessageBody() {
 
   if (entries.length > 0) {
     return (
-      <RunActivity
-        status={status}
-        statusLabel={statusLabel}
-        durationLabel={durationLabel}
-        entries={entries}
-        open={groupOpen}
-        onOpenChange={(next) => {
-          setUserOpen(next);
-          if (!next) setManualEntryId(null);
-        }}
-      >
-        {finalAnswerNode}
-      </RunActivity>
+      <div className="flex flex-col gap-3">
+        <RunActivity
+          status={status}
+          statusLabel={statusLabel}
+          durationLabel={durationLabel}
+          entries={entries}
+          open={groupOpen}
+          onOpenChange={(next) => {
+            setUserOpen(next);
+            if (!next) setManualEntryId(null);
+          }}
+        />
+        {promotedVisualNodes.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {promotedVisualNodes}
+          </div>
+        )}
+        {finalAnswerParts.length > 0 && (
+          <div className="flex flex-col gap-3 text-foreground leading-relaxed">
+            {finalAnswerParts.map((part, idx) => {
+              const cleanText =
+                promotedVisualNodes.length > 0
+                  ? String(part.text || "").replace(/!\[[^\]]*\]\(\/api\/images\/[^)]+\)/g, "").trim()
+                  : part.text;
+              if (!cleanText) return null;
+              return <MarkdownText key={part.id || `ans-${idx}`} text={cleanText} />;
+            })}
+            {sourceParts.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {sourceParts.map((sp, i) => (
+                  <Sources key={sp.id || i} {...sp} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     );
   }
 
-  if (finalAnswerNode) {
-    return finalAnswerNode;
+  if (promotedVisualNodes.length > 0 || finalAnswerParts.length > 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        {promotedVisualNodes.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {promotedVisualNodes}
+          </div>
+        )}
+        {finalAnswerParts.length > 0 && (
+          <div className="flex flex-col gap-3 text-foreground leading-relaxed">
+            {finalAnswerParts.map((part, idx) => {
+              const cleanText =
+                promotedVisualNodes.length > 0
+                  ? String(part.text || "").replace(/!\[[^\]]*\]\(\/api\/images\/[^)]+\)/g, "").trim()
+                  : part.text;
+              if (!cleanText) return null;
+              return <MarkdownText key={part.id || `ans-${idx}`} text={cleanText} />;
+            })}
+            {sourceParts.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {sourceParts.map((sp, i) => (
+                  <Sources key={sp.id || i} {...sp} />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {isRunning && (
+          <div className="py-2">
+            <ThinkingIndicator label={activeRunningLabel} startTime={runStartedAt} />
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (isRunning) {

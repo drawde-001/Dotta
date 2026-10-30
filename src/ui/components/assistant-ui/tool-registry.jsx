@@ -172,8 +172,20 @@ export function getToolActivityLabel(part) {
   if (lower === 'snapshot_read' || lower === 'browser_screenshot') {
     return 'Inspecting live browser page';
   }
-  if (lower.includes('plan') || lower === 'todo_list') {
+  if (lower.includes('plan') || lower === 'todo_list' || lower === 'create_todo_list') {
     return 'Planning next steps';
+  }
+  if (lower === 'recommendation_card' || lower === 'recommend_decision') {
+    return 'Evaluating recommendation';
+  }
+  if (lower === 'task_card' || lower === 'create_task_card') {
+    return args?.label ? `Task: ${args.label}` : 'Updating task';
+  }
+  if (lower === 'checkpoint_history' || lower === 'checkpoints') {
+    return 'Recording checkpoint';
+  }
+  if (lower === 'background_inbox' || lower === 'background_runs') {
+    return 'Checking background tasks';
   }
   if (lower.includes('subagent') || lower === 'invoke_subagent') {
     return 'Delegating to subagent';
@@ -292,12 +304,160 @@ registerToolComponent(['code_diff', 'patch_preview'], ({ args }) => {
 
 registerToolComponent(['agent_plan', 'create_plan'], ({ args, result }) => {
   const planData = result || args || {};
+  const rawSteps = Array.isArray(planData.steps) ? planData.steps : [];
+  const normalizedSteps = rawSteps.map((st, i) =>
+    typeof st === 'string'
+      ? { title: st, status: i === 0 ? 'running' : 'pending' }
+      : {
+          title: st.title || st.label || `Step ${i + 1}`,
+          description: st.description,
+          status: st.status || (i === 0 ? 'running' : 'pending')
+        }
+  );
   return (
     <div className="my-1.5">
       <AgentPlan
         title={planData.title || 'Plan'}
-        steps={planData.steps || []}
+        steps={normalizedSteps.length > 0 ? normalizedSteps : undefined}
         activeIndex={planData.activeIndex ?? 0}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['task_card', 'create_task_card'], ({ args, result }) => {
+  const p = result || args || {};
+  return (
+    <div className="my-1.5">
+      <TaskCard
+        label={p.label || 'Task'}
+        state={p.state || 'done'}
+        meta={p.meta}
+        elapsed={p.elapsed}
+        result={p.result}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['agent_status', 'status_badge'], ({ args, result }) => {
+  const p = result || args || {};
+  return (
+    <div className="my-1.5">
+      <AgentStatus
+        state={p.state || 'working'}
+        label={p.label || 'Status'}
+        elapsed={p.elapsed}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['option_list', 'select_options'], ({ args, result }) => {
+  const p = result || args || {};
+  const rawOptions = Array.isArray(p.options) ? p.options : [];
+  const normalized = rawOptions.map((opt, i) =>
+    typeof opt === 'string' ? { id: `opt-${i}`, label: opt } : opt
+  );
+  return (
+    <div className="my-1.5">
+      <OptionList
+        options={normalized}
+        selectionMode={p.selectionMode || 'single'}
+        choice={p.choice}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['recommendation_card', 'recommend_decision'], ({ args, result }) => {
+  const p = result || args || {};
+  return (
+    <div className="my-1.5">
+      <RecommendationCard
+        state={p.state || 'idle'}
+        question={p.question || 'Recommendation'}
+        confidenceLabel={p.confidenceLabel || '95% confidence'}
+        acceptedLabel={p.acceptedLabel || 'Accepted recommendation'}
+      >
+        {p.description || p.children || p.reason || 'Recommended path forward.'}
+      </RecommendationCard>
+    </div>
+  );
+});
+
+registerToolComponent(['artifact_card', 'create_artifact_card'], ({ args, result }) => {
+  const p = result || args || {};
+  return (
+    <div className="my-1.5">
+      <ArtifactCard
+        title={p.title || 'Artifact'}
+        meta={p.meta || 'Document'}
+        words={p.words || 0}
+        generating={p.generating || false}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['todo_list', 'create_todo_list'], ({ args, result }) => {
+  const p = result || args || {};
+  const rawItems = Array.isArray(p.items) ? p.items : [];
+  const normalized = rawItems.map((item, i) =>
+    typeof item === 'string'
+      ? { id: `todo-${i}`, text: item, status: i === 0 ? 'active' : 'pending' }
+      : {
+          id: item.id || `todo-${i}`,
+          text: item.text || item.label || `Item ${i + 1}`,
+          status: item.status || 'pending',
+          description: item.description
+        }
+  );
+  return (
+    <div className="my-1.5">
+      <TodoList
+        title={p.title || 'Todos'}
+        items={normalized}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['agent_handoff', 'handoff_agent'], ({ args, result }) => {
+  const p = result || args || {};
+  return (
+    <div className="my-1.5">
+      <AgentHandoff
+        from={p.from || 'Omni Agent'}
+        to={p.to || 'Specialist Agent'}
+        reason={p.reason || 'Delegating specialized workflow'}
+        carried={Array.isArray(p.carried) ? p.carried : [p.carried || 'Task context']}
+        settled={p.settled ?? true}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['background_inbox', 'background_runs'], ({ args, result }) => {
+  const p = result || args || {};
+  const rawRuns = Array.isArray(p.runs) ? p.runs : [];
+  return (
+    <div className="my-1.5">
+      <BackgroundInbox
+        runs={rawRuns}
+      />
+    </div>
+  );
+});
+
+registerToolComponent(['checkpoint_history', 'checkpoints'], ({ args, result }) => {
+  const p = result || args || {};
+  const rawCheckpoints = Array.isArray(p.checkpoints) ? p.checkpoints : [];
+  return (
+    <div className="my-1.5">
+      <CheckpointHistory
+        checkpoints={rawCheckpoints}
+        currentId={p.currentId || (rawCheckpoints[0]?.id ?? 'chk-1')}
       />
     </div>
   );
@@ -306,10 +466,24 @@ registerToolComponent(['agent_plan', 'create_plan'], ({ args, result }) => {
 registerToolComponent(['web_search', 'search_web'], ({ args, result, status }) => {
   const query = args?.query || args?.q || 'Web search';
   const searching = status?.type === 'running';
-  const rawItems = Array.isArray(result?.results)
-    ? result.results
-    : Array.isArray(result)
-      ? result
+  let parsed = result;
+  if (typeof result === 'string') {
+    try {
+      parsed = JSON.parse(result);
+    } catch {
+      const linkMatches = [...result.matchAll(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g)];
+      if (linkMatches.length > 0) {
+        parsed = {
+          results: linkMatches.map((m) => ({ title: m[1], url: m[2] }))
+        };
+      }
+    }
+  }
+
+  const rawItems = Array.isArray(parsed?.results)
+    ? parsed.results
+    : Array.isArray(parsed)
+      ? parsed
       : [];
   const results = rawItems
     .map((item) => {

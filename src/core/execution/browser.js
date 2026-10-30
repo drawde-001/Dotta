@@ -42,6 +42,40 @@ function stripHtml(html) {
 }
 
 /**
+ * Hostname of a URL without a leading "www." (falls back to the raw value)
+ */
+function getDomain(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return String(url || '').slice(0, 60);
+  }
+}
+
+/**
+ * Blocks loopback, private, link-local and internal hostnames (SSRF guard)
+ */
+function isBlockedHost(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return true;
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
+    return true;
+  }
+  if (host === '::1' || host === '::' || host.startsWith('fe80:') || host.startsWith('fc') || host.startsWith('fd')) {
+    return true;
+  }
+  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 0 || a === 10 || a === 127) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+  }
+  return false;
+}
+
+/**
  * Executes a live web search using DuckDuckGo HTML endpoint
  */
 export async function executeWebSearch({ query }) {
@@ -117,15 +151,24 @@ export async function executeWebSearch({ query }) {
     }
 
     if (results.length > 0) {
-      return (
-        `### Web Search Results for "${cleanQuery}":\n\n` +
-        results
-          .map((r) => `${r.index}. **[${r.title}](${r.url})**\n   ${r.snippet || 'No description preview available.'}`)
-          .join('\n\n')
-      );
+      return JSON.stringify({
+        query: cleanQuery,
+        source: 'duckduckgo',
+        results: results.map((r) => ({
+          title: r.title,
+          url: r.url,
+          domain: getDomain(r.url),
+          snippet: (r.snippet || '').slice(0, 240)
+        }))
+      });
     }
 
-    return `No direct search results found for "${cleanQuery}". You can refine the query or navigate to a target website using browser_read_page.`;
+    return JSON.stringify({
+      query: cleanQuery,
+      source: 'duckduckgo',
+      results: [],
+      note: `No direct search results found for "${cleanQuery}". Refine the query, or read a known page with web_fetch.`
+    });
   } catch (err) {
     return `Web search failed: ${err.message}`;
   } finally {
