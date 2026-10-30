@@ -59,6 +59,7 @@ export default function App() {
   const abortControllerRef = useRef(null);
   const wsRef = useRef(null);
   const browserIdleTimerRef = useRef(null);
+  const currentThreadIdRef = useRef(`thread-${Date.now()}`);
 
   // Listen for open file events from FileSystemArtifact in chat
   useEffect(() => {
@@ -172,6 +173,7 @@ export default function App() {
 
   const handleNewChat = () => {
     if (isRunning) return;
+    currentThreadIdRef.current = `thread-${Date.now()}`;
     setMessages([]);
     setActiveInterrupt(null);
   };
@@ -226,7 +228,9 @@ export default function App() {
     const assistantMsgId = `asst-${now}`;
 
     let newMessages;
-    if (options.isResume) {
+    if (options.baseMessages) {
+      newMessages = options.baseMessages;
+    } else if (options.isResume) {
       newMessages = messages.map((m, idx) => {
         if (idx === messages.length - 1 && m.role === 'assistant') {
           return {
@@ -277,6 +281,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          threadId: currentThreadIdRef.current,
           instruction: chatInstruction,
           messages: newMessages
             .filter((m) => m.id !== assistantMsgId)
@@ -422,12 +427,10 @@ export default function App() {
                   startedAt: Date.now()
                 });
 
-                // Auto-open live browser when browser tool runs
+                // Auto-open live browser only when interactive browser tools run (not background web_search)
                 if (
                   event.name.startsWith('browser_') ||
-                  event.name.startsWith('snapshot_') ||
-                  event.name === 'web_search' ||
-                  event.name === 'read_page'
+                  event.name.startsWith('snapshot_')
                 ) {
                   setWorkspaceMode('work');
                 }
@@ -469,14 +472,15 @@ export default function App() {
                 last.runCompletedAt = Date.now();
                 last.runStatus = 'complete';
 
-                // Auto-terminate browser and hide workspace panel after 30s of inactivity when done
+                // End of run: kill browser instance after 30s
                 if (browserIdleTimerRef.current) {
                   clearTimeout(browserIdleTimerRef.current);
                 }
                 browserIdleTimerRef.current = setTimeout(() => {
-                  console.log('[App] 30s inactivity reached after run. Auto-closing workspace panel...');
+                  console.log('[App] 30s reached after run. Killing live browser instance...');
                   setWorkspaceMode('chat');
                   handleSendWsMessage({ type: 'close_browser' });
+                  fetch('/api/browser/close', { method: 'POST' }).catch(() => {});
                 }, 30000);
               } else if (event.type === 'RUN_ERROR') {
                 settleReasoning();
@@ -560,24 +564,30 @@ export default function App() {
       }
     ];
 
+    const qaPart = {
+      type: 'submitted-ask-user',
+      id: `submitted-qa-${Date.now()}`,
+      questions: questionsAndAnswers
+    };
+
     // Prepend the Submitted QA Card directly into the assistant message in thread (Screenshot 1)
-    setMessages((prev) => {
-      const updated = [...prev];
-      const last = { ...updated[updated.length - 1] };
-      const contentParts = [...(last.content || [])];
-      contentParts.push({
-        type: 'submitted-ask-user',
-        id: `submitted-qa-${Date.now()}`,
-        questions: questionsAndAnswers
-      });
-      last.content = contentParts;
-      last.runStatus = 'running';
-      updated[updated.length - 1] = last;
-      return updated;
+    const nextMessages = messages.map((m, idx) => {
+      if (idx === messages.length - 1 && m.role === 'assistant') {
+        const existingParts = Array.isArray(m.content) ? [...m.content] : [];
+        return {
+          ...m,
+          content: [...existingParts, qaPart],
+          runStatus: 'running'
+        };
+      }
+      return m;
     });
+
+    setMessages(nextMessages);
 
     await handleSendMessage(answerText, {
       isResume: true,
+      baseMessages: nextMessages,
       resume: {
         toolName: interrupt.metadata?.toolName,
         approved: payload?.approved,

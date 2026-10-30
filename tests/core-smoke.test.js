@@ -30,6 +30,7 @@ console.log('--- Starting Omni Core Smoke Tests ---\n');
 console.log('[Test 1] Verifying Tool Catalog & Scoping...');
 assert(AGENT_TOOLS_CATALOG.file_read, 'file_read should exist in catalog');
 assert(AGENT_TOOLS_CATALOG.shell_run, 'shell_run should exist in catalog');
+assert(AGENT_TOOLS_CATALOG.web_search, 'web_search should exist in catalog');
 assert(AGENT_TOOLS_CATALOG.browser_search, 'browser_search should exist in catalog');
 
 const scoped = getScopedTools({ phase: 'all' });
@@ -127,6 +128,16 @@ console.log('[Test 7] Verifying OmniEngine...');
 const engine = new OmniEngine();
 assert(typeof engine.run === 'function', 'engine.run should be a function');
 console.log('✓ OmniEngine verified.\n');
+
+// 8. Interrupt History & Auto-Resolution Persistence
+console.log('[Test 8] Verifying Interrupt Persistence & Question History...');
+import { recordInterruptHistory, getInterruptAnswer, deleteThread } from '../src/index.js';
+const testThreadId = `test-thread-${Date.now()}`;
+recordInterruptHistory(testThreadId, 'Which component should serve files?', 'File component');
+const retrievedAnswer = getInterruptAnswer(testThreadId, 'Which component should serve files?');
+assert.strictEqual(retrievedAnswer, 'File component', 'Recorded interrupt answer must match retrieved answer');
+deleteThread(testThreadId);
+console.log('✓ Interrupt Persistence and Question History verified.\n');
 
 console.log('=========================================');
 console.log('ALL OMNI CORE TESTS PASSED SUCCESSFULLY!');

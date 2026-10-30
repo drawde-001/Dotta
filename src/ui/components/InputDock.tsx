@@ -1993,7 +1993,7 @@ export const InputDock: React.FC<InputDockProps> = ({
               }
             }}
             className="aic-prompt-input"
-            placeholder="What would you like to do today?"
+            placeholder={isRecording || isTranscribing ? '' : 'What would you like to do today?'}
             aria-label="Prompt input"
           />
 

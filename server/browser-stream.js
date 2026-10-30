@@ -45,12 +45,18 @@ export async function closeLiveBrowser(broadcast) {
   }
   if (browser) {
     try {
+      const proc = typeof browser.process === 'function' ? browser.process() : null;
       await browser.close().catch(() => {});
+      if (proc && !proc.killed) {
+        try {
+          proc.kill('SIGKILL');
+        } catch {}
+      }
     } catch {}
     browser = null;
   }
   isStarting = false;
-  console.log('[BrowserStream] Chromium process closed and resources cleaned up.');
+  console.log('[BrowserStream] Chromium process killed and instance destroyed.');
   if (typeof broadcast === 'function') {
     broadcast({ type: 'browser_closed', timestamp: Date.now() });
   }
