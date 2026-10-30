@@ -302,24 +302,14 @@ registerToolComponent(['code_diff', 'patch_preview'], ({ args }) => {
   );
 });
 
-registerToolComponent(['agent_plan', 'create_plan'], ({ args, result }) => {
+registerToolComponent(['agent_plan', 'create_plan', 'update_plan'], ({ args, result }) => {
   const planData = result || args || {};
-  const rawSteps = Array.isArray(planData.steps) ? planData.steps : [];
-  const normalizedSteps = rawSteps.map((st, i) =>
-    typeof st === 'string'
-      ? { title: st, status: i === 0 ? 'running' : 'pending' }
-      : {
-          title: st.title || st.label || `Step ${i + 1}`,
-          description: st.description,
-          status: st.status || (i === 0 ? 'running' : 'pending')
-        }
-  );
   return (
     <div className="my-1.5">
       <AgentPlan
         title={planData.title || 'Plan'}
-        steps={normalizedSteps.length > 0 ? normalizedSteps : undefined}
-        activeIndex={planData.activeIndex ?? 0}
+        steps={planData.steps}
+        activeIndex={planData.activeIndex}
       />
     </div>
   );

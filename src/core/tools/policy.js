@@ -193,7 +193,29 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     'browser_screenshot',
     'profile_get',
     'shell_output',
-    'generate_image'
+    'generate_image',
+    'agent_plan',
+    'create_plan',
+    'update_plan',
+    'task_card',
+    'create_task_card',
+    'agent_status',
+    'status_badge',
+    'option_list',
+    'select_options',
+    'recommendation_card',
+    'recommend_decision',
+    'artifact_card',
+    'create_artifact_card',
+    'todo_list',
+    'create_todo_list',
+    'todos',
+    'agent_handoff',
+    'handoff_agent',
+    'background_inbox',
+    'background_runs',
+    'checkpoint_history',
+    'checkpoints'
   ];
 
   if (mode === 'default') {
@@ -236,7 +258,29 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     'segment_image',
     'generate_image',
     'edit_image',
-    'describe_image'
+    'describe_image',
+    'agent_plan',
+    'create_plan',
+    'update_plan',
+    'task_card',
+    'create_task_card',
+    'agent_status',
+    'status_badge',
+    'option_list',
+    'select_options',
+    'recommendation_card',
+    'recommend_decision',
+    'artifact_card',
+    'create_artifact_card',
+    'todo_list',
+    'create_todo_list',
+    'todos',
+    'agent_handoff',
+    'handoff_agent',
+    'background_inbox',
+    'background_runs',
+    'checkpoint_history',
+    'checkpoints'
   ];
 
   if (KNOWN_ALLOWED.includes(normTool)) {

@@ -473,37 +473,28 @@ export const AGENT_TOOLS_CATALOG = {
     name: 'agent_plan',
     readOnly: true,
     description:
-      'Creates and displays a rich multi-step execution plan card in the UI. ALWAYS call this tool when the user asks for a plan, roadmap, project outline, or before embarking on a complex multi-step development or research task. Parameter "title" is the plan name; "steps" is an array of steps each with title, description, and status ("pending", "running", or "completed"); "stepTitle" describes what plan is being created.',
+      'Creates and displays a rich multi-step execution plan card in the UI. Call this tool when asked for a plan, roadmap, workflow, or before multi-step tasks. Parameter "title" is the plan name; "steps" is an array of steps (each can be a string or object with label/title, description); "activeIndex" is the 0-based index of the step currently in progress; "stepTitle" is optional activity description.',
     parameters: {
       type: 'OBJECT',
       properties: {
         title: {
           type: 'STRING',
-          description: 'Title of the overall plan or roadmap (e.g. "Full-Stack Application Architecture")'
+          description: 'Title of the overall plan or roadmap (e.g. "Personal Portfolio Execution Plan")'
         },
         steps: {
           type: 'ARRAY',
-          description: 'Ordered list of execution steps with status indicators.',
-          items: {
-            type: 'OBJECT',
-            properties: {
-              title: { type: 'STRING', description: 'Concise step title (e.g. "Database Schema Design")' },
-              description: { type: 'STRING', description: 'Brief explanation of what happens in this step' },
-              status: {
-                type: 'STRING',
-                enum: ['pending', 'running', 'completed'],
-                description: 'Current status of the step'
-              }
-            },
-            required: ['title']
-          }
+          description: 'Ordered list of execution steps (strings or objects with label and description).'
+        },
+        activeIndex: {
+          type: 'INTEGER',
+          description: '0-based index of the step currently in progress'
         },
         stepTitle: {
           type: 'STRING',
-          description: 'Concise human-readable step description (e.g. "Create execution plan")'
+          description: 'Optional activity description'
         }
       },
-      required: ['title', 'steps', 'stepTitle']
+      required: ['steps']
     }
   },
 
@@ -522,7 +513,7 @@ export const AGENT_TOOLS_CATALOG = {
         result: { type: 'STRING', description: 'Optional result or outcome summary' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['label', 'state', 'stepTitle']
+      required: ['label', 'state']
     }
   },
 
@@ -539,7 +530,7 @@ export const AGENT_TOOLS_CATALOG = {
         elapsed: { type: 'STRING', description: 'Optional elapsed time (e.g. "0:45")' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['state', 'label', 'stepTitle']
+      required: ['state', 'label']
     }
   },
 
@@ -567,7 +558,7 @@ export const AGENT_TOOLS_CATALOG = {
         choice: { type: 'ARRAY', items: { type: 'STRING' } },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['options', 'stepTitle']
+      required: ['options']
     }
   },
 
@@ -584,7 +575,7 @@ export const AGENT_TOOLS_CATALOG = {
         confidenceLabel: { type: 'STRING', description: 'Confidence string (e.g. "94% confidence")' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['question', 'description', 'stepTitle']
+      required: ['question', 'description']
     }
   },
 
@@ -601,7 +592,7 @@ export const AGENT_TOOLS_CATALOG = {
         words: { type: 'NUMBER' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['title', 'meta', 'stepTitle']
+      required: ['title', 'meta']
     }
   },
 
@@ -628,7 +619,7 @@ export const AGENT_TOOLS_CATALOG = {
         },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['items', 'stepTitle']
+      required: ['items']
     }
   },
 
@@ -646,7 +637,7 @@ export const AGENT_TOOLS_CATALOG = {
         carried: { type: 'ARRAY', items: { type: 'STRING' }, description: 'Context items carried over' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['from', 'to', 'reason', 'stepTitle']
+      required: ['from', 'to', 'reason']
     }
   },
 
@@ -674,7 +665,7 @@ export const AGENT_TOOLS_CATALOG = {
         },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['runs', 'stepTitle']
+      required: ['runs']
     }
   },
 
@@ -702,7 +693,7 @@ export const AGENT_TOOLS_CATALOG = {
         currentId: { type: 'STRING' },
         stepTitle: { type: 'STRING', description: 'Short activity title' }
       },
-      required: ['checkpoints', 'currentId', 'stepTitle']
+      required: ['checkpoints']
     }
   }
 };
