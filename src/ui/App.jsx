@@ -6,8 +6,8 @@ import {
 } from '@assistant-ui/react';
 import { Thread } from '@/components/assistant-ui/thread';
 import { InputDock } from '@/components/InputDock';
-import { LiveBrowserStream } from '@/components/LiveBrowserStream';
-import { FileViewerSidebar } from '@/components/FileViewerSidebar';
+import { ThreadListSidebar } from '@/components/assistant-ui/elements/threadlist-sidebar.aui';
+import { WorkspacePanel } from '@/components/WorkspacePanel';
 import {
   Globe,
   PenLine,
@@ -17,6 +17,7 @@ import {
   Columns,
   Zap,
   Shuffle,
+  PanelLeft,
   PanelRight,
   Plus
 } from 'lucide-react';
@@ -29,7 +30,9 @@ export default function App() {
   const [activeInterrupt, setActiveInterrupt] = useState(null);
   const [selectedModel, setSelectedModel] = useState('muse-spark-1.3');
   const [actionSetIndex, setActionSetIndex] = useState(0);
-  const [activeViewingFile, setActiveViewingFile] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [openFiles, setOpenFiles] = useState([]);
+  const [activeTabId, setActiveTabId] = useState('browser');
 
   // Dynamic rotating subtitles for Hero screen
   const heroSubtitles = [
@@ -61,11 +64,30 @@ export default function App() {
   const browserIdleTimerRef = useRef(null);
   const currentThreadIdRef = useRef(`thread-${Date.now()}`);
 
+  const handleOpenFileTab = (fileData) => {
+    if (!fileData) return;
+    const fileId = fileData.id || fileData.path || fileData.name || `file-${Date.now()}`;
+    setOpenFiles((prev) => {
+      const exists = prev.find((f) => (f.id || f.path || f.name) === fileId);
+      if (exists) return prev;
+      return [...prev, { ...fileData, id: fileId }];
+    });
+    setActiveTabId(fileId);
+    setWorkspaceMode('work');
+  };
+
+  const handleCloseFileTab = (fileId) => {
+    setOpenFiles((prev) => prev.filter((f) => (f.id || f.path || f.name) !== fileId));
+    if (activeTabId === fileId) {
+      setActiveTabId('browser');
+    }
+  };
+
   // Listen for open file events from FileSystemArtifact in chat
   useEffect(() => {
     const handleOpenFile = (event) => {
       if (event.detail) {
-        setActiveViewingFile(event.detail);
+        handleOpenFileTab(event.detail);
       }
     };
     window.addEventListener('omni:open-file', handleOpenFile);
@@ -654,8 +676,16 @@ export default function App() {
     <div className="flex flex-col h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Top Header Bar */}
       <header className="h-11 px-4 flex items-center justify-between shrink-0 bg-[#08080A] border-b border-[#1F1F26] z-30">
-        {/* Left: Brand */}
+        {/* Left: Sidebar Toggle & Brand */}
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((prev) => !prev)}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition cursor-pointer"
+            title={sidebarOpen ? 'Collapse sidebar' : 'Open sidebar'}
+          >
+            <PanelLeft size={16} />
+          </button>
           <span className="font-semibold text-sm text-white tracking-tight">OmniAgent</span>
         </div>
 
@@ -674,7 +704,10 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setWorkspaceMode('work')}
+            onClick={() => {
+              setWorkspaceMode('work');
+              if (!activeTabId) setActiveTabId('browser');
+            }}
             className={`px-3.5 py-1 rounded-full text-xs font-medium transition cursor-pointer ${
               workspaceMode === 'work'
                 ? 'bg-white/12 text-white font-semibold'
@@ -706,125 +739,119 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Split Body */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left: File Viewer Sidebar (Matching Screenshot 2) */}
-        {activeViewingFile && (
-          <FileViewerSidebar
-            file={activeViewingFile}
-            onClose={() => setActiveViewingFile(null)}
-          />
-        )}
+      {/* Main Split Body wrapped with AssistantRuntimeProvider */}
+      <AssistantRuntimeProvider runtime={runtime}>
+        <div className="flex-1 flex overflow-hidden relative">
+          {/* Far Left: ThreadListSidebar */}
+          {sidebarOpen && (
+            <ThreadListSidebar className="w-64 shrink-0 h-full border-r border-[#1F1F26] bg-[#0c0c0e] z-30" />
+          )}
 
-        {/* Chat Panel (Center / Flex-1) */}
-        <div
-          className={`flex flex-col h-full overflow-hidden relative transition-all duration-200 ${
-            workspaceMode === 'work' ? 'flex-1 border-r border-[#1F1F26]' : 'flex-1'
-          }`}
-        >
-          {messages.length === 0 ? (
-            /* Centered Hero View */
-            <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
-              <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
-                OmniAgent
-              </h1>
-              <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
-                {heroSubtitles[subtitleIndex]}
-              </p>
+          {/* Left Workspace Panel (The Browser Space & Opened Files) */}
+          {workspaceMode === 'work' && (
+            <WorkspacePanel
+              streamState={streamState}
+              onSimulateUrlChange={(newUrl) =>
+                setStreamState((prev) => ({ ...prev, url: newUrl }))
+              }
+              onManualNavigate={(targetUrl) =>
+                handleSendMessage(`Navigate to ${targetUrl}`)
+              }
+              onSendWsMessage={handleSendWsMessage}
+              openFiles={openFiles}
+              activeTabId={activeTabId}
+              onSelectTab={(tabId) => setActiveTabId(tabId)}
+              onCloseFileTab={handleCloseFileTab}
+              onOpenFile={handleOpenFileTab}
+              onClosePanel={handleCloseWorkspace}
+            />
+          )}
 
-              {/* Exact Chatbox in Hero Mode */}
-              <div className="w-full">
-                <InputDock
-                  heroMode={true}
-                  maxWidth="596px"
-                  onSendMessage={handleSendMessage}
-                  isWorking={isRunning}
-                  onStopWorking={handleCancel}
-                  selectedModel={selectedModel}
-                  onSelectModel={setSelectedModel}
-                  mode={agentMode}
-                  onChangeMode={setAgentMode}
-                  activeInterrupt={activeInterrupt}
-                  onResolveInterrupt={handleResolveInterrupt}
-                />
-              </div>
+          {/* Chat Panel (Flex-1 on the Right) */}
+          <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+            {messages.length === 0 ? (
+              /* Centered Hero View */
+              <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
+                <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
+                  OmniAgent
+                </h1>
+                <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
+                  {heroSubtitles[subtitleIndex]}
+                </p>
 
-              {/* Curated Suggestion Chips */}
-              <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
-                {activeQuickActions.map((chip, idx) => (
+                {/* Exact Chatbox in Hero Mode */}
+                <div className="w-full">
+                  <InputDock
+                    heroMode={true}
+                    maxWidth="596px"
+                    onSendMessage={handleSendMessage}
+                    isWorking={isRunning}
+                    onStopWorking={handleCancel}
+                    selectedModel={selectedModel}
+                    onSelectModel={setSelectedModel}
+                    mode={agentMode}
+                    onChangeMode={setAgentMode}
+                    activeInterrupt={activeInterrupt}
+                    onResolveInterrupt={handleResolveInterrupt}
+                  />
+                </div>
+
+                {/* Curated Suggestion Chips */}
+                <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
+                  {activeQuickActions.map((chip, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSendMessage(chip.label)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
+                    >
+                      <span className="text-zinc-400">{chip.icon}</span>
+                      <span>{chip.label}</span>
+                    </button>
+                  ))}
                   <button
-                    key={idx}
                     type="button"
-                    onClick={() => handleSendMessage(chip.label)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
+                    onClick={handleShuffleQuickActions}
+                    className="p-1.5 rounded-full border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
+                    title="Shuffle suggestions"
                   >
-                    <span className="text-zinc-400">{chip.icon}</span>
-                    <span>{chip.label}</span>
+                    <Shuffle size={13} />
                   </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={handleShuffleQuickActions}
-                  className="p-1.5 rounded-full border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
-                  title="Shuffle suggestions"
-                >
-                  <Shuffle size={13} />
-                </button>
+                </div>
               </div>
-            </div>
-          ) : (
-            /* Active Message Thread with Bottom Docked InputDock */
-            <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-              <div className="flex-1 overflow-y-auto">
-                <AssistantRuntimeProvider runtime={runtime}>
+            ) : (
+              /* Active Message Thread with Bottom Docked InputDock */
+              <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                <div className="flex-1 overflow-y-auto">
                   <Thread
                     activeInterrupt={activeInterrupt}
                     onResolveInterrupt={handleResolveInterrupt}
                     selectedModel={selectedModel}
                     onSelectModel={setSelectedModel}
                   />
-                </AssistantRuntimeProvider>
-              </div>
+                </div>
 
-              {/* Bottom Docked Composer */}
-              <div className="shrink-0 p-3 bg-[#08080A] border-t border-[#1F1F26] max-w-3xl w-full mx-auto">
-                <InputDock
-                  heroMode={false}
-                  maxWidth="100%"
-                  onSendMessage={handleSendMessage}
-                  isWorking={isRunning}
-                  onStopWorking={handleCancel}
-                  selectedModel={selectedModel}
-                  onSelectModel={setSelectedModel}
-                  mode={agentMode}
-                  onChangeMode={setAgentMode}
-                  activeInterrupt={activeInterrupt}
-                  onResolveInterrupt={handleResolveInterrupt}
-                />
+                {/* Bottom Docked Composer */}
+                <div className="shrink-0 p-3 bg-[#08080A] border-t border-[#1F1F26] max-w-3xl w-full mx-auto">
+                  <InputDock
+                    heroMode={false}
+                    maxWidth="100%"
+                    onSendMessage={handleSendMessage}
+                    isWorking={isRunning}
+                    onStopWorking={handleCancel}
+                    selectedModel={selectedModel}
+                    onSelectModel={setSelectedModel}
+                    mode={agentMode}
+                    onChangeMode={setAgentMode}
+                    activeInterrupt={activeInterrupt}
+                    onResolveInterrupt={handleResolveInterrupt}
+                  />
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Right Minimal Workspace Panel (Shown in Work mode) */}
-        {workspaceMode === 'work' && (
-          <div className="flex-1 flex flex-col min-w-[360px] max-w-[50%] h-full bg-[#08080A] relative overflow-hidden">
-            {/* Minimal Browser Stream Frame */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              <LiveBrowserStream
-                streamState={streamState}
-                onSimulateUrlChange={(newUrl) =>
-                  setStreamState((prev) => ({ ...prev, url: newUrl }))
-                }
-                onManualNavigate={(targetUrl) =>
-                  handleSendMessage(`Navigate to ${targetUrl}`)
-                }
-                onSendWsMessage={handleSendWsMessage}
-              />
-            </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      </AssistantRuntimeProvider>
     </div>
   );
 }

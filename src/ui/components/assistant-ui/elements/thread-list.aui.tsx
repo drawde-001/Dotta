@@ -35,7 +35,7 @@ import {
 
 export const ThreadList: FC = () => {
   const [search, setSearch] = useState("");
-  const hasThreads = useAuiState((s) => s.threads.threadIds.length > 0);
+  const hasThreads = useAuiState((s) => (s.threads?.threadIds?.length ?? 0) > 0);
 
   return (
     <ThreadListRoot>
@@ -98,10 +98,10 @@ export const ThreadListItems: FC<
       className={cn("flex flex-col gap-0.5", className)}
       {...props}
     >
-      <AuiIf condition={(s) => s.threads.isLoading}>
+      <AuiIf condition={(s) => !!s.threads?.isLoading}>
         <ThreadListSkeleton />
       </AuiIf>
-      <AuiIf condition={(s) => !s.threads.isLoading}>
+      <AuiIf condition={(s) => !s.threads?.isLoading}>
         <ThreadListItemGroups searchQuery={searchQuery} />
       </AuiIf>
     </div>
@@ -161,8 +161,8 @@ export type ThreadListGroup = { label: string; indices: number[] };
  * in which case `filteredIndices` keeps the runtime order.
  */
 export const useThreadListGroups = (searchQuery = "") => {
-  const threadIds = useAuiState((s) => s.threads.threadIds);
-  const threadItems = useAuiState((s) => s.threads.threadItems);
+  const threadIds = useAuiState((s) => s.threads?.threadIds ?? []);
+  const threadItems = useAuiState((s) => s.threads?.threadItems ?? []);
 
   const query = searchQuery.trim().toLowerCase();
   const startOfToday = useStartOfToday();
