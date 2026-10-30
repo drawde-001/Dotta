@@ -5,7 +5,42 @@ import {
   WrapText
 } from 'lucide-react';
 import { getFileLanguageMeta } from './FileSystemArtifact';
-import { getFileIcon } from './FileBrowser';
+
+export function ReactIcon({ className = "size-3.5 text-cyan-400" }) {
+  return (
+    <svg className={className} viewBox="-11.5 -10.23174 23 20.46348" fill="currentColor">
+      <circle cx="0" cy="0" r="2.05" fill="currentColor" />
+      <g stroke="currentColor" strokeWidth="1" fill="none">
+        <ellipse rx="11" ry="4.2" />
+        <ellipse rx="11" ry="4.2" transform="rotate(60)" />
+        <ellipse rx="11" ry="4.2" transform="rotate(120)" />
+      </g>
+    </svg>
+  );
+}
+
+export function getFileIcon(filename = '') {
+  const ext = (filename.split('.').pop() || '').toLowerCase();
+  switch (ext) {
+    case 'tsx':
+    case 'jsx':
+      return <ReactIcon className="size-3.5 text-cyan-400 shrink-0" />;
+    case 'ts':
+      return <span className="font-mono text-[10px] font-bold text-sky-400 shrink-0">TS</span>;
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+      return <span className="font-mono text-[10px] font-bold text-amber-400 shrink-0">JS</span>;
+    case 'json':
+      return <span className="font-mono text-[10px] font-bold text-yellow-300 shrink-0">&#123; &#125;</span>;
+    case 'html':
+      return <span className="font-mono text-[10px] font-bold text-orange-400 shrink-0">HTML</span>;
+    case 'css':
+      return <span className="font-mono text-[10px] font-bold text-blue-400 shrink-0">CSS</span>;
+    default:
+      return <span className="font-mono text-[10px] font-bold text-zinc-400 shrink-0">&lt;/&gt;</span>;
+  }
+}
 
 export function FileCodeViewer({ file }) {
   const [copied, setCopied] = useState(false);
