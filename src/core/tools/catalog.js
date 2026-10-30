@@ -257,6 +257,66 @@ export const AGENT_TOOLS_CATALOG = {
     }
   },
 
+  process_document: {
+    name: 'process_document',
+    readOnly: true,
+    description:
+      'Extracts and returns the raw text of a BIO document (CV or a document entry) so you can read and CONFIRM it before using it. Parameter "bio_ref" is "cv" or "entry:<id>" from bio_index. Always process a document before uploading or quoting it. If processing fails, politely tell the user and recommend the next step.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        bio_ref: { type: 'STRING', description: 'BIO file reference: "cv" or "entry:<id>" from bio_index' },
+        stepTitle: { type: 'STRING', description: 'Concise human-readable step title (e.g., "Process CV document")' }
+      },
+      required: ['bio_ref']
+    }
+  },
+
+  process_image: {
+    name: 'process_image',
+    readOnly: true,
+    description:
+      'Loads a BIO image (profile photo or an image entry) so you can actually SEE it and confirm it matches the current task before using or uploading it. Parameter "bio_ref" is "photo" or "entry:<id>" from bio_index. If the image cannot be loaded, politely tell the user and recommend the next step.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        bio_ref: { type: 'STRING', description: 'BIO file reference: "photo" or "entry:<id>" from bio_index' },
+        stepTitle: { type: 'STRING', description: 'Concise human-readable step title (e.g., "Review profile photo")' }
+      },
+      required: ['bio_ref']
+    }
+  },
+
+  process_audio: {
+    name: 'process_audio',
+    readOnly: true,
+    description:
+      'Transcribes a BIO audio entry through the audio processor and returns the transcript so you can use its content. Requires the user\'s tailored per-entry grant for that audio entry (the general read switch alone is not enough). Parameter "bio_ref" is "entry:<id>" from bio_index. If transcription fails or access is not granted, politely tell the user and recommend the next step.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        bio_ref: { type: 'STRING', description: 'BIO audio entry reference: "entry:<id>" from bio_index' },
+        stepTitle: { type: 'STRING', description: 'Concise human-readable step title (e.g., "Transcribe voice introduction")' }
+      },
+      required: ['bio_ref']
+    }
+  },
+
+  process_video: {
+    name: 'process_video',
+    readOnly: true,
+    description:
+      'Inspects a BIO video entry (metadata + staged upload reference) so you can confirm whether it matches the current task. Requires the user\'s tailored per-entry grant for that video entry. Video frames are not viewed as text in this runtime; if you cannot confirm a match, politely tell the user and recommend the next step. Parameter "bio_ref" is "entry:<id>" from bio_index.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        bio_ref: { type: 'STRING', description: 'BIO video entry reference: "entry:<id>" from bio_index' },
+        stepTitle: { type: 'STRING', description: 'Concise human-readable step title (e.g., "Check intro video")' }
+      },
+      required: ['bio_ref']
+    }
+  },
+
   workspace_create: {
     name: 'workspace_create',
     readOnly: false,
@@ -878,9 +938,6 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
-      AGENT_TOOLS_CATALOG.bio_index,
-      AGENT_TOOLS_CATALOG.bio_get,
-      AGENT_TOOLS_CATALOG.bio_propose_write,
       AGENT_TOOLS_CATALOG.segment_image,
       AGENT_TOOLS_CATALOG.generate_image
     ];
@@ -906,6 +963,23 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
     }
   }
 
+  if (includeStructuredUI) {
+    const bioTools = [
+      AGENT_TOOLS_CATALOG.bio_index,
+      AGENT_TOOLS_CATALOG.bio_get,
+      AGENT_TOOLS_CATALOG.bio_propose_write,
+      AGENT_TOOLS_CATALOG.process_document,
+      AGENT_TOOLS_CATALOG.process_image,
+      AGENT_TOOLS_CATALOG.process_audio,
+      AGENT_TOOLS_CATALOG.process_video
+    ].filter(Boolean);
+    for (const t of bioTools) {
+      if (!tools.some((existing) => existing.name === t.name)) {
+        tools.push(t);
+      }
+    }
+  }
+
   if (includeAskUser && !tools.some((t) => t.name === 'ask_user') && ASK_USER_TOOL) {
     tools.push(ASK_USER_TOOL);
   }
@@ -916,7 +990,7 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
     active = active.filter((t) => t.name !== 'ask_user');
   }
 
-  const maxLimit = includeStructuredUI ? 35 : 20;
+  const maxLimit = includeStructuredUI ? 44 : 20;
   if (active.length > maxLimit) {
     active = active.slice(0, maxLimit);
   }

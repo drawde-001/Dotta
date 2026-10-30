@@ -140,12 +140,20 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
 
   // STEP 1.25: BIO PERMISSION GATE (enforced in code, deny wins, runs before
   // any approval cache so BIO writes can never bypass the approval card)
-  if (normTool === 'bio_index' || normTool === 'bio_get' || normTool === 'bio_propose_write') {
+  const BIO_READ_TOOLS = [
+    'bio_index',
+    'bio_get',
+    'process_document',
+    'process_image',
+    'process_audio',
+    'process_video'
+  ];
+  if (BIO_READ_TOOLS.includes(normTool) || normTool === 'bio_propose_write') {
     const bio = context?.bio || {};
     if (!bio.userId) {
       return { decision: 'deny', reason: 'BIO requires an identified user' };
     }
-    if ((normTool === 'bio_index' || normTool === 'bio_get') && !bio.read) {
+    if (BIO_READ_TOOLS.includes(normTool) && !bio.read) {
       return {
         decision: 'deny',
         reason:

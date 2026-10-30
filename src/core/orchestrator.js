@@ -24,6 +24,12 @@ import {
   recordBioAnswer,
   createBioProposal
 } from './bio/store.js';
+import {
+  processDocument,
+  processImage,
+  processAudio,
+  processVideo
+} from './bio/process.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
 import { buildFunctionResponseParts, normalizeGeminiContents } from './models/gemini-protocol.js';
@@ -87,6 +93,13 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - To upload a BIO file (CV, photo, audio, video) into a form: first call "bio_get" for that field or entry to stage it, then use "browser_action" with action "upload", selectorOrText as the file input selector, and value as the returned uploadRef. Never ask the user to upload a file BIO already holds.
 - If BIO access is denied, do NOT use "ask_user" to request access. Politely explain in plain text that you need BIO access (BIO page, Agent Access switches) or ask for the specific information in plain text.
 - A run uses exactly one active BIO profile. You cannot switch profiles. If BIO lacks a field you need, ask the user with "ask_user", then propose saving that answer with "bio_propose_write" using the Answer ID provided to you.
+- PARAPHRASING RULE: When writing application prose (summaries, biographies, cover text, answers), REWRITE BIO narrative text (background, hobby projects, ideas, document content) in your own words, tailored to the specific role and company — never paste it word-for-word, so two applications are never 100% identical. Keep all factual data EXACT and unchanged: names, email, phone, address, locations, dates, job titles, companies, URLs, and skills keywords.
+- PROCESS BEFORE USE: Before using any BIO file, run its matching processor ("process_document", "process_image", "process_audio", "process_video") and CONFIRM it matches the current task (right person, right document, relevant content). If you cannot see or process a file through the appropriate tool, politely tell the user what happened and recommend the next step (grant access, re-upload, or provide another file). NEVER upload or submit a file you have not processed and confirmed.
+
+5c. Proactive Execution:
+- When the user gives a clear instruction ("apply to this job", "fill this form", "do X"), ACT on it. Do not ask generic clarifying questions (which job, what data should I use, which email) when BIO, this conversation, or files already read in this run already answer them — check and confirm by yourself against that context, then proceed to the next step.
+- Reuse data already fetched in this conversation. Do not re-fetch BIO data you already have, and never re-ask the user for information they already gave.
+- Only ask (with "ask_user") when a genuinely missing, decision-critical detail blocks the next step — one brief question with a recommended option first.
 
 6. Structured UI Components & Execution Plans:
 - "agent_plan": Create and render an interactive multi-step execution plan card in the UI.
@@ -184,6 +197,18 @@ export class OmniEngine extends EventEmitter {
 
       case 'bio_propose_write':
         return 'BIO writes are completed only through the user approval card. This proposal has not been approved, so nothing was saved.';
+
+      case 'process_document':
+        return await processDocument({ userId: context.userId, ref: toolArgs.bio_ref });
+
+      case 'process_image':
+        return await processImage({ userId: context.userId, ref: toolArgs.bio_ref });
+
+      case 'process_audio':
+        return await processAudio({ userId: context.userId, ref: toolArgs.bio_ref });
+
+      case 'process_video':
+        return await processVideo({ userId: context.userId, ref: toolArgs.bio_ref });
 
       case 'workspace_create':
         return createWorkspace(runId || toolArgs.name, toolArgs.name);
@@ -781,7 +806,10 @@ export class OmniEngine extends EventEmitter {
               toolName,
               toolArgs,
               toolDef,
-              maxOutputChars: toolName === 'bio_get' ? 24000 : 4000,
+              maxOutputChars:
+                toolName === 'bio_get' || toolName === 'process_document' || toolName === 'process_audio'
+                  ? 24000
+                  : 4000,
               executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId })
             });
 
@@ -828,11 +856,14 @@ export class OmniEngine extends EventEmitter {
             });
 
             // Attach permissible BIO images so the model actually sees them
-            if (toolName === 'bio_get') {
+            if (toolName === 'bio_get' || toolName === 'process_image') {
               try {
                 const media = await collectBioMediaParts({
                   userId,
-                  fieldIds: toolArgs.field_ids
+                  fieldIds:
+                    toolName === 'process_image'
+                      ? [toolArgs.bio_ref]
+                      : toolArgs.field_ids
                 });
                 bioMediaParts.push(...media);
               } catch {}

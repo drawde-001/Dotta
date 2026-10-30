@@ -123,6 +123,50 @@ const { collectBioMediaParts } = await import('../src/core/bio/executors.js');
 const mediaParts = await collectBioMediaParts({ userId: A, fieldIds: [`entry:${imgEntry.id}`] });
 check('image collected as model-visible part', mediaParts.length === 1 && mediaParts[0].inlineData?.mimeType === 'image/png');
 
+// Paraphrase guidance: narrative reworded, facts verbatim
+const guideOut = JSON.parse(
+  await executeBioGet({ userId: A, fieldIds: ['background', 'fullName', 'email'] })
+);
+check(
+  'narrative flagged for rewording, facts not',
+  Array.isArray(guideOut.rewordBeforeUse) &&
+    guideOut.rewordBeforeUse.includes('background') &&
+    !guideOut.rewordBeforeUse.includes('fullName') &&
+    !guideOut.rewordBeforeUse.includes('email')
+);
+
+// Dedicated file processors (confirm before use)
+const { processDocument, processImage, processAudio, processVideo } = await import(
+  '../src/core/bio/process.js'
+);
+const docOut = await processDocument({ userId: A, ref: 'cv' });
+check('process_document extracts raw text', docOut.includes('Trace-based Just-in-Time'));
+check('process_document stages upload', docOut.includes('uploadRef: biofile-'));
+const imgOut = await processImage({ userId: A, ref: `entry:${imgEntry.id}` });
+check('process_image confirms + stages', imgOut.includes('Processed image') && imgOut.includes('uploadRef: biofile-'));
+const audio2 = store.addEntry(A, activeA.id, {
+  name: 'Voice Note 2',
+  type: 'audio',
+  description: 'Second voice note'
+});
+const audioDenied = await processAudio({ userId: A, ref: `entry:${audio2.id}` });
+check('process_audio blocked without tailored grant', audioDenied.includes('not granted agent access'));
+store.updateEntry(A, activeA.id, audio2.id, { agentReadable: true });
+const audioNoFile = await processAudio({ userId: A, ref: `entry:${audio2.id}` });
+check('process_audio honest when no file', audioNoFile.includes('no readable file attached'));
+const videoEntry = store.addEntry(A, activeA.id, {
+  name: 'Intro Video',
+  type: 'video',
+  description: 'Short intro'
+});
+store.updateEntry(A, activeA.id, videoEntry.id, { agentReadable: true });
+const videoOut = await processVideo({ userId: A, ref: `entry:${videoEntry.id}` });
+check('process_video honest when no file', videoOut.includes('no readable file attached'));
+check(
+  'policy denies processors when read off',
+  checkPermission('process_audio', {}, 'turbo', null, { bio: { userId: A, read: false } }).decision === 'deny'
+);
+
 // Cleanup sandbox artifacts created by this test
 fsx.rmSync(sandboxRoot, { recursive: true, force: true });
 
