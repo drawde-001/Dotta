@@ -36,22 +36,6 @@ export function FileViewerSidebar({ file, onClose }) {
   const actionLabel = file?.actionLabel || (file?.action ? `(${file.action})` : '(single edit)');
   const langMeta = file?.langMeta || getFileLanguageMeta(filename);
 
-  // Compute visual breadcrumb strictly scrubbing root directory
-  const rawPath = file?.path || 'src/core/media/media-processor.js';
-  const cleanTrail = useMemo(() => {
-    const scrubbed = rawPath
-      .replace(/\\/g, '/')
-      .replace(/^.*?[/\\](?:omni-agent|workspace|project|home\/[^\/]+)[/\\]/i, '')
-      .replace(/^[a-zA-Z]:[/\\][^/\\]+[/\\]*/, '')
-      .replace(/^([./\\])+/, '');
-    const segments = scrubbed.split('/').filter(Boolean);
-    // Remove filename from directory segments if present
-    if (segments.length > 0 && segments[segments.length - 1] === filename) {
-      segments.pop();
-    }
-    return segments;
-  }, [rawPath, filename]);
-
   // Determine code lines and start line
   const startLine = file?.editStartLine || 326;
   const rawCode = file?.content || file?.newText || SAMPLE_MEDIA_PROCESSOR_SNIPPET;
@@ -155,16 +139,9 @@ export function FileViewerSidebar({ file, onClose }) {
         </div>
       </div>
 
-      {/* Second Row: Visual Breadcrumb (Matching Screenshot 2 Row 2) */}
+      {/* Second Row: filename only (directory paths are never displayed) */}
       <div className="h-9 px-3 flex items-center justify-between shrink-0 bg-[#0d100d] border-b border-[#182018] text-xs select-none">
-        {/* Strictly visual, non-clickable breadcrumb (NO root access/display) */}
         <div className="flex items-center gap-1.5 text-zinc-400 font-sans truncate pointer-events-none select-none">
-          {cleanTrail.map((seg, idx) => (
-            <React.Fragment key={idx}>
-              <span className="text-zinc-400">{seg}</span>
-              <span className="text-zinc-600">&gt;</span>
-            </React.Fragment>
-          ))}
           <span className="text-[#eab308] font-mono font-bold text-[11px]">
             {langMeta.badge.toLowerCase()}
           </span>

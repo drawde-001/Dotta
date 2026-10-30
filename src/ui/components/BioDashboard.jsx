@@ -121,7 +121,7 @@ export function BioDashboard() {
               </span>
             </div>
             <p className="text-xs text-zinc-400">
-              All data is strictly user-controlled. Agent access requires explicit permission.
+              More context about you, so your agent can do more on your behalf
             </p>
           </div>
         </div>
