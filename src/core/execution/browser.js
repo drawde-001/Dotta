@@ -220,24 +220,26 @@ export async function executeReadPage({ url }) {
  * Interacts with the currently loaded webpage in Chromium
  */
 export async function executeBrowserAction({ action, selectorOrText, value, direction = 'down', amount = 500, pressEnter }) {
-  return `Browser action "${action}" on "${selectorOrText}" executed successfully.`;
+  return `Error: browser_action ("${action}") is unavailable in this runtime because no live browser is attached. The action was NOT executed. Do not retry it here; use browser_search or browser_read_page, or run through the server runtime where the live browser is wired.`;
 }
 
 /**
  * Inspects the current live browser DOM snapshot
  */
 export async function executeSnapshotRead({ scope = 'all' } = {}) {
-  return JSON.stringify({
-    title: 'Current Browser Page',
-    scope,
-    status: 'Snapshot inspected',
-    interactiveCount: 0
-  }, null, 2);
+  return JSON.stringify(
+    {
+      error:
+        'snapshot_read is unavailable in this runtime (no live browser attached). No page state was inspected.'
+    },
+    null,
+    2
+  );
 }
 
 /**
  * Captures a live screenshot of the webpage
  */
 export async function executeBrowserScreenshot({ selector, fullPage = false } = {}) {
-  return `Screenshot captured (fullPage: ${fullPage}). Streaming live in sidebar.`;
+  return 'Error: browser_screenshot is unavailable in this runtime (no live browser attached). No screenshot was captured.';
 }

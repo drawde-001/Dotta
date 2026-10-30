@@ -21,6 +21,89 @@ export function getWorkspaceRoot(runId) {
 }
 
 /**
+ * Per-user sandboxed workspace: one isolated folder per user ID under
+ * workspaces/user-<userId>/. Users (and the agent acting for them) can only
+ * ever see and touch files inside their own folder.
+ */
+export function sanitizeUserId(raw) {
+  const id = String(raw || '').trim();
+  return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id) ? id : null;
+}
+
+export function getUserWorkspaceRoot(userId) {
+  const safe = sanitizeUserId(userId);
+  if (!safe) {
+    throw new Error('Invalid user id');
+  }
+  const root = path.resolve(getWorkspacesBaseDir(), `user-${safe}`);
+  if (!fs.existsSync(root)) {
+    fs.mkdirSync(root, { recursive: true });
+  }
+  return root;
+}
+
+export function listUserWorkspaceFiles(userId) {
+  const root = getUserWorkspaceRoot(userId);
+  const results = [];
+  const MAX_ENTRIES = 500;
+  const MAX_DEPTH = 6;
+
+  function walk(dir, relBase, depth) {
+    if (results.length >= MAX_ENTRIES || depth > MAX_DEPTH) return;
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    for (const ent of entries) {
+      if (results.length >= MAX_ENTRIES) return;
+      if (ent.name === '.workspace.json' || ent.name.startsWith('.env') || ent.name === '.git') continue;
+      if (SENSITIVE_FILE_REGEX.test(ent.name)) continue;
+      const rel = relBase ? `${relBase}/${ent.name}` : ent.name;
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        walk(full, rel, depth + 1);
+      } else if (ent.isFile()) {
+        let size = 0;
+        try {
+          size = fs.statSync(full).size;
+        } catch {}
+        results.push({ path: rel, name: ent.name, size });
+      }
+    }
+  }
+
+  walk(root, '', 0);
+  return results;
+}
+
+export function readUserWorkspaceFile(userId, relativePath) {
+  const root = getUserWorkspaceRoot(userId);
+  const resolved = validateAndResolvePath(root, relativePath);
+  const displayPath = sanitizeRelativeDisplayPath(relativePath, root);
+
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`File not found: "${displayPath}"`);
+  }
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) {
+    throw new Error(`Path is a directory, not a file: "${displayPath}"`);
+  }
+  if (stat.size > 512000) {
+    throw new Error(`File is too large to preview: "${displayPath}"`);
+  }
+
+  const content = redactRootPaths(fs.readFileSync(resolved, 'utf8'), root);
+  return {
+    name: path.basename(displayPath),
+    path: displayPath,
+    content
+  };
+}
+
+/**
  * Strips any absolute host path, workspace root path, or root directory name
  * so neither the agent nor the user ever sees the name or location of the root directory.
  */

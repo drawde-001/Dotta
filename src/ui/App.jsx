@@ -11,6 +11,7 @@ import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { AppRail } from '@/components/AppRail';
 import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
+import { getUserId } from '@/lib/user';
 import {
   Globe,
   PenLine,
@@ -309,6 +310,7 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           threadId: currentThreadIdRef.current,
+          userId: getUserId(),
           instruction: chatInstruction,
           messages: newMessages
             .filter((m) => m.id !== assistantMsgId)
@@ -499,6 +501,32 @@ export default function App() {
                 settleReasoning();
                 last.runCompletedAt = Date.now();
                 last.runStatus = 'complete';
+
+                // Never end silently: if the run stopped early (step/budget/
+                // repeat limits) with no final text, tell the user what happened.
+                const stopReason = event.stopReason || event.summary?.stopReason;
+                if (stopReason && stopReason !== 'success') {
+                  const hasText = contentParts.some(
+                    (p) => p.type === 'text' && typeof p.text === 'string' && p.text.trim()
+                  );
+                  if (!hasText) {
+                    const reasonText =
+                      stopReason === 'max_turns'
+                        ? 'I ran out of steps before finishing this task.'
+                        : stopReason === 'repeated_calls'
+                          ? 'I stopped because I was repeating the same actions without making progress.'
+                          : stopReason === 'timeout'
+                            ? 'I ran out of time before finishing this task.'
+                            : stopReason === 'max_budget'
+                              ? 'I hit the run budget before finishing this task.'
+                              : `I stopped before finishing this task (${stopReason}).`;
+                    contentParts.push({
+                      type: 'text',
+                      id: `text-stop-${contentParts.length}`,
+                      text: `${reasonText} Nothing was completed on the page. Please retry, or narrow the task and I'll continue.`
+                    });
+                  }
+                }
 
                 // End of run: kill browser instance after 30s
                 if (browserIdleTimerRef.current) {

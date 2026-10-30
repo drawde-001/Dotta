@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { LiveBrowserStream } from './LiveBrowserStream';
 import { FileCodeViewer, getFileIcon } from './FileCodeViewer';
+import { getUserId } from '@/lib/user';
 
 export function WorkspacePanel({
   streamState,
@@ -30,6 +31,28 @@ export function WorkspacePanel({
   const [isMaximized, setIsMaximized] = useState(false);
   const [treeLayout, setTreeLayout] = useState('closed'); // closed | tree | split
   const [filter, setFilter] = useState('');
+  const [sandboxFiles, setSandboxFiles] = useState([]);
+
+  // Load the signed-in user's sandboxed file list (never root/system files).
+  const loadSandboxFiles = async () => {
+    try {
+      const res = await fetch('/api/workspace/files', {
+        headers: { 'x-user-id': getUserId() }
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && Array.isArray(data.files)) {
+        setSandboxFiles(data.files);
+      }
+    } catch {}
+  };
+
+  useEffect(() => {
+    loadSandboxFiles();
+  }, []);
+
+  useEffect(() => {
+    if (treeLayout !== 'closed') loadSandboxFiles();
+  }, [treeLayout, openFiles.length]);
 
   // Keyboard shortcuts matching launcher card hints (Ctrl+T for Browser, Ctrl+P for Files)
   useEffect(() => {
@@ -59,9 +82,10 @@ export function WorkspacePanel({
   // File explorer (preview logic): Browser tab -> tree takes the full panel;
   // file tab -> tree shares the panel at 210px beside the file.
   const effectiveTreeLayout = treeLayout === 'split' && !activeFile ? 'tree' : treeLayout;
-  // Sandboxed workspace only: the explorer lists files from the user's own
-  // workspace (opened artifacts). Root/system files are never listed here.
-  const treeFiles = openFiles;
+  // Sandboxed workspace only: the explorer lists files from this user's own
+  // server sandbox folder (GET /api/workspace/files). Root/system files are
+  // never listed, read, or displayed here.
+  const treeFiles = sandboxFiles;
   const normalizedFilter = filter.trim().toLowerCase();
   const visibleTreeFiles = treeFiles.filter((f) => {
     const n = (f.name || '').toLowerCase();
@@ -98,14 +122,24 @@ export function WorkspacePanel({
     });
   };
 
-  const handleTreeFileClick = (f) => {
-    const fid = f.id || f.path || f.name;
+  const handleTreeFileClick = async (f) => {
+    const fid = f.path || f.name;
     const isOpen = openFiles.some((o) => (o.id || o.path || o.name) === fid);
     if (isOpen) {
       onSelectTab(fid);
-    } else {
-      window.dispatchEvent(new CustomEvent('omni:open-file', { detail: f }));
+      setTreeLayout('split');
+      return;
     }
+    try {
+      const res = await fetch(
+        `/api/workspace/file?path=${encodeURIComponent(f.path)}`,
+        { headers: { 'x-user-id': getUserId() } }
+      );
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.ok && data.file) {
+        window.dispatchEvent(new CustomEvent('omni:open-file', { detail: data.file }));
+      }
+    } catch {}
     setTreeLayout('split');
   };
 
@@ -313,7 +347,7 @@ export function WorkspacePanel({
               })}
               {visibleTreeFiles.length === 0 && (
                 <p className="px-2 py-1.5 text-xs text-zinc-500">
-                  {openFiles.length === 0
+                  {sandboxFiles.length === 0
                     ? 'No files in your workspace yet.'
                     : 'No files match.'}
                 </p>

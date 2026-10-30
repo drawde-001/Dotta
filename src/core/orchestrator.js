@@ -442,8 +442,17 @@ export class OmniEngine extends EventEmitter {
               timestamp: Date.now()
             });
 
-            // 1. Budget and cycle check
-            const check = budgetTracker.recordToolCall(toolName, toolArgs);
+            // 1. Budget and cycle check (browser actions are fingerprinted on
+            // their normalized target so near-identical repeats are caught)
+            const cycleArgs =
+              toolName === 'browser_action'
+                ? {
+                    action: toolArgs.action,
+                    selectorOrText: String(toolArgs.selectorOrText || '').trim().toLowerCase(),
+                    direction: toolArgs.direction
+                  }
+                : toolArgs;
+            const check = budgetTracker.recordToolCall(toolName, cycleArgs);
             if (!check.allowed) {
               this.emit('event', {
                 type: 'RUN_FINISHED',
