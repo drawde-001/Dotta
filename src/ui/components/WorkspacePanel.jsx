@@ -36,7 +36,7 @@ export function WorkspacePanel({
           const firstId = openFiles[0].id || openFiles[0].path || openFiles[0].name;
           onSelectTab(firstId);
         } else {
-          onSelectTab('launcher');
+          onSelectTab('plus');
         }
       }
     };
@@ -125,13 +125,13 @@ export function WorkspacePanel({
             );
           })}
 
-          {/* 3. Plus Button Card: Clicking plus opens the launcher layout in Image 2 */}
+          {/* 3. Plus Button: Clicking plus shows the idle browser screen and uses same fill as hover */}
           <button
             type="button"
-            onClick={() => onSelectTab('launcher')}
+            onClick={() => onSelectTab('plus')}
             className={`p-1.5 rounded-lg text-xs transition cursor-pointer shrink-0 ${
-              activeTabId === 'launcher'
-                ? 'bg-[#1a201a] border border-white/10 shadow-sm text-zinc-100 font-medium'
+              activeTabId === 'plus'
+                ? 'bg-white/10 text-white'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5'
             }`}
             title="New tab options"
@@ -161,59 +161,25 @@ export function WorkspacePanel({
         </div>
       </div>
 
-      {/* Main Panel Content - Driven by activeTabId */}
+      {/* Main Panel Content - Reusing LiveBrowserStream directly */}
       <div className="flex-1 overflow-hidden relative bg-[#08080a]">
-        {/* View 1: Browser Viewport */}
-        {activeTabId === 'browser' && (
+        {/* Browser or Plus Idle View (reusing LiveBrowserStream's exact built-in screen) */}
+        {(activeTabId === 'browser' || activeTabId === 'plus') && (
           <div className="h-full w-full flex flex-col">
             <LiveBrowserStream
               streamState={streamState}
               onSimulateUrlChange={onSimulateUrlChange}
               onManualNavigate={onManualNavigate}
               onSendWsMessage={onSendWsMessage}
+              onOpenFiles={handleSelectFilesFromLauncher}
+              onSelectBrowser={() => onSelectTab('browser')}
+              forceIdle={activeTabId === 'plus'}
             />
           </div>
         )}
 
-        {/* View 2: Plus Icon Launcher Screen (Exact Pixel-Match to Screenshot 2) */}
-        {activeTabId === 'launcher' && (
-          <div className="h-full w-full flex items-center justify-center p-6 bg-[#08080a] select-none">
-            <div className="w-full max-w-[340px] flex flex-col gap-2.5">
-              {/* Browser Option */}
-              <button
-                type="button"
-                onClick={() => onSelectTab('browser')}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-white/[0.08] bg-[#121418] hover:bg-[#181a20] hover:border-white/15 text-zinc-200 transition cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <Globe size={16} className="text-zinc-400 group-hover:text-white transition" />
-                  <span className="text-sm font-medium text-zinc-200 group-hover:text-white">Browser</span>
-                </div>
-                <span className="text-xs text-zinc-500 font-sans tracking-tight">
-                  Ctrl+T
-                </span>
-              </button>
-
-              {/* Files Option */}
-              <button
-                type="button"
-                onClick={handleSelectFilesFromLauncher}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-white/[0.08] bg-[#121418] hover:bg-[#181a20] hover:border-white/15 text-zinc-200 transition cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <Folder size={16} className="text-zinc-400 group-hover:text-white transition" />
-                  <span className="text-sm font-medium text-zinc-200 group-hover:text-white">Files</span>
-                </div>
-                <span className="text-xs text-zinc-500 font-sans tracking-tight">
-                  Ctrl+P
-                </span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* View 3: Visual File Code Viewer (Strictly in-memory visual display only) */}
-        {activeTabId !== 'browser' && activeTabId !== 'launcher' && activeFile && (
+        {/* Visual File Code Viewer (Strictly in-memory visual display only) */}
+        {activeTabId !== 'browser' && activeTabId !== 'plus' && activeFile && (
           <FileCodeViewer file={activeFile} />
         )}
       </div>
