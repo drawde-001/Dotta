@@ -219,7 +219,7 @@ export default function App() {
       order: att.order || idx + 1
     }));
 
-    if ((!userText.trim() && orderedAttachments.length === 0) || isRunning) return;
+    if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && isRunning)) return;
 
     // Reset browser idle timer when user initiates new generation
     if (browserIdleTimerRef.current) {
@@ -587,14 +587,17 @@ export default function App() {
     ];
 
     const qaPart = {
-      type: 'submitted-ask-user',
+      type: 'data-submitted-ask-user',
       id: `submitted-qa-${Date.now()}`,
+      data: { questions: questionsAndAnswers },
       questions: questionsAndAnswers
     };
 
     // Prepend the Submitted QA Card directly into the assistant message in thread (Screenshot 1)
+    let hasAssistant = false;
     const nextMessages = messages.map((m, idx) => {
       if (idx === messages.length - 1 && m.role === 'assistant') {
+        hasAssistant = true;
         const existingParts = Array.isArray(m.content) ? [...m.content] : [];
         return {
           ...m,
@@ -604,6 +607,17 @@ export default function App() {
       }
       return m;
     });
+
+    if (!hasAssistant) {
+      nextMessages.push({
+        id: `asst-${Date.now()}`,
+        role: 'assistant',
+        content: [qaPart],
+        runStartedAt: Date.now(),
+        runCompletedAt: null,
+        runStatus: 'running'
+      });
+    }
 
     setMessages(nextMessages);
 
@@ -631,24 +645,61 @@ export default function App() {
   const threadMessages = useExternalMessageConverter({
     messages,
     isRunning,
-    callback: (msg) => ({
-      id: msg.id,
-      role: msg.role,
-      content:
+    callback: (msg) => {
+      const rawContent =
         Array.isArray(msg.content) && msg.content.length > 0
           ? msg.content
-          : [{ type: 'text', text: '' }],
-      attachments: msg.attachments || [],
-      metadata: {
-        custom: {
-          runStartedAt: msg.runStartedAt,
-          runCompletedAt: msg.runCompletedAt,
-          runStatus: msg.runStatus,
-          rawParts: msg.content || [],
-          attachments: msg.attachments || []
+          : [{ type: 'text', text: '' }];
+
+      const sanitizedContent = rawContent.map((part) => {
+        if (!part || typeof part !== 'object') {
+          return { type: 'text', text: String(part || '') };
         }
-      }
-    })
+        const pType = part.type;
+        if (pType === 'submitted-ask-user' || pType === 'ask-user-response') {
+          return {
+            type: 'data-submitted-ask-user',
+            id: part.id,
+            data: { questions: part.questions || part.questionsAndAnswers || [] },
+            questions: part.questions || part.questionsAndAnswers || []
+          };
+        }
+        if (
+          pType === 'text' ||
+          pType === 'reasoning' ||
+          pType === 'tool-call' ||
+          pType === 'file' ||
+          pType === 'source' ||
+          pType === 'image' ||
+          pType === 'data' ||
+          pType === 'generative-ui' ||
+          (typeof pType === 'string' && pType.startsWith('data-'))
+        ) {
+          return part;
+        }
+        return {
+          type: `data-${pType || 'custom'}`,
+          id: part.id,
+          data: part.data || part
+        };
+      });
+
+      return {
+        id: msg.id,
+        role: msg.role,
+        content: sanitizedContent,
+        attachments: msg.attachments || [],
+        metadata: {
+          custom: {
+            runStartedAt: msg.runStartedAt,
+            runCompletedAt: msg.runCompletedAt,
+            runStatus: msg.runStatus,
+            rawParts: msg.content || [],
+            attachments: msg.attachments || []
+          }
+        }
+      };
+    }
   });
 
   const runtime = useExternalStoreRuntime({
