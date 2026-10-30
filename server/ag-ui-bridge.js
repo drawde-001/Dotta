@@ -3,6 +3,7 @@ import {
   sanitizeUserId,
   getUserWorkspaceRoot
 } from '../src/core/execution/workspace.js';
+import { applyBioProposal, discardBioProposal } from '../src/core/bio/store.js';
 
 export function writeAgUiEvent(res, event) {
   if (res.writableEnded) return;
@@ -63,6 +64,21 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
 
     engine.on('event', eventListener);
 
+    // BIO write approval: the value was stored in the proposal at interrupt
+    // time (from a stored user answer). Apply or discard it here — never
+    // take a value from the resume payload or model text.
+    if (resume?.toolName === 'bio_propose_write' && userId) {
+      try {
+        if (resume.approved) {
+          applyBioProposal(userId, threadId);
+        } else {
+          discardBioProposal(userId, threadId);
+        }
+      } catch (err) {
+        console.error('[Omni Server] BIO proposal resolution failed:', err.message);
+      }
+    }
+
     try {
       const result = await engine.run({
         instruction,
@@ -72,7 +88,8 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         model,
         mode,
         resume,
-        workspaceRoot
+        workspaceRoot,
+        userId
       });
 
       if (result.status === 'interrupted' && !interruptEmitted) {

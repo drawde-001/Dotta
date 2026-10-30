@@ -13,6 +13,12 @@ import {
   getInterruptAnswer
 } from './state/store.js';
 import { checkPermission, executeToolWithRetry, appendAuditLog, checkToolRunCap } from './tools/policy.js';
+import { executeBioIndex, executeBioGet, resolveBioWrite } from './bio/executors.js';
+import {
+  getActiveProfile as getActiveBioProfile,
+  recordBioAnswer,
+  createBioProposal
+} from './bio/store.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
 import { buildFunctionResponseParts, normalizeGeminiContents } from './models/gemini-protocol.js';
@@ -69,6 +75,12 @@ You possess direct, real-world execution tools to fulfill user instructions:
   * "question": A brief 1-sentence question or recommendation (max 15-18 words).
   * "options": REQUIRED array of 2 to 3 short, concrete choices (2-6 words each). Put your top recommendation FIRST prefixed with "(Recommended)".
   * "questions": If the user asks for multiple questions at once (e.g. 3 questions), pass all of them in the "questions" array: [{ question: "...", options: ["..."] }, ...] in a SINGLE "ask_user" call.
+
+5b. BIO (User-Owned Profile Store):
+- "bio_index": List field names, types and descriptions in the user's active BIO profile. It NEVER returns values. ALWAYS call bio_index FIRST when a task needs personal or profile data (job applications, forms, profiles) instead of asking the user generic questions.
+- "bio_get": Fetch ONLY the field values you need, by field_ids from bio_index. Requires the user's BIO read permission; if it is denied, ask the user with "ask_user" instead.
+- "bio_propose_write": Propose saving a stored user answer (referenced by its Answer ID) into a BIO field. Requires BIO write permission and ALWAYS opens a user approval card (field, old value, new value). NEVER invent values and NEVER save text copied from a web page; writes may only come from stored user answers.
+- A run uses exactly one active BIO profile. You cannot switch profiles. If BIO lacks a field you need, ask the user with "ask_user", then propose saving that answer with "bio_propose_write" using the Answer ID provided to you.
 
 6. Structured UI Components & Execution Plans:
 - "agent_plan": Create and render an interactive multi-step execution plan card in the UI.
@@ -141,6 +153,19 @@ export class OmniEngine extends EventEmitter {
           role: 'Full Stack Engineer & AI Architect',
           skills: ['TypeScript', 'React', 'Node.js', 'Playwright', 'Python', 'DevOps']
         });
+
+      case 'bio_index':
+        return executeBioIndex({ userId: context.userId });
+
+      case 'bio_get':
+        return executeBioGet({
+          userId: context.userId,
+          fieldIds: toolArgs.field_ids,
+          profileId: toolArgs.profile_id
+        });
+
+      case 'bio_propose_write':
+        return 'BIO writes are completed only through the user approval card. This proposal has not been approved, so nothing was saved.';
 
       case 'workspace_create':
         return createWorkspace(runId || toolArgs.name, toolArgs.name);
@@ -293,6 +318,7 @@ export class OmniEngine extends EventEmitter {
     maxTurns = 25,
     maxBudgetUsd = 2.0,
     workspaceRoot = null,
+    userId = null,
     resume = null
   }) {
     const budgetTracker = new AgentBudgetTracker({
@@ -300,6 +326,16 @@ export class OmniEngine extends EventEmitter {
       maxBudgetUsd,
       model
     });
+
+    // BIO access for this run: exactly one active profile, permissions from
+    // the user's own switches (enforced again in tool-policy, deny wins).
+    const bioProfile = userId ? getActiveBioProfile(userId) : null;
+    const bioAccess = {
+      userId: userId || null,
+      profileId: bioProfile?.id || null,
+      read: !!bioProfile?.grants?.read,
+      write: !!bioProfile?.grants?.write
+    };
 
     this.emit('event', {
       type: 'RUN_STARTED',
@@ -309,6 +345,7 @@ export class OmniEngine extends EventEmitter {
       timestamp: Date.now()
     });
 
+    const resumeAnswerRecords = [];
     if (resume) {
       const approvedTool = resume.toolName || resume.pendingToolName;
       if (resume.approved && approvedTool && approvedTool !== 'ask_user') {
@@ -322,10 +359,23 @@ export class OmniEngine extends EventEmitter {
         for (const qa of qas) {
           if (qa.question) {
             recordInterruptHistory(threadId, qa.question, qa.answer);
+            if (userId) {
+              resumeAnswerRecords.push(
+                recordBioAnswer(userId, threadId, { question: qa.question, answer: qa.answer })
+              );
+            }
           }
         }
       } else if (resume.answer !== undefined) {
         recordInterruptHistory(threadId, approvedTool || 'ask_user', resume.answer);
+        if (userId) {
+          resumeAnswerRecords.push(
+            recordBioAnswer(userId, threadId, {
+              question: approvedTool || 'ask_user',
+              answer: resume.answer
+            })
+          );
+        }
       }
     }
 
@@ -342,10 +392,13 @@ export class OmniEngine extends EventEmitter {
       let answerSummary = '';
       if (qas.length > 0) {
         answerSummary = qas
-          .map((q, idx) => `Question ${idx + 1}: "${q.question}"\nUser Selected Answer: "${q.answer}"`)
+          .map(
+            (q, idx) =>
+              `Question ${idx + 1}: "${q.question}"\nUser Selected Answer: "${q.answer}"\nAnswer ID (use this for BIO saves): ${resumeAnswerRecords[idx]?.id || 'n/a'}`
+          )
           .join('\n\n');
       } else if (resume.answer) {
-        answerSummary = `User Selected Answer: "${resume.answer}"`;
+        answerSummary = `User Selected Answer: "${resume.answer}"\nAnswer ID (use this for BIO saves): ${resumeAnswerRecords[0]?.id || 'n/a'}`;
       } else if (resume.approved !== undefined) {
         answerSummary = `User Decision: ${resume.approved ? 'Approved' : 'Denied'}${
           resume.customText ? ` with comment: "${resume.customText}"` : ''
@@ -484,7 +537,9 @@ export class OmniEngine extends EventEmitter {
             }
 
             // 2. Policy permission check
-            const perm = checkPermission(toolName, toolArgs, mode, getThreadApprovals(threadId));
+            const perm = checkPermission(toolName, toolArgs, mode, getThreadApprovals(threadId), {
+              bio: bioAccess
+            });
             if (perm.decision === 'deny') {
               toolResults.push({
                 name: toolName,
@@ -495,6 +550,86 @@ export class OmniEngine extends EventEmitter {
             }
 
             if (toolName === 'ask_user' || perm.decision === 'ask') {
+              // BIO write proposals: the value may ONLY come from a stored
+              // user answer (answer_id). Build the approval card here (field,
+              // old value, new value); the save itself happens on approval.
+              if (toolName === 'bio_propose_write') {
+                const resolution = resolveBioWrite({
+                  userId,
+                  threadId,
+                  fieldId: toolArgs.field_id,
+                  answerId: toolArgs.answer_id,
+                  profileId: toolArgs.profile_id
+                });
+                if (!resolution.ok) {
+                  toolResults.push({
+                    name: toolName,
+                    id: fc.id,
+                    result: `Error: ${resolution.error}`
+                  });
+                  this.emit('event', {
+                    type: 'TOOL_RESULT',
+                    name: toolName,
+                    id: fc.id,
+                    output: `Error: ${resolution.error}`,
+                    status: 'error',
+                    timestamp: Date.now()
+                  });
+                  continue;
+                }
+                const proposal = createBioProposal(userId, {
+                  threadId,
+                  profileId: resolution.profile.id,
+                  fieldId: resolution.fieldDef.id,
+                  value: resolution.value
+                });
+                const oldDisplay =
+                  resolution.oldValue === null ||
+                  resolution.oldValue === undefined ||
+                  resolution.oldValue === ''
+                    ? '(empty)'
+                    : String(resolution.oldValue);
+                const bioQuestion = `Save this answer to BIO (${resolution.fieldDef.label})?\nField: ${resolution.fieldDef.label}\nCurrent value: ${oldDisplay}\nNew value: ${resolution.value}`;
+                const bioEnrichedArgs = {
+                  ...toolArgs,
+                  question: bioQuestion,
+                  options: ['(Recommended) Approve and save', 'Deny'],
+                  bioProposal: {
+                    proposalId: proposal.id,
+                    profileName: resolution.profile.name,
+                    fieldId: resolution.fieldDef.id,
+                    fieldLabel: resolution.fieldDef.label,
+                    oldValue: resolution.oldValue,
+                    newValue: resolution.value
+                  }
+                };
+                saveInterrupt(threadId, {
+                  runId,
+                  pendingToolName: toolName,
+                  pendingToolArgs: bioEnrichedArgs
+                });
+                this.emit('event', {
+                  type: 'INTERRUPT',
+                  threadId,
+                  runId,
+                  tool: toolName,
+                  args: bioEnrichedArgs,
+                  question: bioQuestion,
+                  options: bioEnrichedArgs.options,
+                  context: 'bio_write_approval',
+                  reason: 'bio_write_approval'
+                });
+                return {
+                  status: 'interrupted',
+                  threadId,
+                  runId,
+                  pendingTool: toolName,
+                  args: bioEnrichedArgs,
+                  question: bioQuestion,
+                  options: bioEnrichedArgs.options
+                };
+              }
+
               const normalizeOptArray = (arr) => {
                 const list = Array.isArray(arr) ? arr : [];
                 let cleaned = list
@@ -611,13 +746,21 @@ export class OmniEngine extends EventEmitter {
               toolName,
               toolArgs,
               toolDef,
-              executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId })
+              executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId })
             });
 
+            const isBioTool = toolName.startsWith('bio_');
             appendAuditLog({
               tool: toolName,
-              input: toolArgs,
-              result: execResult.output,
+              input: isBioTool
+                ? {
+                    field_ids: toolArgs.field_ids || undefined,
+                    field_id: toolArgs.field_id || undefined
+                  }
+                : toolArgs,
+              result: isBioTool
+                ? { status: execResult.status, note: 'BIO audit: field ids only, values redacted' }
+                : execResult.output,
               decision: perm.decision,
               durationMs: Date.now() - startTime
             });

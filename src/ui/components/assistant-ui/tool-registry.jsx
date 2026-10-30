@@ -1,4 +1,5 @@
 import React from 'react';
+import { Leaf } from 'lucide-react';
 import {
   // Tool Use & Execution Cards
   ToolCall,
@@ -199,6 +200,9 @@ export function getToolActivityLabel(part) {
     return args?.prompt
       ? `Generating image: "${String(args.prompt).slice(0, 42)}"`
       : 'Generating image with Muse Image 1.0';
+  }
+  if (lower === 'bio_index' || lower === 'bio_get' || lower === 'bio_propose_write') {
+    return 'Checking BIO';
   }
   if (lower === 'ask_user' || lower === 'ask_question') {
     return args?.question
@@ -488,6 +492,49 @@ registerToolComponent(['background_inbox', 'background_runs'], ({ args, result }
       <BackgroundInbox
         runs={normalizedRuns}
       />
+    </div>
+  );
+});
+
+const BIO_FIELD_LABELS = {
+  photo: 'Photo',
+  fullName: 'Full name',
+  headline: 'Headline',
+  role: 'Role',
+  residence: 'Residence',
+  stateOfOrigin: 'State of origin',
+  address: 'Address',
+  socialLinks: 'Social links',
+  website: 'Personal website',
+  cv: 'CV / Resume',
+  background: 'Background',
+  interests: 'Interests',
+  workHistory: 'Work history',
+  dos: 'Personal dos',
+  donts: "Personal don'ts",
+  hobbyProjects: 'Hobby projects',
+  ideas: 'Ideas',
+  notes: 'My notes'
+};
+
+// Checking BIO: shows the leaf, profile name and field LABELS read — never values.
+registerToolComponent(['bio_index', 'bio_get', 'bio_propose_write'], ({ args, result }) => {
+  let profileName = '';
+  try {
+    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+    if (parsed && typeof parsed === 'object') profileName = parsed.profileName || '';
+  } catch {}
+  const fieldIds = args?.field_ids || (args?.field_id ? [args.field_id] : []);
+  const labelFor = (id) =>
+    BIO_FIELD_LABELS[id] || (String(id).startsWith('entry:') ? 'Additional entry' : String(id));
+  return (
+    <div className="flex items-center gap-2 py-1 text-xs">
+      <Leaf size={13} className="shrink-0 text-[#17deb3]" />
+      <span className="font-medium text-zinc-200">Checking BIO</span>
+      {profileName ? <span className="text-zinc-500">· {profileName}</span> : null}
+      {fieldIds.length > 0 ? (
+        <span className="truncate text-zinc-500">· {fieldIds.map(labelFor).join(', ')}</span>
+      ) : null}
     </div>
   );
 });
