@@ -467,20 +467,20 @@ const ThreadListItemMore: FC<{
           ) : isTaskRunning ? (
             <span
               aria-hidden="true"
-              className="inline-flex items-center justify-center gap-[2px] text-muted-foreground"
+              className="inline-flex size-3.5 items-center justify-center gap-[2.5px] text-muted-foreground"
               title="Agent is working..."
             >
               <span
-                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "-0.32s", animationDuration: "1s" }}
+                className="size-[2px] rounded-full bg-current animate-thread-dot motion-reduce:animate-none"
+                style={{ animationDelay: "-0.32s" }}
               />
               <span
-                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "-0.16s", animationDuration: "1s" }}
+                className="size-[2px] rounded-full bg-current animate-thread-dot motion-reduce:animate-none"
+                style={{ animationDelay: "-0.16s" }}
               />
               <span
-                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "0s", animationDuration: "1s" }}
+                className="size-[2px] rounded-full bg-current animate-thread-dot motion-reduce:animate-none"
+                style={{ animationDelay: "0s" }}
               />
             </span>
           ) : (
