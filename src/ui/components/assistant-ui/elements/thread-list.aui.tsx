@@ -351,35 +351,11 @@ export const ThreadListItem: FC = () => {
         <ThreadListItemPrimitive.Trigger
           ref={triggerRef}
           data-slot="aui_thread-list-item-trigger"
-          className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1"
+          className={cn(
+            "focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1",
+            (isGeneratingTitle || isTaskRunning) && "pe-9",
+          )}
         >
-          {isGeneratingTitle ? (
-            <Loader2Icon
-              aria-hidden
-              data-slot="aui_thread-list-item-spinner"
-              className="text-zinc-400 me-2 size-3.5 shrink-0 animate-spin"
-            />
-          ) : isTaskRunning ? (
-            <span
-              aria-hidden="true"
-              data-slot="aui_thread-list-item-bouncing-dots"
-              className="inline-flex items-center gap-0.5 me-2 shrink-0 py-1"
-              title="Agent is working..."
-            >
-              <span
-                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "-0.32s", animationDuration: "1.1s" }}
-              />
-              <span
-                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "-0.16s", animationDuration: "1.1s" }}
-              />
-              <span
-                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
-                style={{ animationDelay: "0s", animationDuration: "1.1s" }}
-              />
-            </span>
-          ) : null}
           <span
             data-slot="aui_thread-list-item-title"
             className="min-w-0 flex-1 truncate"
@@ -389,7 +365,11 @@ export const ThreadListItem: FC = () => {
           {isTaskRunning && <span className="sr-only">Running</span>}
         </ThreadListItemPrimitive.Trigger>
       )}
-      <ThreadListItemMore onRename={() => setIsRenaming(true)} />
+      <ThreadListItemMore
+        onRename={() => setIsRenaming(true)}
+        isGeneratingTitle={isGeneratingTitle}
+        isTaskRunning={isTaskRunning}
+      />
     </ThreadListItemPrimitive.Root>
   );
 };
@@ -460,7 +440,11 @@ const ThreadListItemRename: FC<{
   );
 };
 
-const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
+const ThreadListItemMore: FC<{
+  onRename: () => void;
+  isGeneratingTitle?: boolean;
+  isTaskRunning?: boolean;
+}> = ({ onRename, isGeneratingTitle = false, isTaskRunning = false }) => {
   return (
     <ThreadListItemMorePrimitive.Root sharedFocusGroup>
       <ThreadListItemMorePrimitive.Trigger asChild>
@@ -468,9 +452,40 @@ const ThreadListItemMore: FC<{ onRename: () => void }> = ({ onRename }) => {
           variant="ghost"
           size="icon"
           data-slot="aui_thread-list-item-more"
-          className="data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100"
+          className={cn(
+            "data-[state=open]:bg-accent absolute end-1.5 top-1/2 size-6 -translate-y-1/2 p-0 transition-opacity",
+            isGeneratingTitle || isTaskRunning
+              ? "opacity-100"
+              : "opacity-0 group-hover:opacity-100 group-has-focus-visible:opacity-100 group-data-active:opacity-100 data-[state=open]:opacity-100",
+          )}
         >
-          <MoreHorizontalIcon className="size-3.5" />
+          {isGeneratingTitle ? (
+            <Loader2Icon
+              aria-hidden
+              className="size-3.5 animate-spin text-muted-foreground"
+            />
+          ) : isTaskRunning ? (
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center justify-center gap-[2px] text-muted-foreground"
+              title="Agent is working..."
+            >
+              <span
+                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "-0.32s", animationDuration: "1s" }}
+              />
+              <span
+                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "-0.16s", animationDuration: "1s" }}
+              />
+              <span
+                className="size-1 rounded-full bg-current animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "0s", animationDuration: "1s" }}
+              />
+            </span>
+          ) : (
+            <MoreHorizontalIcon className="size-3.5" />
+          )}
           <span className="sr-only">More options</span>
         </Button>
       </ThreadListItemMorePrimitive.Trigger>
