@@ -764,7 +764,15 @@ export function getModelAdapter(providerName = 'gemini') {
           ? 'meta-models/Muse-Spark-Open-816B-A42B'
           : m && m.toLowerCase().startsWith('muse-')
             ? m
-            : process.env.META_MUSE_MODEL || 'meta-models/Muse-Spark-Open-816B-A42B'
+            : process.env.META_MUSE_MODEL || 'meta-models/Muse-Spark-Open-816B-A42B',
+      authHeader: (key) => {
+        const headers = { Authorization: `Bearer ${key}` };
+        if (process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET) {
+          headers['Modal-Key'] = process.env.MODAL_PROXY_TOKEN_ID;
+          headers['Modal-Secret'] = process.env.MODAL_PROXY_TOKEN_SECRET;
+        }
+        return headers;
+      }
     });
     adapterRegistry.set('muse', adapter);
     adapterRegistry.set('meta', adapter);

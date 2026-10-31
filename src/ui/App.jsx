@@ -415,12 +415,14 @@ export default function App() {
         {
           id: userMsgId,
           role: 'user',
+          parentId: messages.length > 0 ? messages[messages.length - 1].id : null,
           content: [{ type: 'text', text: userText || (orderedAttachments.length ? `[${orderedAttachments.length} attachments]` : '') }],
           attachments: orderedAttachments
         },
         {
           id: assistantMsgId,
           role: 'assistant',
+          parentId: userMsgId,
           content: [],
           runStartedAt: now,
           runCompletedAt: null,
@@ -455,7 +457,7 @@ export default function App() {
           userId: getUserId(),
           instruction: chatInstruction,
           messages: newMessages
-            .filter((m) => m.id !== assistantMsgId)
+            .filter((m) => m.role === 'user' || (m.role === 'assistant' && (m.content || []).some((c) => c.type === 'text' && c.text)))
             .map((m) => ({
               role: m.role,
               content: (m.content || [])
@@ -876,6 +878,7 @@ export default function App() {
       return {
         id: msg.id,
         role: msg.role,
+        parentId: msg.parentId,
         content: sanitizedContent,
         attachments: msg.attachments || [],
         status: msg.runStatus === 'error'
@@ -954,6 +957,7 @@ export default function App() {
       {
         id: assistantMsgId,
         role: 'assistant',
+        parentId: targetUserMsg.id,
         content: [],
         runStartedAt: Date.now(),
         runCompletedAt: null,
@@ -1115,6 +1119,7 @@ export default function App() {
                     onResolveInterrupt={handleResolveInterrupt}
                     selectedModel={selectedModel}
                     onSelectModel={setSelectedModel}
+                    onReload={handleReload}
                   />
                 </div>
 

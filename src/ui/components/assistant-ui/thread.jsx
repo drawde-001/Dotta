@@ -86,21 +86,24 @@ import { cn } from "@/lib/utils";
 
 export { registerToolComponent, registerDataRenderer };
 
-export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false }) {
+const ReloadContext = React.createContext(null);
+
+export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false, onReload }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
-    <ThreadPrimitive.Root
-      className="flex h-full flex-col bg-transparent text-foreground text-sm"
-      style={{
-        "--thread-max-width": "46rem",
-        "--composer-radius": "1.25rem",
-        "--composer-padding": "8px",
-        "--composer-bg": "transparent",
-        "--accent-color": "var(--aui-accent)",
-        "--accent-foreground": "var(--aui-accent-foreground)",
-      }}
-    >
+    <ReloadContext.Provider value={onReload}>
+      <ThreadPrimitive.Root
+        className="flex h-full flex-col bg-transparent text-foreground text-sm"
+        style={{
+          "--thread-max-width": "46rem",
+          "--composer-radius": "1.25rem",
+          "--composer-padding": "8px",
+          "--composer-bg": "transparent",
+          "--accent-color": "var(--aui-accent)",
+          "--accent-foreground": "var(--aui-accent-foreground)",
+        }}
+      >
       <ThreadPrimitive.Viewport
         turnAnchor="top"
         className="relative flex flex-1 flex-col overflow-x-auto overflow-y-auto scroll-smooth"
@@ -147,6 +150,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
+    </ReloadContext.Provider>
   );
 }
 
@@ -1167,9 +1171,19 @@ function MessageError() {
   });
   const errorObj = useAuiState((s) => s.message.status?.error || s.message.metadata?.custom?.error);
   const rawError = typeof errorObj === 'string' ? errorObj : (errorObj?.message || '');
+  const messageId = useAuiState((s) => s.message.id);
+  const reloadFromContext = React.useContext(ReloadContext);
 
   const aui = useAui();
   const handleRetry = () => {
+    if (typeof reloadFromContext === 'function') {
+      try {
+        reloadFromContext(messageId);
+        return;
+      } catch (err) {
+        console.warn('[Retry] reloadFromContext:', err);
+      }
+    }
     if (typeof aui.message?.reload === 'function') {
       try {
         aui.message.reload();
