@@ -818,6 +818,7 @@ function AssistantMessageBody() {
   flushToolBatch();
 
   const entries = [];
+  const reasoningNodes = [];
   const promotedVisualNodes = [];
   const finalAnswerParts = [];
   const sourceParts = [];
@@ -878,28 +879,20 @@ function AssistantMessageBody() {
       const entryId = part.id || `reasoning-${idx}`;
       const stepLabel = extractThinkingStepLabel(part.text);
       const isStreamingReasoning = Boolean(
-        isLatestStep && (part.status?.type === "running" || idx === rawParts.length - 1)
+        isRunning && (part.status?.type === "running" || idx === rawParts.length - 1)
       );
-      const isOpen =
-        manualEntryId !== null
-          ? manualEntryId === entryId
-          : isStreamingReasoning;
 
-      entries.push({
-        id: entryId,
-        kind: "commentary",
-        label: stepLabel,
-        content: (
+      reasoningNodes.push(
+        <div key={entryId} className="my-1 w-full">
           <Reasoning
             text={part.text}
             status={part.status}
             label={stepLabel}
             streaming={isStreamingReasoning}
-            open={isOpen}
-            onOpenChange={(next) => setManualEntryId(next ? entryId : null)}
+            variant="ghost"
           />
-        ),
-      });
+        </div>
+      );
     } else if (isSubmittedQAPart(part)) {
       const qData =
         part.questions ||
@@ -1019,20 +1012,27 @@ function AssistantMessageBody() {
 
   const groupOpen = userOpen !== null ? userOpen : isGroupActive;
 
-  if (entries.length > 0) {
+  if (entries.length > 0 || reasoningNodes.length > 0) {
     return (
       <div className="flex flex-col gap-3">
-        <RunActivity
-          status={status}
-          statusLabel={statusLabel}
-          durationLabel={durationLabel}
-          entries={entries}
-          open={groupOpen}
-          onOpenChange={(next) => {
-            setUserOpen(next);
-            if (!next) setManualEntryId(null);
-          }}
-        />
+        {reasoningNodes.length > 0 && (
+          <div className="flex flex-col gap-1.5 w-full">
+            {reasoningNodes}
+          </div>
+        )}
+        {entries.length > 0 && (
+          <RunActivity
+            status={status}
+            statusLabel={statusLabel}
+            durationLabel={durationLabel}
+            entries={entries}
+            open={groupOpen}
+            onOpenChange={(next) => {
+              setUserOpen(next);
+              if (!next) setManualEntryId(null);
+            }}
+          />
+        )}
         {promotedVisualNodes.length > 0 && (
           <div className="flex flex-col gap-2">
             {promotedVisualNodes}

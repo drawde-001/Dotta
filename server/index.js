@@ -459,6 +459,41 @@ app.get('/api/health', handleHealth);
 // AG-UI 1.0 Chat endpoint
 app.post('/api/chat', createAgUiHandler({ engine }));
 
+// Silent thread title summarization endpoint: returns clean, concise 3-5 word title
+app.post('/api/thread/title', async (req, res) => {
+  try {
+    const { text = '' } = req.body || {};
+    const raw = String(text || '').trim();
+    if (!raw) return res.json({ title: 'New chat' });
+
+    let cleaned = raw
+      .replace(/https?:\/\/\S+/gi, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/["'`]+/g, '')
+      .replace(/^(can you|could you|please|i want to|i need to|help me|tell me about|how to|what is|search for|research and read their docs on|research and read docs on|research and read|research|find|look up|show me|hi|hey|hello)\s+/i, '')
+      .replace(/[?!.:;,]+$/, '')
+      .trim();
+
+    if (!cleaned) cleaned = raw.trim();
+
+    const words = cleaned
+      .split(/\s+/)
+      .filter((w) => w.length > 0 && !/^(and|the|a|an|to|for|on|with|in|of|how|we)$/i.test(w))
+      .slice(0, 5);
+
+    const titleWords = words.length > 0 ? words : cleaned.split(/\s+/).slice(0, 5);
+    const title = titleWords
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ')
+      .slice(0, 36);
+
+    res.json({ title: title || 'New chat' });
+  } catch (err) {
+    res.json({ title: 'New chat' });
+  }
+});
+
 // Audio & Video Transcription endpoint with 10-minute segmentation support
 app.post('/api/transcribe', async (req, res) => {
   try {

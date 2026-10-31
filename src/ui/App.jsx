@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
@@ -66,7 +66,29 @@ export default function App() {
   const abortControllerRef = useRef(null);
   const wsRef = useRef(null);
   const browserIdleTimerRef = useRef(null);
-  const currentThreadIdRef = useRef(`thread-${Date.now()}`);
+  const initialThreadIdRef = useRef(`thread-${Date.now()}`);
+  const [threads, setThreads] = useState(() => [
+    {
+      id: initialThreadIdRef.current,
+      title: 'New chat',
+      status: 'regular',
+      lastMessageAt: new Date(),
+      isGeneratingTitle: false
+    }
+  ]);
+  const [activeThreadId, setActiveThreadId] = useState(initialThreadIdRef.current);
+  const currentThreadIdRef = useRef(initialThreadIdRef.current);
+  const threadMessagesMapRef = useRef({ [initialThreadIdRef.current]: [] });
+
+  // Sync currentThreadIdRef with activeThreadId
+  useEffect(() => {
+    currentThreadIdRef.current = activeThreadId;
+  }, [activeThreadId]);
+
+  // Keep threadMessagesMapRef updated when messages change
+  useEffect(() => {
+    threadMessagesMapRef.current[activeThreadId] = messages;
+  }, [messages, activeThreadId]);
 
   const handleOpenFileTab = (fileData) => {
     if (!fileData) return;
@@ -197,12 +219,68 @@ export default function App() {
     setActionSetIndex((prev) => (prev + 1) % quickActionSets.length);
   };
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     if (isRunning) return;
-    currentThreadIdRef.current = `thread-${Date.now()}`;
+    const newId = `thread-${Date.now()}`;
+    threadMessagesMapRef.current[newId] = [];
+    setThreads((prev) => [
+      {
+        id: newId,
+        title: 'New chat',
+        status: 'regular',
+        lastMessageAt: new Date(),
+        isGeneratingTitle: false
+      },
+      ...prev
+    ]);
+    setActiveThreadId(newId);
+    currentThreadIdRef.current = newId;
     setMessages([]);
     setActiveInterrupt(null);
-  };
+  }, [isRunning]);
+
+  const handleSwitchThread = useCallback((targetId) => {
+    if (isRunning || targetId === activeThreadId) return;
+    setActiveThreadId(targetId);
+    currentThreadIdRef.current = targetId;
+    setMessages(threadMessagesMapRef.current[targetId] || []);
+    setActiveInterrupt(null);
+  }, [isRunning, activeThreadId]);
+
+  const handleRenameThread = useCallback((targetId, newTitle) => {
+    setThreads((prev) =>
+      prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t))
+    );
+  }, []);
+
+  const handleDeleteThread = useCallback((targetId) => {
+    setThreads((prev) => {
+      const remaining = prev.filter((t) => t.id !== targetId);
+      if (remaining.length === 0) {
+        const freshId = `thread-${Date.now()}`;
+        threadMessagesMapRef.current[freshId] = [];
+        setActiveThreadId(freshId);
+        currentThreadIdRef.current = freshId;
+        setMessages([]);
+        return [
+          {
+            id: freshId,
+            title: 'New chat',
+            status: 'regular',
+            lastMessageAt: new Date(),
+            isGeneratingTitle: false
+          }
+        ];
+      }
+      if (activeThreadId === targetId) {
+        const nextActive = remaining[0].id;
+        setActiveThreadId(nextActive);
+        currentThreadIdRef.current = nextActive;
+        setMessages(threadMessagesMapRef.current[nextActive] || []);
+      }
+      return remaining;
+    });
+  }, [activeThreadId]);
 
   const handleSendMessage = async (userMessage, options = {}) => {
     let userText = '';
@@ -224,6 +302,71 @@ export default function App() {
     }));
 
     if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && isRunning)) return;
+
+    // If this is the first message in the thread, trigger silent title generation
+    const currentTId = currentThreadIdRef.current;
+    const isFirstInThread = (messages.length === 0);
+    if (isFirstInThread && userText.trim()) {
+      setThreads((prev) =>
+        prev.map((t) =>
+          t.id === currentTId
+            ? { ...t, isGeneratingTitle: true }
+            : t
+        )
+      );
+
+      (async () => {
+        try {
+          let genTitle = '';
+          try {
+            const res = await fetch('/api/thread/title', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: userText })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data?.title && data.title !== 'New chat') {
+                genTitle = data.title;
+              }
+            }
+          } catch {}
+
+          if (!genTitle) {
+            let c = userText
+              .replace(/https?:\/\/\S+/gi, '')
+              .replace(/!\[.*?\]\(.*?\)/g, '')
+              .replace(/<[^>]+>/g, '')
+              .replace(/["'`]+/g, '')
+              .replace(/^(can you|could you|please|i want to|i need to|help me|tell me about|how to|what is|search for|research and read their docs on|research and read docs on|research and read|research|find|look up|show me|hi|hey|hello)\s+/i, '')
+              .replace(/[?!.:;,]+$/, '')
+              .trim();
+            if (!c) c = userText.trim();
+            const w = c.split(/\s+/).filter((x) => x.length > 0 && !/^(and|the|a|an|to|for|on|with|in|of|how|we)$/i.test(x)).slice(0, 5);
+            genTitle = (w.length > 0 ? w : c.split(/\s+/).slice(0, 5))
+              .map((x) => x.charAt(0).toUpperCase() + x.slice(1).toLowerCase())
+              .join(' ')
+              .slice(0, 36);
+          }
+
+          setThreads((prev) =>
+            prev.map((t) =>
+              t.id === currentTId
+                ? { ...t, title: genTitle || 'New chat', isGeneratingTitle: false, lastMessageAt: new Date() }
+                : t
+            )
+          );
+        } catch {
+          setThreads((prev) =>
+            prev.map((t) =>
+              t.id === currentTId
+                ? { ...t, isGeneratingTitle: false }
+                : t
+            )
+          );
+        }
+      })();
+    }
 
     // Reset browser idle timer when user initiates new generation
     if (browserIdleTimerRef.current) {
@@ -735,9 +878,30 @@ export default function App() {
     }
   });
 
+  const threadListAdapter = useMemo(() => ({
+    threadId: activeThreadId,
+    threads: threads.map((t) => ({
+      id: t.id,
+      title: t.title || 'New chat',
+      status: 'regular',
+      lastMessageAt: t.lastMessageAt,
+      custom: {
+        isGeneratingTitle: Boolean(t.isGeneratingTitle),
+        isRunning: Boolean(isRunning && t.id === activeThreadId)
+      }
+    })),
+    onSwitchToNewThread: handleNewChat,
+    onSwitchToThread: handleSwitchThread,
+    onRename: handleRenameThread,
+    onDelete: handleDeleteThread
+  }), [threads, activeThreadId, isRunning, handleNewChat, handleSwitchThread, handleRenameThread, handleDeleteThread]);
+
   const runtime = useExternalStoreRuntime({
     isRunning,
     messages: threadMessages,
+    adapters: {
+      threadList: threadListAdapter
+    },
     onNew: async (msg) => {
       await handleSendMessage(msg);
     },

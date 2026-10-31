@@ -13,6 +13,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src/ui')
     }
   },
+  optimizeDeps: {
+    entries: ['index.html']
+  },
   server: {
     port: 3000,
     proxy: {

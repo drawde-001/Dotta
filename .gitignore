@@ -31,6 +31,9 @@ pnpm-debug.log*
 skills/
 *.skill
 
+# Design reference files
+gathered-elements/
+
 # OS & Editor temporary files
 .DS_Store
 Thumbs.db

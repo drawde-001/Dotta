@@ -25,15 +25,15 @@ export const ANIMATION_DURATION = 200;
 
 const ReasoningPreviewContext = createContext(false);
 
-function reasoningVariants({ variant = "outline", className } = {}) {
+function reasoningVariants({ variant = "ghost", className } = {}) {
   const variantMap = {
-    outline: "rounded-lg border border-border px-3 py-2",
-    ghost: "",
-    muted: "bg-muted/50 rounded-lg px-3 py-2",
+    outline: "rounded-lg px-2.5 py-1.5",
+    ghost: "px-0 py-1",
+    muted: "bg-muted/40 rounded-lg px-2.5 py-1.5",
   };
   return cn(
-    "aui-reasoning-root mb-2 w-full",
-    variantMap[variant] ?? variantMap.outline,
+    "aui-reasoning-root mb-2 w-full border-0 shadow-none outline-none",
+    variantMap[variant] ?? variantMap.ghost,
     className
   );
 }
@@ -44,7 +44,7 @@ const ReasoningRoot = forwardRef(function ReasoningRoot(
     variant = "ghost",
     open: controlledOpen,
     onOpenChange: controlledOnOpenChange,
-    defaultOpen = false,
+    defaultOpen = true,
     streaming,
     onAnimationStart,
     children,

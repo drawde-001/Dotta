@@ -322,6 +322,9 @@ const ThreadListSkeleton: FC = () => {
 
 export const ThreadListItem: FC = () => {
   const isRunning = useAuiState((s) => s.threadListItem.isRunning);
+  const custom = useAuiState((s) => (s.threadListItem as any)?.custom);
+  const isGeneratingTitle = Boolean(custom?.isGeneratingTitle);
+  const isTaskRunning = Boolean(isRunning || custom?.isRunning);
   const [isRenaming, setIsRenaming] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef(false);
@@ -350,20 +353,40 @@ export const ThreadListItem: FC = () => {
           data-slot="aui_thread-list-item-trigger"
           className="focus-visible:ring-ring/50 flex h-full min-w-0 flex-1 items-center rounded-md px-2.5 text-start text-sm outline-none group-hover:pe-9 group-has-focus-visible:pe-9 group-has-data-[state=open]:pe-9 group-data-active:pe-9 focus-visible:ring-1"
         >
-          {isRunning && (
+          {isGeneratingTitle ? (
             <Loader2Icon
               aria-hidden
-              data-slot="aui_thread-list-item-running"
-              className="text-muted-foreground me-1.5 size-3.5 shrink-0 animate-spin"
+              data-slot="aui_thread-list-item-spinner"
+              className="text-zinc-400 me-2 size-3.5 shrink-0 animate-spin"
             />
-          )}
+          ) : isTaskRunning ? (
+            <span
+              aria-hidden="true"
+              data-slot="aui_thread-list-item-bouncing-dots"
+              className="inline-flex items-center gap-0.5 me-2 shrink-0 py-1"
+              title="Agent is working..."
+            >
+              <span
+                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "-0.32s", animationDuration: "1.1s" }}
+              />
+              <span
+                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "-0.16s", animationDuration: "1.1s" }}
+              />
+              <span
+                className="size-1 rounded-full bg-blue-400 animate-bounce motion-reduce:animate-none"
+                style={{ animationDelay: "0s", animationDuration: "1.1s" }}
+              />
+            </span>
+          ) : null}
           <span
             data-slot="aui_thread-list-item-title"
             className="min-w-0 flex-1 truncate"
           >
-            <ThreadListItemPrimitive.Title fallback="New Chat" />
+            <ThreadListItemPrimitive.Title fallback="New chat" />
           </span>
-          {isRunning && <span className="sr-only">Running</span>}
+          {isTaskRunning && <span className="sr-only">Running</span>}
         </ThreadListItemPrimitive.Trigger>
       )}
       <ThreadListItemMore onRename={() => setIsRenaming(true)} />
