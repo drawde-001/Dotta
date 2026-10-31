@@ -457,6 +457,34 @@ app.post('/api/attachments/process', async (req, res) => {
       const orderNum = att.order || i + 1;
       console.log(`[Omni Attachments] Sequentially processing attachment ${orderNum} of ${sorted.length}: "${att.name}" (${att.size} bytes)`);
 
+      // Persist the raw file into the user's own sandboxed workspace so the
+      // agent's file tools (file_list, file_read, segment_image, ...) can
+      // actually use it. The workspace folder is created on demand, tied to
+      // the server-session user — never the root directory.
+      let workspacePath = '';
+      const sessionUserId = sanitizeUserId(req.userId);
+      if (sessionUserId && att.dataUrl?.startsWith('data:')) {
+        try {
+          const comma = att.dataUrl.indexOf(',');
+          const buffer = Buffer.from(att.dataUrl.slice(comma + 1), 'base64');
+          if (buffer.length > 0) {
+            const root = getUserWorkspaceRoot(sessionUserId);
+            const safeName = String(att.name || `attachment-${orderNum}`)
+              .split(/[/\\]/)
+              .pop()
+              .replace(/[^a-zA-Z0-9._-]/g, '_')
+              .slice(0, 100);
+            const rel = `uploads/${Date.now()}-${safeName}`;
+            const dest = validateAndResolvePath(root, rel);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.writeFileSync(dest, buffer);
+            workspacePath = rel;
+          }
+        } catch (err) {
+          console.warn('[Omni Attachments] Failed to save attachment to workspace:', err.message);
+        }
+      }
+
       let textSummary = '';
       if (att.textContent) {
         textSummary = att.textContent.slice(0, 3000);
@@ -476,7 +504,12 @@ app.post('/api/attachments/process', async (req, res) => {
         name: att.name,
         size: att.size,
         type: att.type,
-        summary: textSummary || `Processed ${att.type || 'file'} (${att.size} bytes)`
+        workspacePath: workspacePath || undefined,
+        summary:
+          (textSummary || `Processed ${att.type || 'file'} (${att.size} bytes)`) +
+          (workspacePath
+            ? `\nSaved to your workspace as "${workspacePath}". Use file tools (file_read, segment_image, media processors) on that path when the task needs the actual file.`
+            : '\nNo file bytes were received for this attachment, so it was not saved to the workspace.')
       });
     }
 
