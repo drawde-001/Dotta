@@ -15,6 +15,15 @@ import {
 import { transcribeSingleAudioChunk } from '../media/media-processor.js';
 import { stageBioFile } from './staging.js';
 
+/**
+ * Models that accept documents/audio/video natively as inline media in this
+ * runtime (Gemini family). For them the SELECTED MODEL does the processing;
+ * server-side extraction/transcription is only a fallback for other models.
+ */
+export function isNativeMediaModel(model) {
+  return /gemini/i.test(String(model || ''));
+}
+
 function hasValue(v) {
   if (v === null || v === undefined) return false;
   if (typeof v === 'string') return v.trim().length > 0;
@@ -92,7 +101,8 @@ export function executeBioIndex({ userId } = {}) {
  * is transcribed, and stored files are staged for form upload (uploadRef).
  * A profile_id that is not the active profile is denied.
  */
-export async function executeBioGet({ userId, fieldIds = [], profileId = null } = {}) {
+export async function executeBioGet({ userId, fieldIds = [], profileId = null, model = '' } = {}) {
+  const nativeMedia = isNativeMediaModel(model);
   if (!userId) return 'Error: BIO requires an identified user.';
   const profile = getActiveProfile(userId);
   if (!profile) return 'Error: No active BIO profile exists for this user.';
@@ -129,9 +139,13 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
       const abs = sandboxAbsPath(userId, cv.path);
       let text = '';
       if (abs) {
-        try {
-          text = await extractFileText(abs, cv.mime || '', cv.name);
-        } catch {}
+        if (nativeMedia && /\.pdf$/i.test(cv.name || '')) {
+          text = '[The full CV document is attached to this result and will be processed natively by you.]';
+        } else {
+          try {
+            text = await extractFileText(abs, cv.mime || '', cv.name);
+          } catch {}
+        }
         stageFile('cv', abs, cv.name, cv.mime || '');
       }
       values.cv = {
@@ -170,7 +184,9 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
 
       if (entry.type === 'document') {
         let text = entry.textContent || '';
-        if (!text && abs) {
+        if (nativeMedia && /\.pdf$/i.test(entry.file?.name || entry.name || '')) {
+          text = '[The full document is attached to this result and will be processed natively by you.]';
+        } else if (!text && abs) {
           try {
             text = await extractFileText(abs, entry.file?.mime || '', entry.file?.name || entry.name);
             if (text) {
@@ -190,6 +206,10 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
           values[id] = `[Audio entry "${entry.name}" — granted, but no audio file is attached.]`;
           continue;
         }
+        if (nativeMedia) {
+          values[id] = `[Audio entry "${entry.name}" — the full audio is attached to this result and will be processed natively by you.]`;
+          continue;
+        }
         try {
           const result = await transcribeSingleAudioChunk({
             buffer: fs.readFileSync(abs),
@@ -204,7 +224,9 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
           values[id] = `[Audio entry "${entry.name}" — transcription failed: ${err.message}. The file itself is staged for upload.]`;
         }
       } else if (entry.type === 'video') {
-        values[id] = `[Video entry "${entry.name}" — the user granted agent access. Video frames are not viewed as text in this runtime; the stored file is staged for upload via its uploadRef.]`;
+        values[id] = nativeMedia
+          ? `[Video entry "${entry.name}" — the full video is attached to this result and will be processed natively by you.]`
+          : `[Video entry "${entry.name}" — the user granted agent access. Video frames are not viewed as text in this runtime; the stored file is staged for upload via its uploadRef.]`;
       }
       continue;
     }
@@ -248,43 +270,63 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null } 
 }
 
 /**
- * Collect image parts (profile photo + requested image entries) so the model
- * actually SEES permissible images in the same turn as the bio_get result.
+ * Collect media parts so the SELECTED MODEL does the processing natively:
+ * images for every vision model; documents (PDF), audio and video inline for
+ * models that accept them natively (Gemini family). For other models the
+ * callers fall back to extraction (documents) and Meta transcription (audio).
+ * Caps follow the model registry input limits.
  */
-export async function collectBioMediaParts({ userId, fieldIds = [] } = {}) {
+export async function collectBioMediaParts({ userId, fieldIds = [], model = '' } = {}) {
   const parts = [];
   if (!userId) return parts;
   const profile = getActiveProfile(userId);
   if (!profile) return parts;
+  const nativeMedia = isNativeMediaModel(model);
   const ids = Array.isArray(fieldIds) ? fieldIds.map(String) : [];
 
-  const addImage = (relPath, mimeHint) => {
-    if (parts.length >= 3) return;
+  const addFilePart = (relPath, mime, maxBytes) => {
+    if (parts.length >= 4) return;
     const abs = sandboxAbsPath(userId, relPath);
-    if (!abs) return;
+    if (!abs || !mime) return;
     try {
       const stat = fs.statSync(abs);
-      if (stat.size > 5 * 1024 * 1024) return;
-      const ext = path.extname(abs).toLowerCase();
-      const mime =
-        mimeHint ||
-        ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] ||
-          'image/png');
-      if (!mime.startsWith('image/')) return;
+      if (stat.size > maxBytes) return;
       parts.push({
         inlineData: { mimeType: mime, data: fs.readFileSync(abs).toString('base64') }
       });
     } catch {}
   };
 
+  const imageMimeFor = (relPath, hint) => {
+    if (hint && hint.startsWith('image/')) return hint;
+    const ext = path.extname(String(relPath || '')).toLowerCase();
+    return (
+      { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] ||
+      'image/png'
+    );
+  };
+
   if (ids.includes('photo')) {
-    addImage(profile.fields.photo || '', '');
+    addFilePart(profile.fields.photo || '', imageMimeFor(profile.fields.photo || '', ''), 5 * 1024 * 1024);
   }
+  if (ids.includes('cv') && nativeMedia && profile.fields.cv?.path) {
+    addFilePart(profile.fields.cv.path, 'application/pdf', 15 * 1024 * 1024);
+  }
+
   for (const id of ids) {
     if (!id.startsWith('entry:')) continue;
     const entry = (profile.entries || []).find((e) => e.id === id.slice(6));
-    if (entry && entry.type === 'image' && entry.file?.path) {
-      addImage(entry.file.path, entry.file.mime || '');
+    if (!entry || !entry.file?.path) continue;
+    if (entry.type === 'image') {
+      addFilePart(entry.file.path, imageMimeFor(entry.file.path, entry.file.mime || ''), 5 * 1024 * 1024);
+    } else if (!nativeMedia) {
+      continue;
+    } else if (entry.type === 'document') {
+      addFilePart(entry.file.path, 'application/pdf', 15 * 1024 * 1024);
+    } else if (entry.type === 'audio' && entry.agentReadable === true) {
+      addFilePart(entry.file.path, entry.file.mime || 'audio/mpeg', 32 * 1024 * 1024);
+    } else if (entry.type === 'video' && entry.agentReadable === true) {
+      addFilePart(entry.file.path, entry.file.mime || 'video/mp4', 20 * 1024 * 1024);
     }
   }
   return parts;

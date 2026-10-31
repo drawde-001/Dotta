@@ -6,7 +6,7 @@ import {
 } from '@assistant-ui/react';
 import { Thread } from '@/components/assistant-ui/thread';
 import { InputDock } from '@/components/InputDock';
-import { ThreadListSidebar } from '@/components/assistant-ui/elements/threadlist-sidebar.aui';
+import { ThreadsPanel } from '@/components/ThreadsPanel';
 import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { AppRail } from '@/components/AppRail';
 import { BioDashboard } from '@/components/BioDashboard';
@@ -21,7 +21,6 @@ import {
   Columns,
   Zap,
   Shuffle,
-  PanelLeftClose,
   PanelLeftOpen,
   PanelRightOpen
 } from 'lucide-react';
@@ -767,17 +766,11 @@ export default function App() {
         <div className="flex-1 flex overflow-hidden relative">
           {/* Threads panel (Home view only): rounded, collapsible */}
           {view === 'home' && sidebarOpen && (
-            <div className="relative z-30 my-2 mr-2 flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
-              <ThreadListSidebar className="min-h-0 w-full flex-1 border-none bg-transparent" />
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(false)}
-                aria-label="Collapse threads panel"
-                title="Collapse panel"
-                className="absolute right-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] text-zinc-500 transition-colors hover:bg-white/[0.06] hover:text-zinc-200"
-              >
-                <PanelLeftClose size={16} />
-              </button>
+            <div className="z-30 my-2 mr-2 flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
+              <ThreadsPanel
+                onCollapse={() => setSidebarOpen(false)}
+                onOpenBio={() => setView('bio')}
+              />
             </div>
           )}
 
