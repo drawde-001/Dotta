@@ -5,6 +5,7 @@ import { getUserWorkspaceRoot, validateAndResolvePath } from '../execution/works
 import { transcribeSingleAudioChunk } from '../media/media-processor.js';
 import { stageBioFile } from './staging.js';
 import { extractFileText, isNativeMediaModel } from './executors.js';
+import { wrapUntrustedContent } from '../tools/untrusted.js';
 
 /**
  * Dedicated BIO file processors. The agent must run the matching processor
@@ -110,7 +111,7 @@ export async function processDocument({ userId, ref, model = '' } = {}) {
   if (!text) {
     return `Could not extract text from "${resolved.name}". Politely tell the user the document could not be processed and recommend uploading a text-based PDF/DOCX/TXT or pasting the content. (uploadRef: ${uploadRef || 'unavailable'})`;
   }
-  return `[Processed document "${resolved.name}" — confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${text}`;
+  return `[Processed document "${resolved.name}" — confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('bio-document', text)}`;
 }
 
 export async function processImage({ userId, ref } = {}) {
@@ -148,7 +149,7 @@ export async function processAudio({ userId, ref, model = '' } = {}) {
       filename: resolved.name
     });
     if (result?.ok && result.text) {
-      return `[Transcribed audio "${resolved.name}" — confirm the content matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${String(result.text).slice(0, 8000)}`;
+      return `[Transcribed audio "${resolved.name}" — confirm the content matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('audio-transcript', String(result.text).slice(0, 8000))}`;
     }
     return `Could not transcribe audio "${resolved.name}"${result?.error ? `: ${result.error}` : ''}. Politely tell the user transcription failed and recommend re-uploading the audio or providing the content as text. (uploadRef: ${uploadRef || 'unavailable'})`;
   } catch (err) {

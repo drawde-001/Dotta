@@ -23,6 +23,12 @@ import {
   getUserWorkspaceRoot,
   validateAndResolvePath
 } from '../src/core/execution/workspace.js';
+import { wrapUntrustedContent } from '../src/core/tools/untrusted.js';
+import {
+  scanForInjection,
+  quarantineNotice,
+  warningBanner
+} from '../src/core/tools/injection-scan.js';
 import {
   loadUserBio,
   createProfile as bioCreateProfile,
@@ -559,6 +565,18 @@ app.post('/api/attachments/process', async (req, res) => {
             const base64 = att.dataUrl.slice(comma + 1);
             textSummary = Buffer.from(base64, 'base64').toString('utf8').slice(0, 3000);
           } catch {}
+        }
+      }
+
+      // Screen attachment-derived text before it enters agent context.
+      if (textSummary) {
+        const assessment = scanForInjection(textSummary);
+        if (assessment.tier === 'quarantine') {
+          textSummary = quarantineNotice('attachment', assessment, textSummary);
+        } else if (assessment.tier === 'warn') {
+          textSummary = `${warningBanner('attachment', assessment)}\n${wrapUntrustedContent('attachment', textSummary)}`;
+        } else {
+          textSummary = wrapUntrustedContent('attachment', textSummary);
         }
       }
 
