@@ -2301,8 +2301,11 @@ export const InputDock: React.FC<InputDockProps> = ({
                     </button>
                   </div>
 
-                  {/* Models List */}
-                  <div className="flex flex-col gap-0.5">
+                  {/* Models List (capped height, inner scroll) */}
+                  <div
+                    className="flex flex-col gap-0.5 overflow-y-auto"
+                    style={{ maxHeight: 'min(320px, 45vh)' }}
+                  >
                     {visibleModels.length === 0 ? (
                       <div
                         className="px-3 py-3 text-center text-[13px] tracking-[-0.01em]"

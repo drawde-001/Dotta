@@ -579,7 +579,7 @@ export const AGENT_TOOLS_CATALOG = {
     name: 'generate_image',
     readOnly: true,
     description:
-      'Generates a high-resolution image, photo, portrait, illustration, or artwork from a text prompt using Meta Muse Image 1.0 (muse-image-1.0) and renders it directly in the UI ImageGeneration component. ALWAYS use this tool whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or use shell scripts/code to fake image generation.',
+      'Generates a high-resolution image, photo, portrait, illustration, or artwork from a text prompt using Meta Muse Image 1.0 (muse-image-1.0) and renders it directly in the UI ImageGeneration component. ALWAYS use this tool whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or use shell scripts/code to fake image generation. NEVER generate an image to serve as the user\'s photo, portrait, or an application/profile asset unless the user explicitly asked for image generation in this conversation — for applications, always use the user\'s real BIO photo/files.',
     parameters: {
       type: 'OBJECT',
       properties: {
