@@ -38,12 +38,19 @@ services:
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+    volumes:
+      # Persist BIO data, user sandboxes, thread state and session secret
+      # across container rebuilds/redeploys (otherwise every deploy wipes them)
+      - bio_data:/app/src/data
+      - workspaces_data:/app/src/workspaces
     networks:
       - omni_network
 
 volumes:
   caddy_data:
   caddy_config:
+  bio_data:
+  workspaces_data:
 
 networks:
   omni_network:

@@ -75,7 +75,8 @@ store.updateEntry(A, activeA.id, audioEntry.id, { agentReadable: true });
 const afterGrant = await executeBioGet({ userId: A, fieldIds: [`entry:${audioEntry.id}`] });
 check(
   'audio readable with tailored grant',
-  afterGrant.includes('granted') && !afterGrant.includes('has not granted agent access')
+  !afterGrant.includes('has not granted agent access') &&
+    (afterGrant.includes('staged for upload') || afterGrant.length > 120)
 );
 
 // Cross-user isolation: B never sees A's saved value
@@ -153,7 +154,13 @@ const audioDenied = await processAudio({ userId: A, ref: `entry:${audio2.id}` })
 check('process_audio blocked without tailored grant', audioDenied.includes('not granted agent access'));
 store.updateEntry(A, activeA.id, audio2.id, { agentReadable: true });
 const audioNoFile = await processAudio({ userId: A, ref: `entry:${audio2.id}` });
-check('process_audio honest when no file', audioNoFile.includes('no readable file attached'));
+check(
+  'process_audio processes the materialized file (or fails honestly)',
+  !audioNoFile.includes('not granted') &&
+    (audioNoFile.includes('Could not transcribe') ||
+      audioNoFile.includes('Transcribed audio') ||
+      audioNoFile.includes('uploadRef'))
+);
 const videoEntry = store.addEntry(A, activeA.id, {
   name: 'Intro Video',
   type: 'video',
@@ -161,7 +168,10 @@ const videoEntry = store.addEntry(A, activeA.id, {
 });
 store.updateEntry(A, activeA.id, videoEntry.id, { agentReadable: true });
 const videoOut = await processVideo({ userId: A, ref: `entry:${videoEntry.id}` });
-check('process_video honest when no file', videoOut.includes('no readable file attached'));
+check(
+  'process_video processes the materialized file',
+  videoOut.includes('Processed video') && videoOut.includes('uploadRef')
+);
 check(
   'policy denies processors when read off',
   checkPermission('process_audio', {}, 'turbo', null, { bio: { userId: A, read: false } }).decision === 'deny'
@@ -179,6 +189,24 @@ const nativeCv = JSON.parse(await executeBioGet({ userId: A, fieldIds: ['cv'], m
 check('gemini cv marked native processing', String(nativeCv.values.cv.text).includes('processed natively'));
 const nativeDoc = await processDocument({ userId: A, ref: 'cv', model: 'gemini-3.1-pro' });
 check('process_document routes native for gemini', nativeDoc.includes('processed natively'));
+
+// Fresh users get REAL seed files (never metadata phantoms), and a dashboard
+// change is served back to the agent (dashboard -> database -> BIO tool)
+const S = 'user-seed-001';
+const sProfile = store.getActiveProfile(S);
+check('seed CV is a real sandbox file', !!sProfile.fields.cv?.path);
+check(
+  'seed photo is a real sandbox file',
+  typeof sProfile.fields.photo === 'string' && sProfile.fields.photo.startsWith('bio/')
+);
+const sCv = JSON.parse(await executeBioGet({ userId: S, fieldIds: ['cv'] }));
+check('seeded CV actually served to agent', (sCv.values.cv.text || '').includes('Alex Morgan'));
+const sPhoto = await collectBioMediaParts({ userId: S, fieldIds: ['photo'] });
+check('seeded photo visible to model', sPhoto.length === 1);
+store.setField(S, sProfile.id, 'fullName', 'Adaeze Testname');
+const sName = JSON.parse(await executeBioGet({ userId: S, fieldIds: ['fullName'] }));
+check('dashboard change served to agent', sName.values.fullName === 'Adaeze Testname');
+fsx.rmSync(getUserWorkspaceRoot(S), { recursive: true, force: true });
 
 // Cleanup sandbox artifacts created by this test
 fsx.rmSync(sandboxRoot, { recursive: true, force: true });

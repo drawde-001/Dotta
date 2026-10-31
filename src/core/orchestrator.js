@@ -819,7 +819,7 @@ export class OmniEngine extends EventEmitter {
               toolArgs,
               toolDef,
               maxOutputChars:
-                toolName === 'bio_get' || toolName === 'process_document' || toolName === 'process_audio'
+                toolName.startsWith('bio_') || toolName.startsWith('process_')
                   ? 24000
                   : 4000,
               executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId, model })

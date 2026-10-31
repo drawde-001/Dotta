@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { sanitizeUserId } from '../execution/workspace.js';
+import {
+  sanitizeUserId,
+  getUserWorkspaceRoot,
+  validateAndResolvePath
+} from '../execution/workspace.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -172,10 +176,99 @@ function seedProfile() {
   };
 }
 
+const SEED_ASSETS_DIR = path.resolve(__dirname, 'assets');
+const SEED_ASSET_BY_TYPE = {
+  document: { asset: 'seed-cv.pdf', dest: 'bio/seed-degree.pdf', name: 'Degree_Transcript.pdf', mime: 'application/pdf' },
+  image: { asset: 'seed-photo.jpg', dest: 'bio/seed-headshot.jpg', name: 'headshot_formal.jpg', mime: 'image/jpeg' },
+  audio: { asset: 'seed-voice.wav', dest: 'bio/seed-voice.wav', name: 'voice-intro.wav', mime: 'audio/wav' },
+  video: { asset: 'seed-intro.webm', dest: 'bio/seed-intro.webm', name: 'intro-video.webm', mime: 'video/webm' }
+};
+
+function sandboxFileExists(userId, relPath) {
+  if (!relPath || typeof relPath !== 'string') return false;
+  if (relPath.startsWith('/') || relPath.startsWith('http')) return false;
+  try {
+    const resolved = validateAndResolvePath(getUserWorkspaceRoot(userId), relPath);
+    return fs.existsSync(resolved) && fs.statSync(resolved).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function copySeedAsset(userId, assetName, destRel) {
+  try {
+    const src = path.join(SEED_ASSETS_DIR, assetName);
+    if (!fs.existsSync(src)) return null;
+    const dest = validateAndResolvePath(getUserWorkspaceRoot(userId), destRel);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(src, dest);
+    return { path: destRel, size: fs.statSync(dest).size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Seeded/demo BIO data must never claim files that do not exist. On load,
+ * any profile whose photo/CV/entries reference missing sandbox files gets
+ * real dummy files materialized into the user's own sandbox (repair pass —
+ * also fixes profiles seeded before this existed).
+ */
+function materializeProfileFiles(userId, profile) {
+  let changed = false;
+  const fields = profile.fields || (profile.fields = {});
+
+  if (!sandboxFileExists(userId, fields.photo)) {
+    const copied = copySeedAsset(userId, 'seed-photo.jpg', 'bio/seed-photo.jpg');
+    if (copied) {
+      fields.photo = copied.path;
+      changed = true;
+    }
+  }
+
+  if (!fields.cv?.path || !sandboxFileExists(userId, fields.cv.path)) {
+    const copied = copySeedAsset(userId, 'seed-cv.pdf', 'bio/seed-cv.pdf');
+    if (copied) {
+      fields.cv = {
+        name: fields.cv?.name || 'Alex_Morgan_CV_2026.pdf',
+        size: copied.size,
+        mime: 'application/pdf',
+        path: copied.path
+      };
+      changed = true;
+    }
+  }
+
+  for (const entry of profile.entries || []) {
+    if (entry.file?.path && sandboxFileExists(userId, entry.file.path)) continue;
+    const spec = SEED_ASSET_BY_TYPE[entry.type];
+    if (!spec) continue;
+    const copied = copySeedAsset(userId, spec.asset, spec.dest);
+    if (copied) {
+      entry.file = {
+        name: entry.file?.name || spec.name,
+        size: copied.size,
+        mime: entry.file?.mime || spec.mime,
+        path: copied.path
+      };
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function loadUserBio(userId) {
   const filePath = bioFilePath(userId);
-  if (!fs.existsSync(filePath)) {
-    const doc = {
+  let doc = null;
+  if (fs.existsSync(filePath)) {
+    try {
+      doc = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch {
+      doc = null;
+    }
+  }
+  if (!doc || !Array.isArray(doc.profiles)) {
+    doc = {
       userId: sanitizeUserId(userId),
       profiles: [seedProfile()],
       proposals: [],
@@ -183,27 +276,18 @@ export function loadUserBio(userId) {
       createdAt: Date.now(),
       updatedAt: Date.now()
     };
-    atomicWriteJson(filePath, doc);
-    return doc;
   }
-  try {
-    const doc = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    if (!Array.isArray(doc.profiles)) doc.profiles = [];
-    if (!Array.isArray(doc.proposals)) doc.proposals = [];
-    if (!Array.isArray(doc.answers)) doc.answers = [];
-    return doc;
-  } catch {
-    const doc = {
-      userId: sanitizeUserId(userId),
-      profiles: [seedProfile()],
-      proposals: [],
-      answers: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    };
-    atomicWriteJson(filePath, doc);
-    return doc;
+  if (!Array.isArray(doc.proposals)) doc.proposals = [];
+  if (!Array.isArray(doc.answers)) doc.answers = [];
+
+  let repaired = false;
+  for (const profile of doc.profiles) {
+    if (materializeProfileFiles(userId, profile)) repaired = true;
   }
+  if (repaired || !fs.existsSync(filePath)) {
+    atomicWriteJson(filePath, doc);
+  }
+  return doc;
 }
 
 export function saveUserBio(userId, doc) {
