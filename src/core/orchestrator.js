@@ -1,4 +1,6 @@
 import { EventEmitter } from 'events';
+import fs from 'fs';
+import path from 'path';
 import { AgentBudgetTracker } from './state/budget.js';
 import {
   getThreadState,
@@ -42,7 +44,8 @@ import {
   workspaceFileDelete,
   createWorkspace,
   getLatestFileArtifact,
-  sanitizeRelativeDisplayPath
+  sanitizeRelativeDisplayPath,
+  validateAndResolvePath
 } from './execution/workspace.js';
 import {
   runSandboxCommand,
@@ -57,7 +60,7 @@ import {
   executeBrowserScreenshot
 } from './execution/browser.js';
 import { executeSegmentImage } from './tools/sam-tool.js';
-import { executeGenerateImage } from './tools/image-tool.js';
+import { executeGenerateImage, getGeneratedImage } from './tools/image-tool.js';
 import { wrapUntrustedWebOutput, isUntrustedWebTool } from './tools/untrusted.js';
 
 export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent.
@@ -70,7 +73,7 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - "snapshot_read": Inspect current page DOM and interactive elements without navigating.
 - "browser_screenshot": Capture a visual screenshot of the live page.
 2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
-- "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text.
+- "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text. NEVER generate an image to serve as the user's photo, portrait, or an application/profile asset unless the user explicitly asked you to generate an image in this conversation. If a needed photo or file is missing from BIO, politely tell the user and recommend uploading it to BIO instead.
 - "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
 3. Workspace & Files (Strict Root Directory Isolation):
 - "workspace_create": Initialize a dedicated run workspace directory.
@@ -95,6 +98,7 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - A run uses exactly one active BIO profile. You cannot switch profiles. If BIO lacks a field you need, ask the user with "ask_user", then propose saving that answer with "bio_propose_write" using the Answer ID provided to you.
 - PARAPHRASING RULE: When writing application prose (summaries, biographies, cover text, answers), REWRITE BIO narrative text (background, hobby projects, ideas, document content) in your own words, tailored to the specific role and company — never paste it word-for-word, so two applications are never 100% identical. Keep all factual data EXACT and unchanged: names, email, phone, address, locations, dates, job titles, companies, URLs, and skills keywords.
 - PROCESS BEFORE USE: Before using any BIO file, run its matching processor ("process_document", "process_image", "process_audio", "process_video") and CONFIRM it matches the current task (right person, right document, relevant content). If you cannot see or process a file through the appropriate tool, politely tell the user what happened and recommend the next step (grant access, re-upload, or provide another file). NEVER upload or submit a file you have not processed and confirmed.
+- BIO DATA TYPES DRIVE BEHAVIOUR: Personal Dos and Don'ts are binding rules for what you may and may not do in this run — obey them in every action, not just when quoting BIO. Documents are evidence: process, verify, and tailor them. Images must be viewed before use. Audio must be transcribed before use. Video must be confirmed by its metadata/description before use. Contact and identity facts are always used exactly as stored.
 
 5c. Proactive Execution:
 - When the user gives a clear instruction ("apply to this job", "fill this form", "do X"), ACT on it. Do not ask generic clarifying questions (which job, what data should I use, which email) when BIO, this conversation, or files already read in this run already answer them — check and confirm by yourself against that context, then proceed to the next step.
@@ -464,15 +468,21 @@ export class OmniEngine extends EventEmitter {
     // generic questions; when access is off, ask politely in plain text
     // (never via ask_user).
     if (userId) {
+      let bioNote = bioAccess.read
+        ? '[System note: BIO read access is ON for the active profile. Before asking the user for any personal or profile information (name, role, what jobs to apply for, email, phone, CV, website), call bio_index and bio_get to check BIO first. Only ask the user for information BIO does not have.]'
+        : '[System note: BIO read access is OFF. Do not use ask_user to request access. If you need profile information, politely ask the user in plain text to either grant BIO read access (BIO page, Agent Access, Read switch) or provide the specific information.]';
+      // BIO data types drive behaviour: Dos and Don'ts are binding rules
+      // for this run, not just data to quote.
+      if (bioAccess.read && bioProfile) {
+        const dos = String(bioProfile.fields?.dos || '').trim();
+        const donts = String(bioProfile.fields?.donts || '').trim();
+        if (dos || donts) {
+          bioNote += `\n[BIO rules for this run — you MUST obey these:${dos ? `\nPersonal Dos: ${dos}` : ''}${donts ? `\nPersonal Don'ts (NEVER do these): ${donts}` : ''}]`;
+        }
+      }
       contents.push({
         role: 'user',
-        parts: [
-          {
-            text: bioAccess.read
-              ? '[System note: BIO read access is ON for the active profile. Before asking the user for any personal or profile information (name, role, what jobs to apply for, email, phone, CV, website), call bio_index and bio_get to check BIO first. Only ask the user for information BIO does not have.]'
-              : '[System note: BIO read access is OFF. Do not use ask_user to request access. If you need profile information, politely ask the user in plain text to either grant BIO read access (BIO page, Agent Access, Read switch) or provide the specific information.]'
-          }
-        ]
+        parts: [{ text: bioNote }]
       });
     }
 
@@ -845,6 +855,31 @@ export class OmniEngine extends EventEmitter {
               status: execResult.status,
               timestamp: Date.now()
             });
+
+            // Background artifact keeper: any generated image is also copied
+            // into the user's current workspace (artifacts/) so generated
+            // work is never lost with the temp image cache.
+            if (
+              userId &&
+              workspaceRoot &&
+              execResult?.data?.filename &&
+              (toolName === 'generate_image' ||
+                toolName === 'edit_image' ||
+                toolName === 'create_image' ||
+                toolName === 'image_generation')
+            ) {
+              try {
+                const img = getGeneratedImage(execResult.data.filename);
+                if (img?.buffer) {
+                  const dest = validateAndResolvePath(
+                    workspaceRoot,
+                    `artifacts/${execResult.data.filename}`
+                  );
+                  fs.mkdirSync(path.dirname(dest), { recursive: true });
+                  fs.writeFileSync(dest, img.buffer);
+                }
+              } catch {}
+            }
 
             const isWebTool = isUntrustedWebTool(toolName);
             const modelOutput = isWebTool ? wrapUntrustedWebOutput(toolName, execResult.output) : execResult.output;
