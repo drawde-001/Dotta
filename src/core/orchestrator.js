@@ -96,6 +96,7 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - To upload a BIO file (CV, photo, audio, video) into a form: first call "bio_get" for that field or entry to stage it, then use "browser_action" with action "upload", selectorOrText as the file input selector, and value as the returned uploadRef. Never ask the user to upload a file BIO already holds.
 - If BIO access is denied, do NOT use "ask_user" to request access. Politely explain in plain text that you need BIO access (BIO page, Agent Access switches) or ask for the specific information in plain text.
 - A run uses exactly one active BIO profile. You cannot switch profiles. If BIO lacks a field you need, ask the user with "ask_user", then propose saving that answer with "bio_propose_write" using the Answer ID provided to you.
+- When confirming you have the user's data, say "Got your BIO" (never "got your profile"). BIO is the profile store; "profile" on its own means account/settings profiles, which you do not access unless a tool provides them.
 - PARAPHRASING RULE: When writing application prose (summaries, biographies, cover text, answers), REWRITE BIO narrative text (background, hobby projects, ideas, document content) in your own words, tailored to the specific role and company — never paste it word-for-word, so two applications are never 100% identical. Keep all factual data EXACT and unchanged: names, email, phone, address, locations, dates, job titles, companies, URLs, and skills keywords.
 - PROCESS BEFORE USE: Before using any BIO file, run its matching processor ("process_document", "process_image", "process_audio", "process_video") and CONFIRM it matches the current task (right person, right document, relevant content). If you cannot see or process a file through the appropriate tool, politely tell the user what happened and recommend the next step (grant access, re-upload, or provide another file). NEVER upload or submit a file you have not processed and confirmed.
 - BIO DATA TYPES DRIVE BEHAVIOUR: Personal Dos and Don'ts are binding rules for what you may and may not do in this run — obey them in every action, not just when quoting BIO. Documents are evidence: process, verify, and tailor them. Images must be viewed before use. Audio must be transcribed before use. Video must be confirmed by its metadata/description before use. Contact and identity facts are always used exactly as stored.
@@ -196,23 +197,24 @@ export class OmniEngine extends EventEmitter {
         return await executeBioGet({
           userId: context.userId,
           fieldIds: toolArgs.field_ids,
-          profileId: toolArgs.profile_id
+          profileId: toolArgs.profile_id,
+          model: context.model
         });
 
       case 'bio_propose_write':
         return 'BIO writes are completed only through the user approval card. This proposal has not been approved, so nothing was saved.';
 
       case 'process_document':
-        return await processDocument({ userId: context.userId, ref: toolArgs.bio_ref });
+        return await processDocument({ userId: context.userId, ref: toolArgs.bio_ref, model: context.model });
 
       case 'process_image':
-        return await processImage({ userId: context.userId, ref: toolArgs.bio_ref });
+        return await processImage({ userId: context.userId, ref: toolArgs.bio_ref, model: context.model });
 
       case 'process_audio':
-        return await processAudio({ userId: context.userId, ref: toolArgs.bio_ref });
+        return await processAudio({ userId: context.userId, ref: toolArgs.bio_ref, model: context.model });
 
       case 'process_video':
-        return await processVideo({ userId: context.userId, ref: toolArgs.bio_ref });
+        return await processVideo({ userId: context.userId, ref: toolArgs.bio_ref, model: context.model });
 
       case 'workspace_create':
         return createWorkspace(runId || toolArgs.name, toolArgs.name);
@@ -820,7 +822,7 @@ export class OmniEngine extends EventEmitter {
                 toolName === 'bio_get' || toolName === 'process_document' || toolName === 'process_audio'
                   ? 24000
                   : 4000,
-              executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId })
+              executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId, model })
             });
 
             const isBioTool = toolName.startsWith('bio_');
@@ -890,15 +892,25 @@ export class OmniEngine extends EventEmitter {
               response: { result: modelOutput }
             });
 
-            // Attach permissible BIO images so the model actually sees them
-            if (toolName === 'bio_get' || toolName === 'process_image') {
+            // Attach permissible BIO media so the SELECTED MODEL processes
+            // it natively (images for vision models; documents/audio/video
+            // inline for models that accept them). Extraction/transcription
+            // in the tool results is only the fallback for other models.
+            if (
+              toolName === 'bio_get' ||
+              toolName === 'process_image' ||
+              toolName === 'process_document' ||
+              toolName === 'process_audio' ||
+              toolName === 'process_video'
+            ) {
               try {
                 const media = await collectBioMediaParts({
                   userId,
+                  model,
                   fieldIds:
-                    toolName === 'process_image'
-                      ? [toolArgs.bio_ref]
-                      : toolArgs.field_ids
+                    toolName === 'bio_get'
+                      ? toolArgs.field_ids
+                      : [toolArgs.bio_ref]
                 });
                 bioMediaParts.push(...media);
               } catch {}

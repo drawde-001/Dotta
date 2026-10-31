@@ -167,6 +167,19 @@ check(
   checkPermission('process_audio', {}, 'turbo', null, { bio: { userId: A, read: false } }).decision === 'deny'
 );
 
+// Model-native delivery routing (selected model does the processing)
+const geminiParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'gemini-3.1-pro' });
+check(
+  'gemini gets document natively',
+  geminiParts.some((p) => p.inlineData?.mimeType === 'application/pdf')
+);
+const museParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'muse-spark-1.3' });
+check('muse gets no pdf inline (extraction fallback)', museParts.length === 0);
+const nativeCv = JSON.parse(await executeBioGet({ userId: A, fieldIds: ['cv'], model: 'gemini-3.1-pro' }));
+check('gemini cv marked native processing', String(nativeCv.values.cv.text).includes('processed natively'));
+const nativeDoc = await processDocument({ userId: A, ref: 'cv', model: 'gemini-3.1-pro' });
+check('process_document routes native for gemini', nativeDoc.includes('processed natively'));
+
 // Cleanup sandbox artifacts created by this test
 fsx.rmSync(sandboxRoot, { recursive: true, force: true });
 
