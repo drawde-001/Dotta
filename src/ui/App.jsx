@@ -684,6 +684,7 @@ export default function App() {
                 settleReasoning();
                 last.runCompletedAt = Date.now();
                 last.runStatus = 'error';
+                last.error = event.message || event.error || 'The model and all failover endpoints failed to respond.';
               }
 
               last.content = contentParts;
@@ -713,6 +714,7 @@ export default function App() {
           if (last && last.role === 'assistant') {
             last.runCompletedAt = last.runCompletedAt || Date.now();
             last.runStatus = 'error';
+            last.error = err.message || 'Stream connection error. The model endpoint is unavailable.';
             updated[updated.length - 1] = last;
           }
           return updated;
@@ -865,11 +867,19 @@ export default function App() {
         role: msg.role,
         content: sanitizedContent,
         attachments: msg.attachments || [],
+        status: msg.runStatus === 'error'
+          ? {
+              type: 'incomplete',
+              reason: 'error',
+              error: msg.error || 'The model and all failover endpoints failed to respond.'
+            }
+          : undefined,
         metadata: {
           custom: {
             runStartedAt: msg.runStartedAt,
             runCompletedAt: msg.runCompletedAt,
             runStatus: msg.runStatus,
+            error: msg.error,
             rawParts: msg.content || [],
             attachments: msg.attachments || []
           }

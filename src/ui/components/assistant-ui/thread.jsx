@@ -41,6 +41,7 @@ import {
   MessagePartPrimitive,
   MessagePrimitive,
   ThreadPrimitive,
+  useAui,
   useAuiState,
 } from "@assistant-ui/react";
 import "@assistant-ui/react-markdown/styles/dot.css";
@@ -1145,12 +1146,59 @@ function AssistantMessage() {
 }
 
 function MessageError() {
+  const errorObj = useAuiState((s) => s.message.status?.error || s.message.metadata?.custom?.error);
+  const rawError = typeof errorObj === 'string' ? errorObj : (errorObj?.message || '');
+
+  let title = 'Run Failed';
+  let description = 'The model and all failover endpoints failed to respond. Please check your credentials or network connection.';
+
+  if (rawError.includes('Modal') || rawError.includes('modal.direct') || rawError.includes('MODAL')) {
+    title = 'Modal Endpoint Failed';
+    description = rawError;
+  } else if (rawError.includes('401') || rawError.includes('403') || rawError.includes('API key') || rawError.includes('TOKEN') || rawError.includes('Unauthorized')) {
+    title = 'Authentication Error';
+    description = rawError || 'Invalid or missing API key/token for the model endpoint.';
+  } else if (rawError.includes('429') || rawError.includes('quota') || rawError.includes('Rate limit')) {
+    title = 'Rate Limit / Quota Exceeded';
+    description = rawError || 'The model endpoint rate limit or quota has been exceeded.';
+  } else if (rawError.includes('500') || rawError.includes('502') || rawError.includes('503') || rawError.includes('504')) {
+    title = 'Model Host Server Error';
+    description = rawError || 'The upstream inference server returned an internal error.';
+  } else if (rawError) {
+    title = 'Inference Error';
+    description = rawError;
+  }
+
+  const aui = useAui();
+  const handleRetry = () => {
+    if (typeof aui.thread?.retry === 'function') {
+      aui.thread.retry();
+    } else if (typeof aui.message?.reload === 'function') {
+      aui.message.reload();
+    }
+  };
+
   return (
-    <MessagePrimitive.Error>
-      <ErrorPrimitive.Root className="mt-2 rounded-md border border-destructive bg-destructive/10 p-3 text-destructive text-sm dark:bg-destructive/5 dark:text-red-200">
-        <ErrorPrimitive.Message className="line-clamp-2" />
-      </ErrorPrimitive.Root>
-    </MessagePrimitive.Error>
+    <>
+      <MessagePrimitive.Error>
+        <div className="mt-2.5">
+          <ErrorState
+            title={title}
+            description={description}
+            onRetry={handleRetry}
+          />
+        </div>
+      </MessagePrimitive.Error>
+      <AuiIf condition={(s) => s.message.metadata?.custom?.runStatus === 'error' && s.message.status?.type !== 'incomplete'}>
+        <div className="mt-2.5">
+          <ErrorState
+            title={title}
+            description={description}
+            onRetry={handleRetry}
+          />
+        </div>
+      </AuiIf>
+    </>
   );
 }
 
