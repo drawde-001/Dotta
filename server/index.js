@@ -150,7 +150,7 @@ wss.on('connection', async (ws) => {
 });
 
 const engine = new OmniEngine({
-  defaultModel: process.env.DEFAULT_MODEL || 'meta-muse-spark'
+  defaultModel: process.env.DEFAULT_MODEL || 'muse-spark-open'
 });
 
 // Register live browser executors with OmniEngine
@@ -447,7 +447,7 @@ engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
 const handleHealth = (req, res) => {
   res.json({
     status: 'healthy',
-    defaultModel: process.env.DEFAULT_MODEL || 'meta-muse-spark',
+    defaultModel: process.env.DEFAULT_MODEL || 'muse-spark-open',
     wsClients: wsClients.size,
     browserActive: !!getLiveBrowserPage(),
     timestamp: Date.now()
@@ -941,5 +941,5 @@ app.get('*', (req, res, next) => {
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Omni Agent Server] Listening on http://0.0.0.0:${PORT}`);
   console.log(`[Omni Agent Stream] WebSocket active on ws://0.0.0.0:${PORT}/ws`);
-  console.log(`[Omni Agent Engine] Default model configured: ${process.env.DEFAULT_MODEL || 'meta-muse-spark'}`);
+  console.log(`[Omni Agent Engine] Default model configured: ${process.env.DEFAULT_MODEL || 'muse-spark-open'}`);
 });

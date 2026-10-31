@@ -60,6 +60,17 @@ export interface StagedAttachment {
 
 export const AVAILABLE_MODELS: ModelOption[] = [
   {
+    id: 'muse-spark-open',
+    name: 'Muse Spark Open',
+    effort: 'High',
+    provider: 'muse',
+    isFav: true,
+    efforts: ['Low', 'Medium', 'High', 'Max'],
+    badge: 'Default',
+    desc: 'Open-weight high-throughput Muse Spark model served serverless via Modal vLLM with native tool calling',
+    hasRealApi: true,
+  },
+  {
     id: 'muse-wonder-1.0',
     name: 'Muse Wonder 1.0',
     effort: 'High',
@@ -77,7 +88,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     provider: 'muse',
     isFav: true,
     efforts: ['Low', 'Medium', 'High', 'Max'],
-    badge: 'Default',
+    badge: 'Meta Muse',
     desc: 'Tuned for agentic tool loops, browser navigation, and high-throughput coding',
     hasRealApi: true,
   },
@@ -519,7 +530,7 @@ export const InputDock: React.FC<InputDockProps> = ({
   const [modelFilterTab, setModelFilterTab] = useState<ModelFilterTab>('fav');
   const [models, setModels] = useState<ModelOption[]>(AVAILABLE_MODELS);
   const [activeModelId, setActiveModelId] = useState<string>(
-    AVAILABLE_MODELS.some((m) => m.id === selectedModel) ? selectedModel : 'meta-muse-spark'
+    AVAILABLE_MODELS.some((m) => m.id === selectedModel) ? selectedModel : 'muse-spark-open'
   );
   const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
   const [modelMenuPointerReady, setModelMenuPointerReady] = useState<boolean>(false);

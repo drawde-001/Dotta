@@ -85,7 +85,7 @@ import { cn } from "@/lib/utils";
 
 export { registerToolComponent, registerDataRenderer };
 
-export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel, showComposer = false }) {
+export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
@@ -184,7 +184,7 @@ function ThreadSuggestions() {
   );
 }
 
-function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-muse-spark', onSelectModel }) {
+function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel }) {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [turboMenuOpen, setTurboMenuOpen] = useState(false);
@@ -318,19 +318,19 @@ function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'meta-m
                   <div className="px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
                     Active Model
                   </div>
-                  {/* Meta Muse Spark */}
+                  {/* Muse Spark Open */}
                   <div
                     onClick={() => {
-                      onSelectModel?.('meta-muse-spark');
+                      onSelectModel?.('muse-spark-open');
                       setModelMenuOpen(false);
                     }}
                     className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
-                      selectedModel === 'meta-muse-spark' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                      selectedModel === 'muse-spark-open' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles size={14} className="text-sky-400" />
-                      <span className="text-[13px]">meta-muse-spark</span>
+                      <span className="text-[13px]">muse-spark-open</span>
                     </div>
                     <span className="text-[10px] text-sky-400 font-mono">default</span>
                   </div>

@@ -10,6 +10,7 @@
 import { getApiKey } from '../env.js';
 
 export const MUSE_UI_MODEL_IDS = [
+  'muse-spark-open',
   'muse-wonder-1.0',
   'muse-spark-1.3',
   'muse-spark-1.2',
@@ -29,9 +30,10 @@ export function isMuseModel(id) {
 /** Resolve the real provider model id from a UI model id. */
 export function resolveMuseWireModel(requestedModel) {
   const req = String(requestedModel || '').trim();
+  if (req.toLowerCase() === 'muse-spark-open') return 'muse-spark-open';
   if (req.toLowerCase().startsWith('muse-')) return req;
-  if (req.toLowerCase() === 'meta-muse-spark') return 'muse-spark-1.3';
-  return process.env.META_MUSE_MODEL || process.env.MODEL_ID || 'muse-spark-1.3';
+  if (req.toLowerCase() === 'meta-muse-spark') return 'muse-spark-open';
+  return process.env.META_MUSE_MODEL || process.env.MODEL_ID || 'muse-spark-open';
 }
 
 /** Internal schema types are UPPERCASE; OpenAI JSON Schema needs lowercase. */
@@ -211,22 +213,45 @@ export async function callMuseStream({
   tools = null,
   generationConfig = {}
 }) {
-  const activeKey = apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
-  if (!activeKey) {
-    throw new Error('MODEL_API_KEY (or META_MUSE_API_KEY) is not set on the server (.env / .env.local).');
+  const reqModel = String(requestedModel || '').toLowerCase();
+  const isModal = reqModel === 'muse-spark-open' || reqModel.includes('open') || reqModel.includes('816b') || Boolean(process.env.MODAL_PROXY_TOKEN_ID);
+
+  let model = resolveMuseWireModel(requestedModel);
+  let baseUrl;
+  let activeKey;
+
+  if (isModal) {
+    model = 'meta-models/Muse-Spark-Open-816B-A42B';
+    baseUrl = (process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1').replace(/\/+$/, '');
+    
+    if (process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET) {
+      activeKey = `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`;
+    } else {
+      activeKey = process.env.MODAL_API_KEY || apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+    }
+  } else {
+    baseUrl = (process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
+    activeKey = apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
   }
 
-  const baseUrl = (process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
-  const model = resolveMuseWireModel(requestedModel);
+  if (!activeKey) {
+    throw new Error('MODAL_PROXY_TOKEN_ID & MODAL_PROXY_TOKEN_SECRET (or MODEL_API_KEY) are not set in .env.');
+  }
 
   const payload = {
     model,
     messages: toOpenAiMessages(contents, systemInstruction),
     stream: true,
-    stream_options: { include_usage: true }
+    stream_options: { include_usage: true },
+    temperature: generationConfig?.temperature ?? 0.3,
+    top_p: generationConfig?.topP ?? 0.95,
+    reasoning_effort: generationConfig?.reasoningEffort || 'medium'
   };
   const oaiTools = toOpenAiTools(tools);
-  if (oaiTools) payload.tools = oaiTools;
+  if (oaiTools) {
+    payload.tools = oaiTools;
+    payload.tool_choice = 'auto';
+  }
   if (generationConfig?.maxOutputTokens) payload.max_tokens = generationConfig.maxOutputTokens;
 
   const controller = new AbortController();
@@ -244,14 +269,55 @@ export async function callMuseStream({
       signal: controller.signal
     });
   } catch (e) {
-    clearTimeout(timer);
-    throw new Error(`Could not reach Meta Muse API at ${baseUrl}: ${e.message}`);
+    if (isModal) {
+      console.warn(`[MuseProvider] Primary Modal endpoint failed (${e.message}). Attempting fallback to Meta Muse / Fireworks...`);
+      const fallbackBase = (process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
+      const fallbackKey = apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+      if (fallbackKey && fallbackBase !== baseUrl) {
+        payload.model = 'muse-spark-1.3';
+        response = await fetch(`${fallbackBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${fallbackKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }).catch(() => null);
+      }
+    }
+    if (!response) {
+      clearTimeout(timer);
+      throw new Error(`Could not reach Meta Muse API at ${baseUrl}: ${e.message}`);
+    }
   }
 
   if (!response.ok) {
-    clearTimeout(timer);
-    const errText = await response.text().catch(() => '');
-    throw new Error(`Meta Muse API HTTP ${response.status} (${model}): ${errText.slice(0, 500)}`);
+    if (isModal) {
+      console.warn(`[MuseProvider] Primary Modal endpoint HTTP ${response.status}. Attempting fallback to Meta Muse / Fireworks...`);
+      const fallbackBase = (process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, '');
+      const fallbackKey = apiKey || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+      if (fallbackKey && fallbackBase !== baseUrl) {
+        payload.model = 'muse-spark-1.3';
+        const fallbackRes = await fetch(`${fallbackBase}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${fallbackKey}`
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        }).catch(() => null);
+        if (fallbackRes && fallbackRes.ok) {
+          response = fallbackRes;
+        }
+      }
+    }
+    if (!response.ok) {
+      clearTimeout(timer);
+      const errText = await response.text().catch(() => '');
+      throw new Error(`Meta Muse API HTTP ${response.status} (${model}): ${errText.slice(0, 500)}`);
+    }
   }
 
   let fullText = '';
@@ -384,6 +450,28 @@ export async function callMuseStream({
     functionCalls.push(fc);
     modelParts.push({ functionCall: fc });
     callbacks.onFunctionCall?.(fc);
+  }
+
+  // Fallback for open-weight models: parse tool call if emitted inside markdown codeblock
+  if (functionCalls.length === 0 && fullText) {
+    try {
+      const codeBlockMatch = fullText.match(/```(?:json)?\s*(\{[\s\S]*?"(?:name|tool)"\s*:\s*"[\s\S]*?\})\s*```/);
+      if (codeBlockMatch) {
+        const parsed = JSON.parse(codeBlockMatch[1]);
+        const toolName = parsed.name || parsed.tool;
+        const toolArgs = parsed.args || parsed.parameters || parsed.arguments || {};
+        if (toolName) {
+          const fc = {
+            name: toolName,
+            args: typeof toolArgs === 'string' ? JSON.parse(toolArgs) : toolArgs,
+            id: `call_fb_${Date.now().toString(36)}`
+          };
+          functionCalls.push(fc);
+          modelParts.push({ functionCall: fc });
+          callbacks.onFunctionCall?.(fc);
+        }
+      }
+    } catch {}
   }
 
   if (!fullText && !fullThought && functionCalls.length === 0) {

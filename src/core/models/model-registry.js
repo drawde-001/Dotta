@@ -61,6 +61,28 @@ export const MODEL_REGISTRY = {
     description: "Meta's flagship model for complex coding, multi-file agentic work, and long-horizon tasks."
   },
 
+  'muse-spark-open': {
+    id: 'muse-spark-open',
+    name: 'Muse Spark Open',
+    provider: 'modal',
+    selectable: true,
+    capabilities: {
+      text: true,
+      tools: true,
+      vision: true,
+      imageGeneration: false,
+      speechToText: false,
+      segmentation: false
+    },
+    contextWindow: 1048576,
+    limits: {
+      rpm: 3000,
+      tpm: 4000000,
+      image: IMAGE_INPUT_LIMITS
+    },
+    description: 'Open-weight high-throughput Muse Spark model served serverless via Modal vLLM with native tool calling.'
+  },
+
   'muse-spark-1.3': {
     id: 'muse-spark-1.3',
     name: 'Muse Spark 1.3',
@@ -198,27 +220,13 @@ export const MODEL_REGISTRY = {
 export function getModelRegistry() {
   const registry = { ...MODEL_REGISTRY };
 
-  // Muse Spark Open: Only appears if custom endpoint configured in env
-  const sparkOpenEndpoint = process.env.MUSE_SPARK_OPEN_ENDPOINT || process.env.SPARK_OPEN_URL;
-  if (sparkOpenEndpoint) {
-    registry['muse-spark-open'] = {
-      id: 'muse-spark-open',
-      name: 'Muse Spark Open (Self-Hosted)',
-      provider: 'meta-self-hosted',
-      selectable: true,
-      endpoint: sparkOpenEndpoint,
-      capabilities: {
-        text: true,
-        tools: true,
-        vision: true,
-        imageGeneration: false,
-        speechToText: false,
-        segmentation: false
-      },
-      contextWindow: 1048576,
-      description: 'Open-weight 816B mixture-of-experts model served via custom endpoint.'
-    };
-  }
+  // Muse Spark Open: Configured with deployed Modal endpoint
+  const sparkOpenEndpoint = process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1';
+  registry['muse-spark-open'] = {
+    ...registry['muse-spark-open'],
+    endpoint: sparkOpenEndpoint,
+    provider: 'modal',
+  };
 
   // Muse Glimmer: Only appears if custom endpoint configured in env
   const glimmerEndpoint = process.env.MUSE_GLIMMER_ENDPOINT || process.env.GLIMMER_URL;

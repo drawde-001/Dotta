@@ -748,16 +748,27 @@ export function getModelAdapter(providerName = 'gemini') {
     return adapter;
   }
 
-  if (key === 'muse' || key === 'meta') {
+  if (key === 'muse' || key === 'meta' || key === 'modal') {
     const adapter = new OpenAiCompatibleModelAdapter({
       providerName: 'meta',
-      apiKeyGetter: () => getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY'),
-      baseUrlGetter: () => process.env.MODEL_API_BASE_URL || process.env.META_MUSE_BASE_URL || 'https://api.meta.ai/v1',
-      defaultModel: 'muse-spark-1.3',
-      modelResolver: (m) => (m && m.toLowerCase().startsWith('muse-') ? m : process.env.META_MUSE_MODEL || 'muse-spark-1.3')
+      apiKeyGetter: () =>
+        process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
+          ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
+          : process.env.MODAL_API_KEY || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY'),
+      baseUrlGetter: () =>
+        process.env.MODAL_MUSE_SPARK_URL ||
+        'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+      defaultModel: 'meta-models/Muse-Spark-Open-816B-A42B',
+      modelResolver: (m) =>
+        m && m.toLowerCase() === 'muse-spark-open'
+          ? 'meta-models/Muse-Spark-Open-816B-A42B'
+          : m && m.toLowerCase().startsWith('muse-')
+            ? m
+            : process.env.META_MUSE_MODEL || 'meta-models/Muse-Spark-Open-816B-A42B'
     });
     adapterRegistry.set('muse', adapter);
     adapterRegistry.set('meta', adapter);
+    adapterRegistry.set('modal', adapter);
     return adapter;
   }
 
@@ -847,7 +858,7 @@ export function resolveProviderForModel(modelId = '') {
 export async function streamModelTurn({
   contents,
   systemInstruction = '',
-  model = process.env.DEFAULT_MODEL || 'meta-muse-spark',
+  model = process.env.DEFAULT_MODEL || 'muse-spark-open',
   tools = null,
   generationConfig = {},
   callbacks = {}

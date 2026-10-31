@@ -130,8 +130,14 @@ async function callMetaMuseVoiceTranscribe({
   timeoutMs = 25000,
   isFinalFallback = false
 }) {
+  const modalToken =
+    process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
+      ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
+      : process.env.MODAL_API_KEY;
+
   const metaKey =
     options.apiKey ||
+    modalToken ||
     getApiKey('MUSE_API_KEY') ||
     getApiKey('META_MUSE_API_KEY') ||
     getApiKey('MODEL_API_KEY') ||
@@ -143,17 +149,20 @@ async function callMetaMuseVoiceTranscribe({
 
   const configuredBase = (
     options.baseUrl ||
+    process.env.MODAL_MUSE_SPARK_URL ||
     process.env.MODEL_API_BASE_URL ||
     process.env.META_MUSE_BASE_URL ||
     process.env.MUSE_BASE_URL ||
     process.env.META_BASE_URL ||
-    ''
+    'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1'
   ).replace(/\/$/, '');
 
   const baseUrls = Array.from(
     new Set(
       [
         configuredBase,
+        process.env.MODEL_API_BASE_URL,
+        process.env.META_MUSE_BASE_URL,
         'https://api.meta.ai/v1',
         'https://api.llama.com/v1'
       ].filter(Boolean)
@@ -248,10 +257,10 @@ async function callMetaMuseVoiceTranscribe({
         }
       } catch {}
 
-      // Meta Muse multimodal chat completions with muse-voice-transcribe-1.0 / muse-wonder-1.0 / muse-spark-1.3
+      // Meta Muse multimodal chat completions with muse-voice-transcribe-1.0 / meta-models/Muse-Spark-Open-816B-A42B / muse-spark-1.3 / muse-wonder-1.0
       const chatModels = isFinalFallback
-        ? ['muse-voice-transcribe-1.0', 'muse-spark-1.3', 'muse-wonder-1.0']
-        : ['muse-voice-transcribe-1.0', 'muse-wonder-1.0'];
+        ? ['muse-voice-transcribe-1.0', 'meta-models/Muse-Spark-Open-816B-A42B', 'muse-spark-open', 'muse-spark-1.3', 'muse-wonder-1.0']
+        : ['muse-voice-transcribe-1.0', 'meta-models/Muse-Spark-Open-816B-A42B', 'muse-spark-open', 'muse-wonder-1.0'];
 
       for (const chatModel of chatModels) {
         try {

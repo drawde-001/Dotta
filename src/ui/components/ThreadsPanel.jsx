@@ -3,7 +3,6 @@ import {
   Bell,
   Search,
   PanelLeftClose,
-  ChevronDown,
   Folder,
   SquarePen
 } from 'lucide-react';
@@ -44,9 +43,8 @@ export function ThreadsPanel({ onCollapse, onOpenBio }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 pb-1 pt-4">
-        <div className="flex items-center gap-1.5 px-1 py-1 text-[15px] font-semibold tracking-tight text-zinc-100">
+        <div className="flex items-center px-1 py-1 text-[15px] font-semibold tracking-tight text-zinc-100">
           Omni Agent
-          <ChevronDown size={14} className="text-zinc-500" />
         </div>
         <div className="flex items-center gap-0.5">
           <span

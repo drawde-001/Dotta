@@ -27,7 +27,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
     const body = req.body || {};
     const threadId = body.threadId || `thread-${Date.now()}`;
     const runId = body.runId || `run-${Date.now()}`;
-    const model = body.model || process.env.DEFAULT_MODEL || 'meta-muse-spark';
+    const model = body.model || process.env.DEFAULT_MODEL || 'muse-spark-open';
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const latestUserMsg = [...messages].reverse().find((m) => m.role === 'user');
     const instruction =
