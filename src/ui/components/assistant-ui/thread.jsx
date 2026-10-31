@@ -1146,8 +1146,40 @@ function AssistantMessage() {
 }
 
 function MessageError() {
+  const isError = useAuiState(
+    (s) =>
+      s.message.status?.type === 'incomplete' ||
+      s.message.status?.reason === 'error' ||
+      s.message.metadata?.custom?.runStatus === 'error' ||
+      Boolean(s.message.metadata?.custom?.error)
+  );
+  const isRunning = useAuiState((s) => s.thread.isRunning || s.message.status?.type === 'running');
+  const hasContent = useAuiState((s) => {
+    const parts = s.message.parts || [];
+    return parts.some(
+      (p) =>
+        (p.type === 'text' && typeof p.text === 'string' && p.text.trim().length > 0) ||
+        p.type === 'tool-call' ||
+        p.type === 'image' ||
+        p.type === 'source' ||
+        (typeof p.type === 'string' && p.type.startsWith('data-'))
+    );
+  });
   const errorObj = useAuiState((s) => s.message.status?.error || s.message.metadata?.custom?.error);
   const rawError = typeof errorObj === 'string' ? errorObj : (errorObj?.message || '');
+
+  const aui = useAui();
+  const handleRetry = () => {
+    if (typeof aui.thread?.retry === 'function') {
+      aui.thread.retry();
+    } else if (typeof aui.message?.reload === 'function') {
+      aui.message.reload();
+    }
+  };
+
+  if (!isError && (hasContent || isRunning)) {
+    return null;
+  }
 
   let title = 'Run Failed';
   let description = 'The model and all failover endpoints failed to respond. Please check your credentials or network connection.';
@@ -1155,7 +1187,14 @@ function MessageError() {
   if (rawError.includes('Modal') || rawError.includes('modal.direct') || rawError.includes('MODAL')) {
     title = 'Modal Endpoint Failed';
     description = rawError;
-  } else if (rawError.includes('401') || rawError.includes('403') || rawError.includes('API key') || rawError.includes('TOKEN') || rawError.includes('Unauthorized')) {
+  } else if (
+    rawError.includes('401') ||
+    rawError.includes('403') ||
+    rawError.includes('API key') ||
+    rawError.includes('TOKEN') ||
+    rawError.includes('Unauthorized') ||
+    rawError.includes('proxy auth required')
+  ) {
     title = 'Authentication Error';
     description = rawError || 'Invalid or missing API key/token for the model endpoint.';
   } else if (rawError.includes('429') || rawError.includes('quota') || rawError.includes('Rate limit')) {
@@ -1167,38 +1206,19 @@ function MessageError() {
   } else if (rawError) {
     title = 'Inference Error';
     description = rawError;
+  } else if (!hasContent && !isRunning) {
+    title = 'No Response From Model';
+    description = 'The model completed the turn without generating any output or the upstream server failed.';
   }
 
-  const aui = useAui();
-  const handleRetry = () => {
-    if (typeof aui.thread?.retry === 'function') {
-      aui.thread.retry();
-    } else if (typeof aui.message?.reload === 'function') {
-      aui.message.reload();
-    }
-  };
-
   return (
-    <>
-      <MessagePrimitive.Error>
-        <div className="mt-2.5">
-          <ErrorState
-            title={title}
-            description={description}
-            onRetry={handleRetry}
-          />
-        </div>
-      </MessagePrimitive.Error>
-      <AuiIf condition={(s) => s.message.metadata?.custom?.runStatus === 'error' && s.message.status?.type !== 'incomplete'}>
-        <div className="mt-2.5">
-          <ErrorState
-            title={title}
-            description={description}
-            onRetry={handleRetry}
-          />
-        </div>
-      </AuiIf>
-    </>
+    <div className="mt-2.5">
+      <ErrorState
+        title={title}
+        description={description}
+        onRetry={handleRetry}
+      />
+    </div>
   );
 }
 

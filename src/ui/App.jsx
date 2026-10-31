@@ -668,6 +668,9 @@ export default function App() {
                       text: `${reasonText} Nothing was completed on the page. Please retry, or narrow the task and I'll continue.`
                     });
                   }
+                } else if (!contentParts.some((p) => (p.type === 'text' && p.text?.trim()) || p.type === 'tool-call')) {
+                  last.runStatus = 'error';
+                  last.error = last.error || 'The model completed the turn without generating a response.';
                 }
 
                 // End of run: kill browser instance after 30s
@@ -727,7 +730,15 @@ export default function App() {
         if (last && last.role === 'assistant') {
           last.runCompletedAt = last.runCompletedAt || Date.now();
           if (last.runStatus === 'running') {
-            last.runStatus = 'complete';
+            const hasTextOrTools = (last.content || []).some(
+              (p) => (p.type === 'text' && typeof p.text === 'string' && p.text.trim()) || p.type === 'tool-call'
+            );
+            if (!hasTextOrTools) {
+              last.runStatus = 'error';
+              last.error = last.error || 'The model endpoint completed without returning a response.';
+            } else {
+              last.runStatus = 'complete';
+            }
           }
           last.content = (last.content || []).map((p) => {
             if (p.type === 'reasoning' && p.status?.type === 'running') {
