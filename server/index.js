@@ -296,9 +296,47 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
       if (!stagedFile) {
         return 'Browser action error: Unknown upload reference. Call bio_get first to stage the BIO file, then upload with its uploadRef. Nothing was uploaded.';
       }
-      await page.locator(String(selectorOrText || '')).first().setInputFiles(stagedFile.absPath, { timeout: 6000 });
+      const selector = String(selectorOrText || '').trim();
+      let uploaded = false;
+      if (selector) {
+        try {
+          await page.locator(selector).first().setInputFiles(stagedFile.absPath, { timeout: 6000 });
+          uploaded = true;
+        } catch {}
+      }
+      if (!uploaded) {
+        // Real forms hide the actual file input behind a styled button.
+        // Find the real input, preferring one whose accept matches the file.
+        const ext = (stagedFile.name.split('.').pop() || '').toLowerCase();
+        const mime = String(stagedFile.mime || '').toLowerCase();
+        const inputs = page.locator('input[type="file"]');
+        const count = await inputs.count().catch(() => 0);
+        for (let i = 0; i < count; i++) {
+          const candidate = inputs.nth(i);
+          const accept = String((await candidate.getAttribute('accept').catch(() => '')) || '').toLowerCase();
+          const matches =
+            !accept ||
+            accept.split(',').some((tok) => {
+              const t = tok.trim();
+              return (
+                t === `.${ext}` ||
+                t === mime ||
+                (t.endsWith('/*') && mime.startsWith(t.slice(0, -1)))
+              );
+            });
+          if (!matches) continue;
+          try {
+            await candidate.setInputFiles(stagedFile.absPath, { timeout: 6000 });
+            uploaded = true;
+            break;
+          } catch {}
+        }
+        if (!uploaded) {
+          return `Browser action error: Found ${count} file input(s) on this page but could not attach "${stagedFile.name}". Take a snapshot_read, check its fileInputs list, and target the file input directly.`;
+        }
+      }
       await page.waitForTimeout(350);
-      return `Uploaded "${stagedFile.name}" into "${selectorOrText}". Take a snapshot_read to confirm the form state before continuing.`;
+      return `Uploaded "${stagedFile.name}" into the form file field. Take a snapshot_read to confirm the form state before submitting.`;
     } else if (action === 'scroll') {
       const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
       await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);
@@ -325,6 +363,32 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
       .evaluate(() => ({
         title: document.title,
         url: window.location.href,
+        // File inputs are often visually hidden behind custom upload
+        // buttons, so surface them explicitly (with accept/required/label)
+        // or the agent will never know media is required on a form.
+        fileInputs: Array.from(document.querySelectorAll('input[type="file"]')).map((el) => {
+          const linked = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+          const wrapping = el.closest('label');
+          const labelText = (
+            linked?.innerText ||
+            wrapping?.innerText ||
+            el.getAttribute('aria-label') ||
+            el.name ||
+            'File upload'
+          )
+            .trim()
+            .replace(/\s+/g, ' ')
+            .slice(0, 60);
+          return {
+            tag: 'input',
+            type: 'file',
+            text: labelText,
+            name: el.getAttribute('name') || undefined,
+            id: el.id || undefined,
+            accept: el.getAttribute('accept') || undefined,
+            required: !!el.required || el.getAttribute('aria-required') === 'true'
+          };
+        }),
         interactives: Array.from(
           document.querySelectorAll(
             'a, button, input, textarea, select, [role="button"], [role="radio"], [role="checkbox"], [role="option"], [role="link"], [role="tab"], label, [contenteditable="true"]'
