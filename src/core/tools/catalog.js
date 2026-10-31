@@ -999,3 +999,50 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
 }
 
 export const AGENT_TOOLS = getScopedTools({ phase: 'all', includeAskUser: false });
+
+const READ_ONLY_RUN_TOOLS = new Set([
+  'web_search',
+  'browser_search',
+  'browser_read_page',
+  'read_page',
+  'file_read',
+  'file_list',
+  'file_search',
+  'snapshot_read',
+  'browser_screenshot',
+  'profile_get',
+  'shell_output',
+  'generate_image',
+  'bio_index',
+  'bio_get',
+  'process_document',
+  'process_image',
+  'process_audio',
+  'process_video',
+  'ask_user',
+  'agent_plan',
+  'task_card',
+  'agent_status',
+  'todo_list'
+]);
+
+const ACTION_VERB_PATTERN =
+  /\b(apply|fill|upload|submit|create|write|edit|delete|remove|run|build|generate|segment|send|post|book|schedule|download|install|fix|change|update|make|deploy)\b/i;
+const QUESTION_PATTERN =
+  /^(what|how|why|when|where|who|which|whose|can|could|should|is|are|do|does|did|research|find|search|show|tell|explain|compare|list|summar)/i;
+
+/**
+ * Least-privilege scoping (OWASP LLM01/LLM06): a clearly read-only
+ * research/question run does not need write, shell, browser-action, or
+ * file-mutation tools. Anything with an action verb keeps the full set.
+ * The plain tool set is unchanged; this only narrows the per-run offer.
+ */
+export function getScopedToolsForIntent({ instruction = '' } = {}) {
+  const full = getScopedTools({ phase: 'all', includeAskUser: true, includeStructuredUI: true });
+  const text = String(instruction || '').trim();
+  if (!text) return full;
+  if (ACTION_VERB_PATTERN.test(text)) return full;
+  const isQuestion = QUESTION_PATTERN.test(text) || /\?\s*$/.test(text);
+  if (!isQuestion) return full;
+  return full.filter((t) => READ_ONLY_RUN_TOOLS.has(t.name) || t.readOnly === true);
+}

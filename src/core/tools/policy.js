@@ -333,6 +333,85 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
   };
 }
 
+/** Hosts treated as trusted work surfaces (plus any URL the user provided). */
+export const TRUSTED_JOB_HOSTS = [
+  'linkedin.com',
+  'indeed.com',
+  'glassdoor.com',
+  'greenhouse.io',
+  'lever.co',
+  'ziprecruiter.com',
+  'dice.com',
+  'wellfound.com',
+  'remoteok.com',
+  'weworkremotely.com'
+];
+
+export function hostOf(url) {
+  try {
+    return new URL(String(url || '')).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+export function isApprovedHost(host, approvedHosts) {
+  const h = String(host || '').replace(/^www\./, '');
+  if (!h) return false;
+  const set = approvedHosts instanceof Set ? approvedHosts : new Set(approvedHosts || []);
+  if (set.has(h)) return true;
+  for (const approved of set) {
+    if (approved && h.endsWith(`.${approved}`)) return true;
+  }
+  return false;
+}
+
+/** Approved hosts = trusted job boards + every host the user themselves named. */
+export function collectApprovedHosts(texts = []) {
+  const hosts = new Set(TRUSTED_JOB_HOSTS);
+  for (const text of texts) {
+    const matches = String(text || '').match(/https?:\/\/([a-z0-9.-]+)/gi) || [];
+    for (const m of matches) {
+      const h = hostOf(m);
+      if (h) hosts.add(h);
+    }
+  }
+  return hosts;
+}
+
+/**
+ * Data-movement guard for browser actions (prompt-injection exfiltration
+ * defense): uploading files, or typing the user's BIO data, toward a host
+ * that is neither approved nor part of user-requested form work requires
+ * human approval. Returns null when the action may proceed.
+ */
+export function evaluateBrowserDataAction({
+  action,
+  currentHost,
+  approvedHosts,
+  formWorkApproved,
+  bioValueMatch
+} = {}) {
+  const act = String(action || '').toLowerCase();
+  const approved =
+    !!formWorkApproved || (!!currentHost && isApprovedHost(currentHost, approvedHosts));
+  if (act === 'upload') {
+    if (approved) return null;
+    return {
+      decision: 'ask',
+      reason: `Uploading a file to ${currentHost || 'this site'} requires your approval (the site is not in the approved list and the request did not ask for form work).`
+    };
+  }
+  if (act === 'type' && bioValueMatch) {
+    if (approved) return null;
+    return {
+      decision: 'ask',
+      reason: `Sending your BIO data to ${currentHost || 'this site'} requires your approval (the site is not in the approved list).`
+    };
+  }
+  return null;
+}
+
 export const COST_BEARING_TOOL_CAPS = {
   segment_image: 10,
   generate_image: 10,

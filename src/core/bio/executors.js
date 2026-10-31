@@ -14,6 +14,7 @@ import {
 } from '../execution/workspace.js';
 import { transcribeSingleAudioChunk } from '../media/media-processor.js';
 import { stageBioFile } from './staging.js';
+import { wrapUntrustedContent } from '../tools/untrusted.js';
 
 /**
  * Models that accept documents/audio/video natively as inline media in this
@@ -151,7 +152,7 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
       values.cv = {
         name: cv.name,
         size: cv.size || null,
-        text: text || '[CV is stored but has no extractable text yet.]'
+        text: text ? wrapUntrustedContent('bio-document', text) : '[CV is stored but has no extractable text yet.]'
       };
       continue;
     }
@@ -197,7 +198,7 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
           } catch {}
         }
         values[id] = text
-          ? text
+          ? wrapUntrustedContent('bio-document', text)
           : `[Document "${entry.name}" is stored${entry.file?.name ? ` as ${entry.file.name}` : ''} but has no extractable text.]`;
       } else if (entry.type === 'image') {
         values[id] = `[Image entry "${entry.name}" — attached to this result for viewing${abs ? ', and staged for upload' : ''}.]`;
@@ -218,7 +219,7 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
           });
           values[id] =
             result?.ok && result.text
-              ? result.text.slice(0, 8000)
+              ? wrapUntrustedContent('audio-transcript', result.text.slice(0, 8000))
               : `[Audio entry "${entry.name}" — transcription unavailable${result?.error ? `: ${result.error}` : ''}. The file itself is staged for upload.]`;
         } catch (err) {
           values[id] = `[Audio entry "${entry.name}" — transcription failed: ${err.message}. The file itself is staged for upload.]`;
