@@ -917,6 +917,56 @@ export default function App() {
     onDelete: handleDeleteThread
   }), [threads, activeThreadId, isRunning, handleNewChat, handleSwitchThread, handleRenameThread, handleDeleteThread]);
 
+  const handleReload = async (parentId) => {
+    if (isRunning) return;
+
+    let targetUserMsg = null;
+    let baseList = [];
+
+    if (parentId) {
+      const idx = messages.findIndex((m) => m.id === parentId);
+      if (idx !== -1 && messages[idx].role === 'user') {
+        targetUserMsg = messages[idx];
+        baseList = messages.slice(0, idx + 1);
+      }
+    }
+
+    if (!targetUserMsg) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user') {
+          targetUserMsg = messages[i];
+          baseList = messages.slice(0, i + 1);
+          break;
+        }
+      }
+    }
+
+    if (!targetUserMsg) return;
+
+    const userText = (targetUserMsg.content || [])
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text)
+      .join('');
+
+    const assistantMsgId = `asst-${Date.now()}`;
+    const refreshedMessages = [
+      ...baseList,
+      {
+        id: assistantMsgId,
+        role: 'assistant',
+        content: [],
+        runStartedAt: Date.now(),
+        runCompletedAt: null,
+        runStatus: 'running'
+      }
+    ];
+
+    await handleSendMessage(userText, {
+      baseMessages: refreshedMessages,
+      attachments: targetUserMsg.attachments || []
+    });
+  };
+
   const runtime = useExternalStoreRuntime({
     isRunning,
     messages: threadMessages,
@@ -925,6 +975,9 @@ export default function App() {
     },
     onNew: async (msg) => {
       await handleSendMessage(msg);
+    },
+    onReload: async (parentId) => {
+      await handleReload(parentId);
     },
     onCancel: async () => {
       handleCancel();

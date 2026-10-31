@@ -1170,10 +1170,21 @@ function MessageError() {
 
   const aui = useAui();
   const handleRetry = () => {
-    if (typeof aui.thread?.retry === 'function') {
-      aui.thread.retry();
-    } else if (typeof aui.message?.reload === 'function') {
-      aui.message.reload();
+    if (typeof aui.message?.reload === 'function') {
+      try {
+        aui.message.reload();
+        return;
+      } catch (err) {
+        console.warn('[Retry] aui.message.reload:', err);
+      }
+    }
+    if (typeof aui.thread?.startRun === 'function') {
+      try {
+        aui.thread.startRun({ parentId: null });
+        return;
+      } catch (err) {
+        console.warn('[Retry] aui.thread.startRun:', err);
+      }
     }
   };
 
