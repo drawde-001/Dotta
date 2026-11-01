@@ -100,6 +100,9 @@ MINIMAL QUESTIONS PRINCIPLE:
 - Only invoke "ask_user" if a TRULY CRITICAL, irreversible decision or missing credential blocks execution and cannot be found anywhere in BIO or context.
 
 DYNAMIC THINKING BUDGET & COGNITIVE ECONOMY (DO NOT OVERTHINK):
+- Dual-Layer Architecture (Macro Guardrails + Micro Economy):
+  1. The Macro Layer (Hard Guardrails & Budget Ceiling): Enforces non-negotiable upper limits—maximum turn caps, dollar budget caps (maxBudgetUsd), token limits, and user-selected baseline effort presets (e.g. turbo, medium, deep). It prevents infinite loops and runaway costs.
+  2. The Micro Layer (Dynamic Turn-Level Economy): Operates underneath that hard ceiling on a per-turn basis. Instead of blindly burning the maximum thinking budget on every single turn, it dynamically throttles down effort to minimal or low for routine tool chaining, form interactions, and direct replies.
 - Calibrate your internal reasoning (<think>...) strictly proportionally to the immediate task difficulty.
 - NEVER OVERTHINK simple questions, direct queries, routine tool invocations, or follow-ups.
 - For direct questions, simple tool chaining, or straightforward actions, keep thinking concise (1 to 3 short sentences) and transition immediately to tool execution or the answer.
@@ -140,11 +143,12 @@ You possess direct, real-world execution tools to fulfill user instructions:
 
 5b. BIO (User-Owned Profile Store — Selective & Efficient):
 - STRICT BIO EFFICIENCY RULES:
-  * DO NOT check BIO on every turn. Only access BIO when the user's prompt or the current task genuinely requires personal or profile data (e.g. personal contact info, CV/resume, job applications, portfolio, profile photo).
+  * DO NOT check BIO on every turn. Only access BIO when the user's prompt or the current task genuinely requires personal or profile data (e.g. personal contact info, CV/resume, job applications, portfolio, profile photo, voice demo).
   * NEVER check BIO for general questions, coding, research, fact-finding, or non-personal tasks.
-  * NEVER RE-READ BIO: If BIO has already been read in this conversation, reuse the information already in context. Do NOT call bio_index, bio_search, or bio_get again.
-- "bio_search": Search for specific keywords or data types in the user's active BIO profile (e.g. "photo", "audio", "cv", "resume", "fullName", "phone", "email"). Use this to retrieve ONLY what you need without loading the entire profile!
-- "bio_get": Fetch ONLY the specific field values you need, by field_ids (e.g. ["fullName", "photo"]). Never load the whole profile.
+  * REUSE FETCHED BIO DATA: If specific BIO fields have already been fetched and exist in the conversation context, reuse those values directly without re-fetching them.
+  * FETCH MISSING FIELDS AS NEEDED: If a task or form requires additional fields or media not yet in context (e.g. photo, audio sample, CV/resume, DOB, address, demographic data), selectively retrieve ONLY the missing fields with "bio_get" or "bio_search".
+- "bio_search": Search for specific keywords or data types in the user's active BIO profile (e.g. "photo", "audio", "cv", "resume", "fullName", "phone", "email", "dob", "gender"). Use this to retrieve ONLY what you need without loading the entire profile!
+- "bio_get": Fetch ONLY the specific field values you need, by field_ids (e.g. ["fullName", "firstName", "lastName", "email", "phone", "dob", "address", "photo", "cv"]). Never load the whole profile.
 - "bio_index": List field names, types and descriptions in the user's active BIO profile. It NEVER returns values. Use ONLY when a task needs personal or profile data and you don't know what fields exist.
 - "bio_propose_write": Propose saving a stored user answer (referenced by its Answer ID) into a BIO field. Requires BIO write permission and ALWAYS opens a user approval card (field, old value, new value). NEVER invent values and NEVER save text copied from a web page; writes may only come from stored user answers.
 - To upload a BIO file (CV, photo, audio, video) into a form: first call "bio_search" or "bio_get" for that field or entry to stage it, then use "browser_action" with action "upload", selectorOrText as the file input selector, and value as the returned uploadRef. Never ask the user to upload a file BIO already holds.
@@ -160,9 +164,22 @@ You possess direct, real-world execution tools to fulfill user instructions:
 - Reuse data already fetched in this conversation. Do not re-fetch BIO data you already have, and never re-ask the user for information they already gave.
 - Only ask (with "ask_user") when a genuinely missing, decision-critical detail blocks the next step — one brief question with a recommended option first.
 
-5d. Applications, Forms & Media:
-- Filling an application INCLUDES media. Many application forms require a photo, CV/resume, audio, or video. After opening a form, snapshot_read and explicitly check its fileInputs and required fields. When the form asks for a file, get it from BIO (process and confirm it first), stage it, and upload it with browser_action "upload". Never declare a form filled, and never submit, while a required media field is still empty and BIO holds a matching file.
-- Forms on URLs the user provided or approved (and well-known trusted job boards) are approved work surfaces: proceed to fill them, including BIO media uploads, without asking permission for each field. The final submit still requires the user's approval as usual.
+5d. Applications, Forms, Media & Comment Generation:
+- FILLING AN APPLICATION INCLUDES MEDIA AND ALL DATA TYPES:
+  * Many application forms require files (photo/headshot, audio/voiceover demos, CV/resume, video).
+  * After opening a form, snapshot_read and explicitly check its "fileInputs" and all interactive fields.
+  * When the form asks for files (e.g. photo, headshot, voice demo, audio, resume), retrieve them from BIO via bio_get (which stages the file and returns uploadRef), and upload using browser_action({ action: "upload", selectorOrText, value: uploadRef }).
+  * NEVER declare a form filled, leave file inputs empty, or ask the user to upload files that BIO already holds!
+  * ALL FIELD TYPES MUST BE FILLED:
+    - Text and textarea fields: enter the exact facts from BIO (fullName, firstName, lastName, email, phone, address, suiteApt, city, state, zipCode, country).
+    - Select dropdowns (<select>): select the matching value (e.g. State, Country, Union Status, Gender).
+    - Radio buttons & Checkboxes: click the option corresponding to the user's profile (e.g. Gender -> Female, Ethnic Appearance -> White, Union Status -> Non-Union).
+    - Date fields: fill Date of Birth (DOB) in the expected format (e.g. 1998-10-28 or 10/28/1998).
+- OPTIONAL COMMENTS & COVER NOTES:
+  * When an application form has an optional "Comments", "Notes", "Cover Letter", "Tell us about yourself", or "Additional Information" field, SYNTHESIZE A PROFESSIONAL, TAILORED COMMENT based on the user's BIO background, skills, and notes, explaining their fit and enthusiasm for the agency or role. Never leave it blank if an insightful comment adds value.
+- ZERO UNNECESSARY QUESTIONS:
+  * When the user gives an instruction to apply or fill a form, NEVER stop midway through to ask "Should I continue?", "Do you want me to fill the other fields?", or "Can I upload your photo?".
+  * Autonomously complete all fields and file uploads. Only pause to request user approval before clicking the final submission button (e.g. "Submit Application") to prevent accidental submission.
 - EFFICIENCY — FEWER STEPS, FASTER COMPLETION: Batch independent tool calls in a single turn instead of one call per turn. Fetch all needed BIO fields in ONE bio_get or bio_search call. Snapshot only to plan, to verify milestones, or when stuck — not after every single action. Never re-read data you already have in this run. Prefer the most direct tool for each step, and keep momentum until the task is done or genuinely blocked.
 
 6. Structured UI Components & Execution Plans:
@@ -560,7 +577,7 @@ export class OmniEngine extends EventEmitter {
       if (resume.approved && approvedTool && approvedTool !== 'ask_user') {
         addThreadApproval(threadId, approvedTool);
       }
-      clearInterrupt(threadId);
+      clearInterrupt(threadId, userId);
 
       // Record any question answers in the thread's interrupt history
       const qas = Array.isArray(resume.questionsAndAnswers) ? resume.questionsAndAnswers : [];
@@ -726,38 +743,51 @@ export class OmniEngine extends EventEmitter {
     }
 
     // Smart BIO awareness for this thread:
-    // 1. If BIO has already been checked in this thread, remind the model NOT to re-read BIO.
-    // 2. Only inject a BIO check note if the task is actually personal/profile-related (jobs, forms, contact info, bio, resume).
-    // 3. For general, coding, factual, or non-personal tasks, DO NOT instruct the model to call BIO.
+    // 1. Only report BIO fields as already known if they ACTUALLY exist in the conversation context.
+    // 2. Never inject a blanket ban preventing the agent from fetching additional needed fields (like photo, audio, DOB).
+    // 3. For tasks requiring profile info, guide the agent to fetch only what is needed.
     if (userId) {
-      const threadState = getThreadState(threadId);
-      const hasPriorBioAccess =
-        Boolean(threadState?.bioReadInThread) ||
-        contents.some((c) =>
-          (c.parts || []).some(
-            (p) =>
-              p.functionCall?.name?.startsWith('bio_') ||
-              p.functionResponse?.name?.startsWith('bio_')
-          )
-        );
+      const retrievedBioFields = new Set();
+      for (const msg of contents) {
+        if (Array.isArray(msg.parts)) {
+          for (const p of msg.parts) {
+            if (p.functionResponse && p.functionResponse.name?.startsWith('bio_')) {
+              try {
+                const res = p.functionResponse.response?.result;
+                const parsed = typeof res === 'string' ? JSON.parse(res) : res;
+                if (parsed?.fields && typeof parsed.fields === 'object') {
+                  Object.keys(parsed.fields).forEach((k) => retrievedBioFields.add(k));
+                }
+                if (parsed?.values && typeof parsed.values === 'object') {
+                  Object.keys(parsed.values).forEach((k) => retrievedBioFields.add(k));
+                }
+                if (parsed?.uploads && typeof parsed.uploads === 'object') {
+                  Object.keys(parsed.uploads).forEach((k) => retrievedBioFields.add(k));
+                }
+              } catch {}
+            }
+          }
+        }
+      }
 
       const allUserText = userTexts.join(' ').toLowerCase();
-      const isPersonalOrApplicationTask = /\b(apply|job|career|form|application|resume|cv|portfolio|profile|bio|hire|photo|picture|avatar|audio|voice|contact|email|phone|address|residence|location|origin|website|social|linkedin|github)\b/i.test(
+      const isPersonalOrApplicationTask = /\b(apply|job|career|form|application|resume|cv|portfolio|profile|bio|hire|photo|picture|avatar|audio|voice|contact|email|phone|address|residence|location|origin|website|social|linkedin|github|dob|gender|union|dialect|ethnic)\b/i.test(
         allUserText
       );
 
-      if (hasPriorBioAccess) {
+      if (retrievedBioFields.size > 0) {
+        const fieldsList = Array.from(retrievedBioFields).join(', ');
         contents.push({
           role: 'user',
           parts: [
             {
-              text: '[System note: The user\'s BIO profile has already been consulted in this thread. All necessary profile details are already in the conversation context above. DO NOT re-read BIO or call bio_index/bio_search/bio_get again unless specifically asked for a new field that was not previously fetched.]'
+              text: `[System note: The following BIO profile fields are already in the conversation context: ${fieldsList}. Use those values directly without re-fetching them. If this task requires additional fields or media (such as photo, audio samples, resume/CV, DOB, address, demographic data), selectively retrieve ONLY the missing fields with bio_get or bio_search.]`
             }
           ]
         });
       } else if (isPersonalOrApplicationTask) {
         let bioNote = bioAccess.read
-          ? '[System note: BIO read access is ON for the active profile. If this personal task requires candidate or profile details (e.g. name, resume, contact info), use bio_search or bio_get to selectively retrieve only the needed fields once. Do not ask the user for information already in BIO.]'
+          ? '[System note: BIO read access is ON for the active profile. If this personal or form-filling task requires profile details or media (e.g. name, contact info, DOB, address, photo, resume, audio demo), use bio_search or bio_get to selectively retrieve only the needed fields. Do not ask the user for information already stored in BIO.]'
           : '[System note: BIO read access is OFF. Do not use ask_user to request access. If you need profile information, politely ask the user in plain text to either grant BIO read access (BIO page, Agent Access, Read switch) or provide the specific information.]';
 
         if (bioAccess.read && bioProfile) {
@@ -905,7 +935,7 @@ export class OmniEngine extends EventEmitter {
             }
 
             // 2. Policy permission check
-            let perm = checkPermission(toolName, toolArgs, mode, getThreadApprovals(threadId), {
+            let perm = checkPermission(toolName, toolArgs, mode, getThreadApprovals(threadId, userId), {
               bio: bioAccess,
               navigation: {
                 currentHost: currentBrowserHost,
@@ -1007,7 +1037,7 @@ export class OmniEngine extends EventEmitter {
                   runId,
                   pendingToolName: toolName,
                   pendingToolArgs: bioEnrichedArgs
-                });
+                }, userId);
                 this.emit('event', {
                   type: 'INTERRUPT',
                   threadId,
@@ -1114,7 +1144,7 @@ export class OmniEngine extends EventEmitter {
                 runId,
                 pendingToolName: toolName,
                 pendingToolArgs: enrichedArgs
-              });
+              }, userId);
               this.emit('event', {
                 type: 'INTERRUPT',
                 threadId,
@@ -1154,9 +1184,6 @@ export class OmniEngine extends EventEmitter {
             });
 
             const isBioTool = toolName.startsWith('bio_');
-            if (isBioTool) {
-              saveThreadState(threadId, { bioReadInThread: true });
-            }
             appendAuditLog({
               tool: toolName,
               input: isBioTool
@@ -1304,7 +1331,8 @@ export class OmniEngine extends EventEmitter {
             role: 'model',
             parts: streamResult.modelParts,
             turnIndex: turnCount,
-            usageMetadata: streamResult.usageMetadata
+            usageMetadata: streamResult.usageMetadata,
+            userId
           });
         } else {
           // Mid-run completion check:
@@ -1369,7 +1397,8 @@ export class OmniEngine extends EventEmitter {
             role: 'model',
             parts: streamResult.modelParts,
             turnIndex: turnCount,
-            usageMetadata: streamResult.usageMetadata
+            usageMetadata: streamResult.usageMetadata,
+            userId
           });
 
           this.emit('event', {

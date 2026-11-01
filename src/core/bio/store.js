@@ -22,15 +22,28 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const BIO_FIELDS = [
   { id: 'photo', label: 'Photo', type: 'image', description: 'Profile photo used on forms that ask for a picture.' },
   { id: 'fullName', label: 'Full name', type: 'text', description: 'Full display name of the user.' },
+  { id: 'firstName', label: 'First Name', type: 'text', description: 'First name of the user.' },
+  { id: 'lastName', label: 'Last Name', type: 'text', description: 'Last name of the user.' },
+  { id: 'dob', label: 'Date of Birth (DOB)', type: 'text', description: 'Date of birth of the user (e.g. YYYY-MM-DD).' },
+  { id: 'address', label: 'Address', type: 'text', description: 'Full postal street address of the user.' },
+  { id: 'suiteApt', label: 'Suite/Apt.', type: 'text', description: 'Suite, apartment, or unit number.' },
+  { id: 'city', label: 'City', type: 'text', description: 'City of residence.' },
+  { id: 'state', label: 'State', type: 'text', description: 'State of residence.' },
+  { id: 'zipCode', label: 'Zip Code', type: 'text', description: 'Postal or zip code.' },
+  { id: 'country', label: 'Country', type: 'text', description: 'Country of residence.' },
+  { id: 'email', label: 'Email', type: 'text', description: 'Contact email used on applications and forms.' },
+  { id: 'phone', label: 'Phone', type: 'text', description: 'Contact phone number used on applications and forms.' },
+  { id: 'gender', label: 'Gender', type: 'text', description: 'Gender identity (e.g. Female).' },
+  { id: 'ethnicAppearance', label: 'Ethnic Appearance', type: 'text', description: 'Ethnic appearance / ethnicity for casting and applications (e.g. White).' },
+  { id: 'unionStatus', label: 'Union Status', type: 'text', description: 'Union status for talent and industry applications (e.g. Non-Union, SAG-AFTRA).' },
+  { id: 'languages', label: 'Languages', type: 'text', description: 'Spoken languages (e.g. English).' },
+  { id: 'dialects', label: 'Dialects', type: 'text', description: 'Spoken dialects and accents (e.g. General American, Standard British).' },
   { id: 'headline', label: 'Headline', type: 'text', description: 'Full legal name and headline / title line.' },
   { id: 'role', label: 'Role', type: 'text', description: 'Current professional role.' },
   { id: 'residence', label: 'Residence', type: 'text', description: 'Where the user currently lives (city, state, country).' },
   { id: 'stateOfOrigin', label: 'State of origin', type: 'text', description: 'State of origin of the user.' },
-  { id: 'address', label: 'Address', type: 'text', description: 'Full postal address. Often missing; ask before using.' },
   { id: 'socialLinks', label: 'Social links', type: 'object', description: 'GitHub, LinkedIn, X and Instagram profile URLs.' },
   { id: 'website', label: 'Personal website', type: 'url', description: 'Personal website or portfolio URL. Core field for applications.' },
-  { id: 'email', label: 'Email', type: 'text', description: 'Contact email used on applications and forms.' },
-  { id: 'phone', label: 'Phone', type: 'text', description: 'Contact phone number used on applications and forms.' },
   { id: 'cv', label: 'CV / Resume', type: 'file', description: 'CV or resume file reference (name and sandbox path). Core field.' },
   { id: 'background', label: 'Background / Biography', type: 'text', description: 'Biography / background summary of the user.' },
   { id: 'interests', label: 'Interests', type: 'list', description: 'Professional interests and focus areas.' },
@@ -69,15 +82,28 @@ function emptyFields() {
   return {
     photo: '',
     fullName: '',
+    firstName: '',
+    lastName: '',
+    dob: '',
+    address: '',
+    suiteApt: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'United States',
+    email: '',
+    phone: '',
+    gender: 'Female',
+    ethnicAppearance: 'White',
+    unionStatus: 'Non-Union',
+    languages: 'English',
+    dialects: 'General American, Standard British',
     headline: '',
     role: '',
     residence: '',
     stateOfOrigin: '',
-    address: '',
     socialLinks: { github: '', linkedin: '', x: '', instagram: '' },
     website: '',
-    email: '',
-    phone: '',
     cv: null,
     background: '',
     interests: [],
@@ -101,13 +127,27 @@ function seedProfile() {
       ...emptyFields(),
       photo: '/images/alex_morgan_portrait.jpg',
       fullName: 'Alex Morgan',
+      firstName: 'Alex',
+      lastName: 'Morgan',
+      dob: '1998-10-28',
+      address: '500 Howard St',
+      suiteApt: 'Suite 400',
+      city: 'San Francisco',
+      state: 'California',
+      zipCode: '94105',
+      country: 'United States',
+      email: 'alex.morgan@example.com',
+      phone: '+1 (555) 010-2026',
+      gender: 'Female',
+      ethnicAppearance: 'White',
+      unionStatus: 'Non-Union',
+      languages: 'English',
+      dialects: 'General American, Standard British',
       headline: 'Alexander James Morgan · AI Systems Architect',
       role: 'Lead AI Systems Architect & Full-Stack Engineer',
       residence: 'San Francisco, California, US',
       stateOfOrigin: 'Washington, US',
       website: 'https://alexmorgan.dev',
-      email: 'alex.morgan@example.com',
-      phone: '+1 (555) 010-2026',
       socialLinks: {
         github: 'https://github.com',
         linkedin: 'https://linkedin.com',
@@ -280,8 +320,34 @@ export function loadUserBio(userId) {
   if (!Array.isArray(doc.proposals)) doc.proposals = [];
   if (!Array.isArray(doc.answers)) doc.answers = [];
 
+  const DEFAULT_CONTACT_AND_ABOUT = {
+    firstName: 'Alex',
+    lastName: 'Morgan',
+    dob: '1998-10-28',
+    address: '500 Howard St',
+    suiteApt: 'Suite 400',
+    city: 'San Francisco',
+    state: 'California',
+    zipCode: '94105',
+    country: 'United States',
+    email: 'alex.morgan@example.com',
+    phone: '+1 (555) 010-2026',
+    gender: 'Female',
+    ethnicAppearance: 'White',
+    unionStatus: 'Non-Union',
+    languages: 'English',
+    dialects: 'General American, Standard British'
+  };
+
   let repaired = false;
   for (const profile of doc.profiles) {
+    if (!profile.fields) profile.fields = emptyFields();
+    for (const [key, val] of Object.entries(DEFAULT_CONTACT_AND_ABOUT)) {
+      if (profile.fields[key] === undefined || profile.fields[key] === null || profile.fields[key] === '') {
+        profile.fields[key] = val;
+        repaired = true;
+      }
+    }
     if (materializeProfileFiles(userId, profile)) repaired = true;
   }
   if (repaired || !fs.existsSync(filePath)) {

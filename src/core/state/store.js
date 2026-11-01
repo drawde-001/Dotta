@@ -214,8 +214,16 @@ export function deleteUserThread(userId, threadId) {
   return deleted;
 }
 
-export function getThreadState(threadId) {
+export function getThreadState(threadId, userId = null) {
   if (!threadId) return null;
+  if (userId) {
+    const userPath = getThreadFilePath(threadId, userId);
+    if (fs.existsSync(userPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(userPath, 'utf8'));
+      } catch {}
+    }
+  }
   const filePath = getThreadFilePath(threadId);
   if (fs.existsSync(filePath)) {
     try {
@@ -225,10 +233,12 @@ export function getThreadState(threadId) {
   return null;
 }
 
-export function saveThreadState(threadId, patch = {}) {
+export function saveThreadState(threadId, patch = {}, userId = null) {
   if (!threadId) return null;
-  const existing = getThreadState(threadId) || {
+  const existing = getThreadState(threadId, userId) || {
+    id: threadId,
     threadId,
+    userId: userId || null,
     createdAt: Date.now(),
     status: 'active',
     contents: [],
@@ -240,17 +250,18 @@ export function saveThreadState(threadId, patch = {}) {
     ...existing,
     ...patch,
     threadId,
+    userId: userId || existing.userId || null,
     updatedAt: Date.now()
   };
 
-  const filePath = getThreadFilePath(threadId);
+  const filePath = getThreadFilePath(threadId, userId || existing.userId);
   atomicWriteJson(filePath, updated);
   return updated;
 }
 
 export function persistTurn(threadId, { role, parts, turnIndex, usageMetadata, userId = null } = {}) {
   if (!threadId) return;
-  const state = (userId ? getUserThread(userId, threadId) : null) || getThreadState(threadId) || {
+  const state = (userId ? getUserThread(userId, threadId) : null) || getThreadState(threadId, userId) || {
     id: threadId,
     threadId,
     userId: userId || null,
@@ -285,26 +296,26 @@ export function persistTurn(threadId, { role, parts, turnIndex, usageMetadata, u
   return state;
 }
 
-export function saveInterrupt(threadId, interruptData) {
+export function saveInterrupt(threadId, interruptData, userId = null) {
   return saveThreadState(threadId, {
     status: 'interrupted',
     interrupt: {
       ...interruptData,
       savedAt: Date.now()
     }
-  });
+  }, userId);
 }
 
-export function clearInterrupt(threadId) {
+export function clearInterrupt(threadId, userId = null) {
   return saveThreadState(threadId, {
     status: 'active',
     interrupt: null
-  });
+  }, userId);
 }
 
-export function getThreadApprovals(threadId) {
+export function getThreadApprovals(threadId, userId = null) {
   if (!threadId) return new Set();
-  const state = getThreadState(threadId);
+  const state = getThreadState(threadId, userId);
   return new Set(Array.isArray(state?.approvals) ? state.approvals : []);
 }
 

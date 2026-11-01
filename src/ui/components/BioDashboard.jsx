@@ -714,6 +714,154 @@ export function BioDashboard() {
                 />
               </div>
 
+              {/* Contact Information */}
+              <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Contact Information</span>
+                  <span className="text-[10px] text-zinc-500">* Required for applications</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">First Name *</span>
+                    <Editable
+                      value={fields.firstName}
+                      placeholder="Add first name"
+                      onSave={(v) => saveField('firstName', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Last Name *</span>
+                    <Editable
+                      value={fields.lastName}
+                      placeholder="Add last name"
+                      onSave={(v) => saveField('lastName', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">DOB *</span>
+                    <Editable
+                      value={fields.dob}
+                      placeholder="YYYY-MM-DD"
+                      onSave={(v) => saveField('dob', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Address *</span>
+                    <Editable
+                      value={fields.address}
+                      placeholder="Street address"
+                      onSave={(v) => saveField('address', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Suite/Apt.</span>
+                    <Editable
+                      value={fields.suiteApt}
+                      placeholder="Suite, Apt, Floor"
+                      onSave={(v) => saveField('suiteApt', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">City *</span>
+                    <Editable
+                      value={fields.city}
+                      placeholder="City"
+                      onSave={(v) => saveField('city', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">State *</span>
+                    <Editable
+                      value={fields.state}
+                      placeholder="Select or enter state"
+                      onSave={(v) => saveField('state', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Zip Code *</span>
+                    <Editable
+                      value={fields.zipCode}
+                      placeholder="Zip code"
+                      onSave={(v) => saveField('zipCode', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Country *</span>
+                    <Editable
+                      value={fields.country || 'United States'}
+                      placeholder="United States"
+                      onSave={(v) => saveField('country', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Email *</span>
+                    <Editable
+                      value={fields.email}
+                      placeholder="Add email"
+                      onSave={(v) => saveField('email', v)}
+                    />
+                  </div>
+                  <div className="col-span-full flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Phone</span>
+                    <Editable
+                      value={fields.phone}
+                      placeholder="Add phone"
+                      onSave={(v) => saveField('phone', v)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* About You */}
+              <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">About You</span>
+                  <span className="text-[10px] text-zinc-500">* Talent &amp; Casting profile</span>
+                </div>
+                <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Gender *</span>
+                    <Editable
+                      value={fields.gender || 'Female'}
+                      placeholder="Female"
+                      onSave={(v) => saveField('gender', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Ethnic Appearance</span>
+                    <Editable
+                      value={fields.ethnicAppearance || 'White'}
+                      placeholder="White"
+                      onSave={(v) => saveField('ethnicAppearance', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Union Status *</span>
+                    <Editable
+                      value={fields.unionStatus || 'Non-Union'}
+                      placeholder="Non-Union"
+                      onSave={(v) => saveField('unionStatus', v)}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Languages</span>
+                    <Editable
+                      value={fields.languages || 'English'}
+                      placeholder="English"
+                      onSave={(v) => saveField('languages', v)}
+                    />
+                  </div>
+                  <div className="col-span-full flex flex-col gap-0.5">
+                    <span className="text-[11px] font-mono text-zinc-400">Dialects *</span>
+                    <Editable
+                      value={fields.dialects || 'General American, Standard British'}
+                      placeholder="General American, Standard British"
+                      onSave={(v) => saveField('dialects', v)}
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-3">
                 <span className="text-xs font-medium text-zinc-400">Role</span>
                 <Editable value={fields.role} placeholder="Add your role" onSave={(v) => saveField('role', v)} textClassName="text-xs font-medium text-zinc-100 sm:text-sm" />
