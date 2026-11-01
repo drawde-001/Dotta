@@ -136,10 +136,43 @@ export function normalizeGeminiContents(promptOrContents) {
       rawParts = [{ text: item.content }];
     } else if (Array.isArray(item.content)) {
       rawParts = item.content
-        .map((c) => (typeof c === 'string' ? { text: c } : c.text ? { text: c.text } : null))
+        .map((c) => {
+          if (typeof c === 'string') return { text: c };
+          if (c?.inlineData) return c;
+          if (c?.text) return { text: c.text };
+          if (c?.dataUrl && (c.type || c.dataUrl.startsWith('data:'))) {
+            const comma = c.dataUrl.indexOf(',');
+            const mime = c.type || c.dataUrl.slice(5, comma).split(';')[0] || 'application/octet-stream';
+            return {
+              inlineData: {
+                mimeType: mime,
+                data: comma !== -1 ? c.dataUrl.slice(comma + 1) : c.dataUrl
+              }
+            };
+          }
+          return null;
+        })
         .filter(Boolean);
     } else if (typeof item.text === 'string' && item.text.trim()) {
       rawParts = [{ text: item.text }];
+    }
+
+    if (Array.isArray(item.attachments)) {
+      for (const att of item.attachments) {
+        if (att?.dataUrl?.startsWith('data:')) {
+          const comma = att.dataUrl.indexOf(',');
+          const mime = att.type || att.dataUrl.slice(5, comma).split(';')[0] || 'application/octet-stream';
+          const base64 = att.dataUrl.slice(comma + 1);
+          if (
+            mime.startsWith('audio/') ||
+            mime.startsWith('image/') ||
+            mime.startsWith('video/') ||
+            mime === 'application/pdf'
+          ) {
+            rawParts.push({ inlineData: { mimeType: mime, data: base64 } });
+          }
+        }
+      }
     }
 
     const cleanParts = consolidateGeminiParts(rawParts);
@@ -180,6 +213,35 @@ export function buildFunctionResponseParts(toolResults) {
 }
 
 /**
+ * Recursively cleans schema objects for Google Gemini API:
+ * - Ensures any schema with type "ARRAY" or "array" specifies valid "items"
+ * - Strips disallowed internal schema keys
+ */
+function sanitizeGeminiSchema(schema) {
+  if (!schema || typeof schema !== 'object') return schema;
+  const clone = { ...schema };
+  const typeStr = String(clone.type || '').toUpperCase();
+
+  if (typeStr === 'ARRAY' && !clone.items) {
+    clone.items = { type: 'STRING' };
+  }
+
+  if (clone.properties && typeof clone.properties === 'object') {
+    const nextProps = {};
+    for (const [k, v] of Object.entries(clone.properties)) {
+      nextProps[k] = sanitizeGeminiSchema(v);
+    }
+    clone.properties = nextProps;
+  }
+
+  if (clone.items && typeof clone.items === 'object') {
+    clone.items = sanitizeGeminiSchema(clone.items);
+  }
+
+  return clone;
+}
+
+/**
  * Converts internal tool definitions to strict Gemini functionDeclarations,
  * stripping internal properties like `readOnly` that trigger Google API 400 Bad Request.
  */
@@ -188,6 +250,6 @@ export function toGeminiFunctionDeclarations(tools) {
   return tools.map((t) => ({
     name: t.name,
     description: t.description || '',
-    parameters: t.parameters || { type: 'OBJECT', properties: {} }
+    parameters: sanitizeGeminiSchema(t.parameters || { type: 'OBJECT', properties: {} })
   }));
 }

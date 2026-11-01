@@ -20,7 +20,7 @@ import { ComposerAttachments } from './assistant-ui/elements/attachment.aui';
 import { ComposerVoiceDictation } from './assistant-ui/elements/composer-voice.aui';
 
 export type ComposerMode = 'Plan' | 'Ask' | 'Build';
-export type EffortLevel = 'Low' | 'Medium' | 'High' | 'Max';
+export type EffortLevel = 'Low' | 'Medium' | 'High';
 export type ProviderType = 'muse' | 'google' | 'kimi' | 'openai' | 'spark';
 export type ModelFilterTab = 'fav' | 'all';
 
@@ -65,7 +65,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Default',
     desc: 'Open-weight high-throughput Muse Spark model served serverless via Modal vLLM with native tool calling',
     hasRealApi: true,
@@ -76,7 +76,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Meta Flagship',
     desc: 'Complex multi-file software engineering and long-horizon agentic workflows',
     hasRealApi: true,
@@ -87,7 +87,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Meta Muse',
     desc: 'Tuned for agentic tool loops, browser navigation, and high-throughput coding',
     hasRealApi: true,
@@ -98,7 +98,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'Medium',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Meta Muse',
     desc: 'Previous Muse Spark release with full multimodal audio/image support',
     hasRealApi: true,
@@ -109,7 +109,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'Medium',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Meta Muse',
     desc: 'Baseline Muse Spark agent model',
     hasRealApi: true,
@@ -120,7 +120,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'openai',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'OpenAI API',
     desc: 'Flagship OpenAI reasoning and autonomous execution',
     hasRealApi: true,
@@ -131,7 +131,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'Medium',
     provider: 'openai',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Fast Code',
     desc: 'High-throughput, low-latency OpenAI code engine',
     hasRealApi: true,
@@ -142,7 +142,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'spark',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Anthropic',
     desc: 'Frontier Claude agentic reasoning and tool execution',
     hasRealApi: true,
@@ -150,10 +150,10 @@ export const AVAILABLE_MODELS: ModelOption[] = [
   {
     id: 'opus-48',
     name: 'Claude 3 Opus',
-    effort: 'Max',
+    effort: 'High',
     provider: 'spark',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Deep Arch',
     desc: 'Deep architecture, complex coding, and strategic planning',
     hasRealApi: true,
@@ -164,7 +164,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'spark',
     isFav: false,
-    efforts: ['Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Agentic',
     desc: 'Autonomous multi-step tool agent engine',
     hasRealApi: true,
@@ -175,7 +175,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'openai',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Universal',
     desc: 'Compatible with any OpenAI endpoint (Ollama, vLLM, DeepSeek, Groq, OpenRouter)',
     hasRealApi: true,
@@ -186,31 +186,31 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'kimi',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Moonshot',
     desc: 'Ultra-long context reasoning and document synthesis',
     hasRealApi: true,
   },
   {
     id: 'gemini-3.8-flash',
-    name: 'Gemini 3 Flash',
+    name: 'Gemini 3.8 Flash',
     effort: 'High',
     provider: 'google',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Google API',
-    desc: 'Fast multimodal Google model',
+    desc: 'Fast multimodal Google flagship model',
     hasRealApi: true,
   },
   {
     id: 'gemini-3.1-pro-preview',
     name: 'Gemini 3.1 Pro',
-    effort: 'Max',
+    effort: 'High',
     provider: 'google',
     isFav: false,
-    efforts: ['Medium', 'High', 'Max'],
+    efforts: ['Low', 'Medium', 'High'],
     badge: 'Deep Thinking',
-    desc: 'Frontier Gemini 3.1 Pro deep reasoning',
+    desc: 'Frontier Gemini 3.1 Pro deep reasoning and code architecture',
     hasRealApi: true,
   },
 ];
@@ -577,7 +577,7 @@ export const InputDock: React.FC<InputDockProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Load saved favourite models from localStorage on mount (strictly Meta models)
+  // Load saved favourite models from localStorage on mount
   useEffect(() => {
     try {
       const savedFavs = localStorage.getItem('ai_composer_fav_models');
@@ -587,7 +587,7 @@ export const InputDock: React.FC<InputDockProps> = ({
           setModels((prev) =>
             prev.map((m) => ({
               ...m,
-              isFav: m.provider === 'muse' && parsed.includes(m.id),
+              isFav: parsed.includes(m.id) || m.isFav,
             }))
           );
         }
@@ -1257,7 +1257,8 @@ export const InputDock: React.FC<InputDockProps> = ({
           body: JSON.stringify({
             audio: seg.base64Audio,
             durationSec: seg.durationSec,
-            mimeType: seg.mimeType
+            mimeType: seg.mimeType,
+            model: activeModelId || selectedModel
           })
         });
 
@@ -1327,7 +1328,8 @@ export const InputDock: React.FC<InputDockProps> = ({
 
     onSendMessage(trimmed, {
       attachments: orderedAttachments,
-      maxIndividualSizeBytes: MAX_INDIVIDUAL_ATTACHMENT_BYTES
+      maxIndividualSizeBytes: MAX_INDIVIDUAL_ATTACHMENT_BYTES,
+      effort: activeModel.effort
     });
     setPromptText('');
     setStagedAttachments([]);

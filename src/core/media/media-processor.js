@@ -16,7 +16,7 @@
  */
 
 import { IMAGE_INPUT_LIMITS, AUDIO_INPUT_LIMITS } from '../models/model-registry.js';
-import { getApiKey } from '../env.js';
+import { getApiKey, getGeminiApiKeys } from '../env.js';
 
 export const MAX_IMAGE_SIZE_BYTES = IMAGE_INPUT_LIMITS.maxInlineFileSizeBytes; // 50 MB
 export const SUPPORTED_IMAGE_MIMES = new Set(IMAGE_INPUT_LIMITS.supportedMimeTypes);
@@ -316,14 +316,98 @@ async function callMetaMuseVoiceTranscribe({
 }
 
 /**
- * Send an audio segment to Meta Voice Transcribe (muse-voice-transcribe-1.0) as primary/default,
- * try intermediate fallbacks if needed, and ALWAYS hand back over to muse-voice-transcribe-1.0
- * as the final fallback if every other provider fails.
+ * Helper: Call Google Gemini Multimodal Audio across Gemini endpoints/models.
+ * Uses candidate model cascade (gemini-3.8-flash -> gemini-3.6-flash -> gemini-2.5-flash -> gemini-3-flash-preview -> gemini-3.5-flash-lite)
+ * with multi-key rotation and failover.
+ */
+export async function callGeminiAudioTranscribe({
+  base64,
+  rawMime = 'audio/wav',
+  preferredModel = 'gemini-3.8-flash',
+  timeoutMs = 25000
+} = {}) {
+  const geminiKeys = getGeminiApiKeys();
+  if (!geminiKeys.length || !base64) return null;
+
+  const geminiBaseUrl = (
+    process.env.GEMINI_API_BASE_URL ||
+    'https://generativelanguage.googleapis.com/v1beta'
+  ).replace(/\/$/, '');
+
+  const candidateModels = [
+    preferredModel,
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-2.5-flash',
+    'gemini-3-flash-preview',
+    'gemini-3.5-flash-lite'
+  ].filter((m) => m && /gemini/i.test(m));
+  const uniqueModels = [...new Set(candidateModels)];
+
+  for (const geminiKey of geminiKeys) {
+    for (const gModel of uniqueModels) {
+      try {
+        const res = await fetch(
+          `${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { inlineData: { mimeType: rawMime, data: base64 } },
+                    {
+                      text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else.'
+                    }
+                  ]
+                }
+              ]
+            }),
+            signal: AbortSignal.timeout(timeoutMs)
+          }
+        );
+
+        if (res.ok) {
+          const json = await res.json();
+          const candidateText = json.candidates?.[0]?.content?.parts
+            ?.filter((p) => !p.thought && typeof p.text === 'string')
+            .map((p) => p.text)
+            .join('')
+            .trim();
+          if (candidateText) {
+            return {
+              ok: true,
+              text: candidateText,
+              source: `gemini_audio:${gModel}`,
+              data: json
+            };
+          }
+        } else if (res.status === 429 || res.status === 403 || res.status === 400) {
+          // Key rate-limited or invalid, try next key
+          break;
+        }
+      } catch (err) {
+        // Continue to next candidate model
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Transcribe an audio chunk routed by the selected model category:
+ * - When Gemini is selected: Route to Gemini Multimodal Audio FIRST, fallback to Meta / Whisper.
+ * - When Meta is selected: Route to Meta Muse Voice Transcribe FIRST, fallback to Whisper / Gemini.
+ * - When OpenAI is selected: Route to Whisper FIRST.
  */
 export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   const rawMime = (audioPayload.mimeType || 'audio/wav').split(';')[0].trim();
   const defaultExt = rawMime.includes('wav') ? 'wav' : rawMime.includes('mp3') ? 'mp3' : 'webm';
   const filename = audioPayload.filename || `audio.${defaultExt}`;
+  const preferredModel = options.preferredModel || audioPayload.preferredModel || '';
+  const isGeminiCategory = /gemini/i.test(preferredModel);
+  const isOpenAiCategory = /whisper|openai|gpt/i.test(preferredModel);
 
   // Resolve the audio blob/buffer and base64
   let blob;
@@ -344,7 +428,49 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     base64 = Buffer.from(bytes).toString('base64');
   }
 
-  // --- Attempt 1 (DEFAULT PRIMARY): Meta Muse Voice Transcribe (muse-voice-transcribe-1.0) ---
+  // 1. If Gemini is selected: Route directly to Gemini Multimodal Audio FIRST
+  if (isGeminiCategory && base64) {
+    const geminiPrimary = await callGeminiAudioTranscribe({
+      base64,
+      rawMime,
+      preferredModel,
+      timeoutMs: 25000
+    });
+    if (geminiPrimary && geminiPrimary.ok && geminiPrimary.text) {
+      return geminiPrimary;
+    }
+  }
+
+  // 2. If OpenAI is selected: Route directly to OpenAI Whisper FIRST
+  if (isOpenAiCategory) {
+    const openaiKey = getApiKey('OPENAI_API_KEY');
+    if (openaiKey) {
+      try {
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        formData.append('model', 'whisper-1');
+        formData.append('response_format', 'text');
+
+        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: formData,
+          signal: AbortSignal.timeout(25000)
+        });
+
+        if (res.ok) {
+          const text = (await res.text()).trim();
+          if (text) {
+            return { ok: true, text, source: 'openai_whisper' };
+          }
+        }
+      } catch (err) {
+        console.warn('[MediaProcessor] Whisper error:', err.message);
+      }
+    }
+  }
+
+  // 3. Meta Muse Voice Transcribe (PRIMARY for Meta models, SECONDARY fallback for other models)
   const primaryMuseResult = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -359,89 +485,49 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     return primaryMuseResult;
   }
 
-  // --- Attempt 2 (Intermediate Fallback): OpenAI Whisper ---
-  const openaiKey = getApiKey('OPENAI_API_KEY');
-  if (openaiKey) {
-    try {
-      const formData = new FormData();
-      formData.append('file', blob, filename);
-      formData.append('model', 'whisper-1');
-      formData.append('response_format', 'text');
+  // 4. Intermediate Fallback: OpenAI Whisper (if not already tried)
+  if (!isOpenAiCategory) {
+    const openaiKey = getApiKey('OPENAI_API_KEY');
+    if (openaiKey) {
+      try {
+        const formData = new FormData();
+        formData.append('file', blob, filename);
+        formData.append('model', 'whisper-1');
+        formData.append('response_format', 'text');
 
-      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${openaiKey}` },
-        body: formData,
-        signal: AbortSignal.timeout(25000)
-      });
+        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${openaiKey}` },
+          body: formData,
+          signal: AbortSignal.timeout(25000)
+        });
 
-      if (res.ok) {
-        const text = (await res.text()).trim();
-        if (text) {
-          return { ok: true, text, source: 'openai_whisper' };
+        if (res.ok) {
+          const text = (await res.text()).trim();
+          if (text) {
+            return { ok: true, text, source: 'openai_whisper' };
+          }
         }
+      } catch (err) {
+        console.warn('[MediaProcessor] Whisper fallback error:', err.message);
       }
-    } catch (err) {
-      console.warn('[MediaProcessor] Whisper fallback error:', err.message);
     }
   }
 
-  // --- Attempt 3 (Intermediate Fallback): Gemini Multimodal Audio ---
-  const geminiKey = getApiKey('GEMINI_API_KEY');
-  if (geminiKey && base64) {
-    try {
-      const geminiBaseUrl = (
-        process.env.GEMINI_API_BASE_URL ||
-        'https://generativelanguage.googleapis.com/v1beta'
-      ).replace(/\/$/, '');
-      const geminiModels = ['gemini-2.5-flash', 'gemini-3-flash-preview'];
-
-      for (const gModel of geminiModels) {
-        try {
-          const res = await fetch(
-            `${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`,
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [
-                  {
-                    parts: [
-                      { inlineData: { mimeType: rawMime, data: base64 } },
-                      {
-                        text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else.'
-                      }
-                    ]
-                  }
-                ]
-              }),
-              signal: AbortSignal.timeout(25000)
-            }
-          );
-
-          if (res.ok) {
-            const json = await res.json();
-            const candidateText = json.candidates?.[0]?.content?.parts
-              ?.filter((p) => !p.thought && typeof p.text === 'string')
-              .map((p) => p.text)
-              .join('')
-              .trim();
-            if (candidateText) {
-              return {
-                ok: true,
-                text: candidateText,
-                source: `gemini_audio:${gModel}`,
-                data: json
-              };
-            }
-          }
-        } catch {}
-      }
-    } catch {}
+  // 5. Intermediate Fallback: Gemini Multimodal Audio (if not already tried)
+  if (!isGeminiCategory && base64) {
+    const geminiFallback = await callGeminiAudioTranscribe({
+      base64,
+      rawMime,
+      preferredModel: 'gemini-3.8-flash',
+      timeoutMs: 25000
+    });
+    if (geminiFallback && geminiFallback.ok && geminiFallback.text) {
+      return geminiFallback;
+    }
   }
 
-  // --- Attempt 4 (FINAL HANDOVER FALLBACK): Meta Muse Voice Transcribe (muse-voice-transcribe-1.0) ---
-  // Always hand back over to muse-voice-transcribe-1.0 if every other fallback failed.
+  // 6. Final Handover Fallback: Meta Muse Voice Transcribe
   const finalMuseResult = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -518,10 +604,15 @@ export async function transcribeAudioSequentially(segments, audioSource, options
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
+    const providerLabel = /gemini/i.test(options.preferredModel || '')
+      ? 'Gemini'
+      : /whisper|openai/i.test(options.preferredModel || '')
+      ? 'Whisper'
+      : 'muse-voice-transcribe-1.0';
     onProgress({
       currentSegment: i + 1,
       totalSegments: segments.length,
-      status: `Transcribing segment ${i + 1} of ${segments.length} with muse-voice-transcribe-1.0...`
+      status: `Transcribing segment ${i + 1} of ${segments.length} with ${providerLabel}...`
     });
 
     const segmentBuffer = sliceWavBufferForSegment(

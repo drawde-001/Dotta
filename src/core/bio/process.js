@@ -92,13 +92,35 @@ function stage(resolved, userId) {
 
 export async function processDocument({ userId, ref, model = '' } = {}) {
   if (!userId) return 'Error: BIO requires an identified user.';
-  const resolved = resolveBioFileRef(userId, ref);
-  if (resolved.error) return `Error: ${resolved.error}`;
-  if (resolved.kind !== 'document' && resolved.fieldId !== 'cv') {
-    return `Error: "${resolved.name}" is not a document. Use the matching processor for its type.`;
+  let resolved = resolveBioFileRef(userId, ref);
+  let abs = null;
+  let uploadRef = null;
+
+  if (resolved.error) {
+    abs = sandboxAbsPath(userId, ref);
+    if (abs && fs.existsSync(abs)) {
+      const ext = path.extname(abs).toLowerCase();
+      const mime = ext === '.pdf' ? 'application/pdf' : 'text/plain';
+      resolved = {
+        name: path.basename(abs),
+        mime,
+        relPath: ref,
+        kind: 'document'
+      };
+      uploadRef = stageBioFile({ userId, absPath: abs, name: resolved.name, mime });
+    } else {
+      return `Error: ${resolved.error}`;
+    }
+  } else {
+    if (resolved.kind !== 'document' && resolved.fieldId !== 'cv') {
+      return `Error: "${resolved.name}" is not a document. Use the matching processor for its type.`;
+    }
+    const staged = stage(resolved, userId);
+    abs = staged.abs;
+    uploadRef = staged.uploadRef;
   }
-  const { abs, uploadRef } = stage(resolved, userId);
-  if (!abs) return `Error: The document "${resolved.name}" has no readable file attached in BIO. Politely tell the user and recommend re-uploading it or providing another file.`;
+
+  if (!abs) return `Error: The document "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
   if (isNativeMediaModel(model) && /\.pdf$/i.test(resolved.name || '')) {
     return `[Document "${resolved.name}" will be processed natively by you — the full file is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
@@ -116,38 +138,91 @@ export async function processDocument({ userId, ref, model = '' } = {}) {
 
 export async function processImage({ userId, ref } = {}) {
   if (!userId) return 'Error: BIO requires an identified user.';
-  const resolved = resolveBioFileRef(userId, ref);
-  if (resolved.error) return `Error: ${resolved.error}`;
-  if (resolved.kind !== 'image' && resolved.fieldId !== 'photo') {
-    return `Error: "${resolved.name}" is not an image. Use the matching processor for its type.`;
+  let resolved = resolveBioFileRef(userId, ref);
+  let abs = null;
+  let uploadRef = null;
+
+  if (resolved.error) {
+    abs = sandboxAbsPath(userId, ref);
+    if (abs && fs.existsSync(abs)) {
+      const ext = path.extname(abs).toLowerCase();
+      const mime =
+        { '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif' }[ext] ||
+        'image/png';
+      resolved = {
+        name: path.basename(abs),
+        mime,
+        relPath: ref,
+        kind: 'image'
+      };
+      uploadRef = stageBioFile({ userId, absPath: abs, name: resolved.name, mime });
+    } else {
+      return `Error: ${resolved.error}`;
+    }
+  } else {
+    if (resolved.kind !== 'image' && resolved.fieldId !== 'photo') {
+      return `Error: "${resolved.name}" is not an image. Use the matching processor for its type.`;
+    }
+    const staged = stage(resolved, userId);
+    abs = staged.abs;
+    uploadRef = staged.uploadRef;
   }
-  const { abs, uploadRef } = stage(resolved, userId);
-  if (!abs) return `Error: The image "${resolved.name}" has no readable file attached in BIO. Politely tell the user and recommend re-uploading it or providing another image.`;
+
+  if (!abs) return `Error: The image "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another image.`;
   const size = fs.statSync(abs).size;
   return `[Processed image "${resolved.name}" (${size} bytes) — the image itself is attached to this result for viewing. Confirm it is the right image for the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
 }
 
 export async function processAudio({ userId, ref, model = '' } = {}) {
   if (!userId) return 'Error: BIO requires an identified user.';
-  const resolved = resolveBioFileRef(userId, ref);
-  if (resolved.error) return `Error: ${resolved.error}`;
-  if (resolved.kind !== 'audio') {
-    return `Error: "${resolved.name}" is not an audio entry. Use the matching processor for its type.`;
+  let resolved = resolveBioFileRef(userId, ref);
+  let abs = null;
+  let uploadRef = null;
+
+  if (resolved.error) {
+    abs = sandboxAbsPath(userId, ref);
+    if (abs && fs.existsSync(abs)) {
+      const ext = path.extname(abs).toLowerCase();
+      const mime =
+        { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.flac': 'audio/flac' }[ext] ||
+        'audio/wav';
+      resolved = {
+        name: path.basename(abs),
+        mime,
+        relPath: ref,
+        kind: 'audio'
+      };
+      uploadRef = stageBioFile({ userId, absPath: abs, name: resolved.name, mime });
+    } else {
+      return `Error: ${resolved.error}`;
+    }
+  } else {
+    if (resolved.kind !== 'audio') {
+      return `Error: "${resolved.name}" is not an audio entry. Use the matching processor for its type.`;
+    }
+    if (resolved.entry && resolved.entry.agentReadable !== true) {
+      return `Error: The user has not granted agent access to audio entry "${resolved.entry.name}". Do NOT use ask_user for this. Politely ask the user in plain text to grant access on that entry (BIO page, Additional bio) or to provide the information another way.`;
+    }
+    const staged = stage(resolved, userId);
+    abs = staged.abs;
+    uploadRef = staged.uploadRef;
   }
-  if (resolved.entry && resolved.entry.agentReadable !== true) {
-    return `Error: The user has not granted agent access to audio entry "${resolved.entry.name}". Do NOT use ask_user for this. Politely ask the user in plain text to grant access on that entry (BIO page, Additional bio) or to provide the information another way.`;
-  }
-  const { abs, uploadRef } = stage(resolved, userId);
-  if (!abs) return `Error: The audio "${resolved.name}" has no readable file attached in BIO. Politely tell the user and recommend re-uploading it or providing another file.`;
+
+  if (!abs) return `Error: The audio "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
+
   if (isNativeMediaModel(model)) {
     return `[Audio "${resolved.name}" will be processed natively by you — the full audio is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
+
   try {
-    const result = await transcribeSingleAudioChunk({
-      buffer: fs.readFileSync(abs),
-      mimeType: resolved.mime || 'audio/mpeg',
-      filename: resolved.name
-    });
+    const result = await transcribeSingleAudioChunk(
+      {
+        buffer: fs.readFileSync(abs),
+        mimeType: resolved.mime || 'audio/mpeg',
+        filename: resolved.name
+      },
+      { preferredModel: model }
+    );
     if (result?.ok && result.text) {
       return `[Transcribed audio "${resolved.name}" — confirm the content matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('audio-transcript', String(result.text).slice(0, 8000))}`;
     }
@@ -159,16 +234,38 @@ export async function processAudio({ userId, ref, model = '' } = {}) {
 
 export async function processVideo({ userId, ref, model = '' } = {}) {
   if (!userId) return 'Error: BIO requires an identified user.';
-  const resolved = resolveBioFileRef(userId, ref);
-  if (resolved.error) return `Error: ${resolved.error}`;
-  if (resolved.kind !== 'video') {
-    return `Error: "${resolved.name}" is not a video entry. Use the matching processor for its type.`;
+  let resolved = resolveBioFileRef(userId, ref);
+  let abs = null;
+  let uploadRef = null;
+
+  if (resolved.error) {
+    abs = sandboxAbsPath(userId, ref);
+    if (abs && fs.existsSync(abs)) {
+      const ext = path.extname(abs).toLowerCase();
+      const mime = { '.mp4': 'video/mp4', '.webm': 'video/webm', '.mov': 'video/quicktime' }[ext] || 'video/mp4';
+      resolved = {
+        name: path.basename(abs),
+        mime,
+        relPath: ref,
+        kind: 'video'
+      };
+      uploadRef = stageBioFile({ userId, absPath: abs, name: resolved.name, mime });
+    } else {
+      return `Error: ${resolved.error}`;
+    }
+  } else {
+    if (resolved.kind !== 'video') {
+      return `Error: "${resolved.name}" is not a video entry. Use the matching processor for its type.`;
+    }
+    if (resolved.entry && resolved.entry.agentReadable !== true) {
+      return `Error: The user has not granted agent access to video entry "${resolved.entry.name}". Do NOT use ask_user for this. Politely ask the user in plain text to grant access on that entry (BIO page, Additional bio) or to provide the information another way.`;
+    }
+    const staged = stage(resolved, userId);
+    abs = staged.abs;
+    uploadRef = staged.uploadRef;
   }
-  if (resolved.entry && resolved.entry.agentReadable !== true) {
-    return `Error: The user has not granted agent access to video entry "${resolved.entry.name}". Do NOT use ask_user for this. Politely ask the user in plain text to grant access on that entry (BIO page, Additional bio) or to provide the information another way.`;
-  }
-  const { abs, uploadRef } = stage(resolved, userId);
-  if (!abs) return `Error: The video "${resolved.name}" has no readable file attached in BIO. Politely tell the user and recommend re-uploading it or providing another file.`;
+
+  if (!abs) return `Error: The video "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
   const size = fs.statSync(abs).size;
   if (isNativeMediaModel(model)) {
     return `[Video "${resolved.name}" (${size} bytes) will be processed natively by you — the full video is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;

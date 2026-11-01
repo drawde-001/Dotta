@@ -24,13 +24,19 @@ services:
       dockerfile: Dockerfile
     container_name: omni_app
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - PORT=3001
-      - DEFAULT_MODEL=${DEFAULT_MODEL:-meta-muse-spark}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-muse-spark-open}
       - META_MUSE_API_KEY=${META_MUSE_API_KEY:-}
       - META_MUSE_BASE_URL=${META_MUSE_BASE_URL:-https://api.meta.ai/v1}
-      - META_MUSE_MODEL=${META_MUSE_MODEL:-muse-spark-1.3}
+      - META_MUSE_MODEL=${META_MUSE_MODEL:-muse-spark-open}
+      - MODAL_MUSE_SPARK_URL=${MODAL_MUSE_SPARK_URL:-https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1}
+      - MODAL_PROXY_TOKEN_ID=${MODAL_PROXY_TOKEN_ID:-}
+      - MODAL_PROXY_TOKEN_SECRET=${MODAL_PROXY_TOKEN_SECRET:-}
+      - MODAL_API_KEY=${MODAL_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -39,6 +45,8 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
     volumes:
+      # Mount .env so runtime key loaders find it directly
+      - ./.env:/app/.env:ro
       # Persist BIO data, user sandboxes, thread state and session secret
       # across container rebuilds/redeploys (otherwise every deploy wipes them)
       - bio_data:/app/src/data

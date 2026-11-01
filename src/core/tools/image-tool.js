@@ -12,7 +12,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { getApiKey } from '../env.js';
+import { getApiKey, getGeminiApiKeys } from '../env.js';
 
 export const PRIMARY_IMAGE_MODEL = 'muse-image-1.0';
 
@@ -129,6 +129,49 @@ export async function executeGenerateImage(args = {}, options = {}) {
     };
   }
 
+  const fetchFn = options.fetchFn || globalThis.fetch;
+  const isGeminiCategory = options.activeModel && /gemini/i.test(options.activeModel);
+
+  // When Gemini is selected: Route to Google Imagen 3 first
+  if (isGeminiCategory) {
+    const geminiKeys = getGeminiApiKeys();
+    const geminiBase = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+    for (const gKey of geminiKeys) {
+      try {
+        const imagenRes = await fetchFn(`${geminiBase}/models/imagen-3.0-generate-002:predict?key=${gKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instances: [{ prompt }],
+            parameters: { sampleCount: 1, aspectRatio: size.includes('16:9') ? '16:9' : '1:1' }
+          }),
+          signal: AbortSignal.timeout(35000)
+        });
+        if (imagenRes.ok) {
+          const imgData = await imagenRes.json();
+          const b64 = imgData?.predictions?.[0]?.bytesBase64Encoded;
+          if (b64) {
+            const stored = storeGeneratedImage(b64, prompt);
+            return {
+              status: 'ok',
+              model: 'imagen-3.0-generate-002',
+              prompt,
+              size,
+              url: stored.url,
+              imageUrl: stored.url,
+              filename: stored.filename,
+              mimeType: stored.mimeType,
+              note: 'Image generated via Google Imagen 3 and rendered in the UI via the ImageGeneration component. Keep your text response brief and do NOT output markdown image tags or base64.'
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('[ImageTool] Imagen 3 generation attempt failed, falling back to Muse Image:', err.message);
+      }
+    }
+  }
+
+  // Meta Muse Image 1.0 (PRIMARY for Meta models, fallback for Gemini/others)
   const apiKey =
     options.apiKey ||
     getApiKey('MODEL_API_KEY') ||
@@ -139,7 +182,7 @@ export async function executeGenerateImage(args = {}, options = {}) {
     return {
       status: 'permanent_error',
       model: PRIMARY_IMAGE_MODEL,
-      message: 'Meta API key (MODEL_API_KEY / META_MUSE_API_KEY) is not configured on the server.'
+      message: 'Image generation key (MODEL_API_KEY / META_MUSE_API_KEY / GEMINI_API_KEY) is not configured on the server.'
     };
   }
 
@@ -150,8 +193,6 @@ export async function executeGenerateImage(args = {}, options = {}) {
     process.env.MUSE_BASE_URL ||
     'https://api.meta.ai/v1'
   ).replace(/\/+$/, '');
-
-  const fetchFn = options.fetchFn || globalThis.fetch;
 
   // 1. Primary Meta Image Generation Endpoint: POST {baseUrl}/images/generations
   const controller = new AbortController();

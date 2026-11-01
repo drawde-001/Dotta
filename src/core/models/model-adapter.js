@@ -7,7 +7,7 @@ import {
   toOpenAiMessages,
   toOpenAiTools
 } from './muse-provider.js';
-import { getApiKey } from '../env.js';
+import { getApiKey, getApiKeys, getGeminiApiKeys } from '../env.js';
 
 export const GEMINI_MODEL_CATALOG = {
   'gemini-3.8-flash': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'medium', defaultThinkingBudget: 2048, defaultMaxOutputTokens: 8192 },
@@ -50,7 +50,14 @@ export function resolveGeminiModelCandidates(requestedModel = 'gemini-3.8-flash'
 
   const targetModel = entry.aliasFor || req;
   const candidates = [targetModel];
-  const defaults = ['gemini-3.8-flash', 'gemini-3-flash-preview', 'gemini-3.1-pro-preview'];
+  const defaults = [
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3-flash-preview',
+    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-3.1-pro-preview'
+  ];
   for (const def of defaults) {
     if (!candidates.includes(def)) candidates.push(def);
   }
@@ -58,13 +65,23 @@ export function resolveGeminiModelCandidates(requestedModel = 'gemini-3.8-flash'
 }
 
 export function resolveGenerationConfig(model = 'gemini-3.8-flash', userGenConfig = {}, minHeadroom = 2048) {
+  const { effort, ...cleanGenConfig } = userGenConfig;
   const entry = GEMINI_MODEL_CATALOG[model] || {};
-  const defaultBudget = entry.defaultThinkingBudget || 2048;
+  let defaultBudget = entry.defaultThinkingBudget || 2048;
   const defaultMaxOutput = entry.defaultMaxOutputTokens || 8192;
+
+  if (effort) {
+    const ef = String(effort).toLowerCase();
+    if (ef === 'low') defaultBudget = 1024;
+    else if (ef === 'medium') defaultBudget = 2048;
+    else if (ef === 'high' || ef === 'max') {
+      defaultBudget = model.includes('pro') ? 8192 : 4096;
+    }
+  }
 
   const thinkingConfig = {
     includeThoughts: true,
-    ...(userGenConfig.thinkingConfig || {})
+    ...(cleanGenConfig.thinkingConfig || {})
   };
 
   if (thinkingConfig.thinkingBudget === undefined && thinkingConfig.thinkingLevel === undefined) {
@@ -74,8 +91,8 @@ export function resolveGenerationConfig(model = 'gemini-3.8-flash', userGenConfi
   }
 
   const thinkingBudget = typeof thinkingConfig.thinkingBudget === 'number' ? thinkingConfig.thinkingBudget : 0;
-  let maxOutputTokens = typeof userGenConfig.maxOutputTokens === 'number'
-    ? userGenConfig.maxOutputTokens
+  let maxOutputTokens = typeof cleanGenConfig.maxOutputTokens === 'number'
+    ? cleanGenConfig.maxOutputTokens
     : defaultMaxOutput;
 
   if (thinkingBudget > 0 && maxOutputTokens - thinkingBudget < minHeadroom) {
@@ -83,7 +100,7 @@ export function resolveGenerationConfig(model = 'gemini-3.8-flash', userGenConfi
   }
 
   return {
-    ...userGenConfig,
+    ...cleanGenConfig,
     maxOutputTokens,
     thinkingConfig
   };
@@ -103,15 +120,72 @@ export class ModelAdapter {
   }
 }
 
+function maskGeminiKey(key) {
+  if (!key || typeof key !== 'string') return 'none';
+  if (key.length <= 10) return '***';
+  return `${key.slice(0, 8)}...${key.slice(-6)}`;
+}
+
 export class GeminiModelAdapter extends ModelAdapter {
   constructor(apiKeyGetter, baseUrlGetter) {
     super('gemini');
     this.apiKeyGetter = typeof apiKeyGetter === 'function' ? apiKeyGetter : () => getApiKey('GEMINI_API_KEY');
     this.baseUrlGetter = typeof baseUrlGetter === 'function' ? baseUrlGetter : () => process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
+    this.currentKeyIndex = 0;
+    this.keyCooldowns = new Map(); // key -> cooldown expiry timestamp
+  }
+
+  getAllKeys() {
+    let keys = getGeminiApiKeys();
+    if (!keys || keys.length === 0) {
+      const fallback = typeof this.apiKeyGetter === 'function' ? this.apiKeyGetter() : null;
+      if (fallback) keys = [fallback];
+    }
+    return [...new Set((keys || []).filter(Boolean))];
   }
 
   isConfigured() {
-    return Boolean(this.apiKeyGetter());
+    return this.getAllKeys().length > 0;
+  }
+
+  getRotatedKeys() {
+    const keys = this.getAllKeys();
+    if (keys.length <= 1) return keys;
+
+    const now = Date.now();
+    const startIdx = this.currentKeyIndex % keys.length;
+    const rotated = [...keys.slice(startIdx), ...keys.slice(0, startIdx)];
+
+    // Separate active keys vs keys in temporary cooldown
+    const active = [];
+    const cooling = [];
+    for (const k of rotated) {
+      const cdUntil = this.keyCooldowns.get(k) || 0;
+      if (now >= cdUntil) {
+        active.push(k);
+      } else {
+        cooling.push(k);
+      }
+    }
+    // If all keys are cooling, still try them as last resort
+    return active.length > 0 ? [...active, ...cooling] : rotated;
+  }
+
+  markKeySuccess(key) {
+    this.keyCooldowns.delete(key);
+    const keys = this.getAllKeys();
+    const idx = keys.indexOf(key);
+    if (idx !== -1) {
+      this.currentKeyIndex = idx;
+    }
+  }
+
+  markKeyFailure(key, statusCode = 0, cooldownMs = 60000) {
+    this.keyCooldowns.set(key, Date.now() + cooldownMs);
+    const keys = this.getAllKeys();
+    if (keys.length > 1) {
+      this.currentKeyIndex = (this.currentKeyIndex + 1) % keys.length;
+    }
   }
 
   async streamTurn({
@@ -122,8 +196,8 @@ export class GeminiModelAdapter extends ModelAdapter {
     generationConfig = {},
     callbacks = {}
   }) {
-    const apiKey = this.apiKeyGetter();
-    if (!apiKey) {
+    const allKeys = this.getAllKeys();
+    if (!allKeys.length) {
       throw new Error('GEMINI_API_KEY is not configured on server.');
     }
 
@@ -132,94 +206,147 @@ export class GeminiModelAdapter extends ModelAdapter {
     const baseUrl = this.baseUrlGetter();
 
     for (const candModel of candidateModels) {
-      try {
-        const url = `${baseUrl}/models/${candModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
-        const payload = {
-          contents: normalizedContents,
-          generationConfig: resolveGenerationConfig(candModel, generationConfig)
-        };
+      const rotatedKeys = this.getRotatedKeys();
+      const payload = {
+        contents: normalizedContents,
+        generationConfig: resolveGenerationConfig(candModel, generationConfig)
+      };
 
-        if (systemInstruction) {
-          payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-        }
-        if (Array.isArray(tools) && tools.length > 0) {
-          payload.tools = [{ functionDeclarations: toGeminiFunctionDeclarations(tools) }];
-        }
+      if (systemInstruction) {
+        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
+      }
+      if (Array.isArray(tools) && tools.length > 0) {
+        payload.tools = [{ functionDeclarations: toGeminiFunctionDeclarations(tools) }];
+      }
 
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+      let modelOverloaded = false;
 
-        if (!response.ok) {
-          const errText = await response.text();
-          console.warn(`[Gemini Adapter HTTP ${response.status} - ${candModel}]:`, errText);
-          continue;
-        }
+      for (let kIdx = 0; kIdx < rotatedKeys.length; kIdx++) {
+        if (modelOverloaded) break;
+        const apiKey = rotatedKeys[kIdx];
+        const masked = maskGeminiKey(apiKey);
 
-        let fullThought = '';
-        let fullText = '';
-        const functionCalls = [];
-        const rawModelParts = [];
-        let usageMetadata = null;
-        let buffer = '';
+        try {
+          const url = `${baseUrl}/models/${candModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(12000)
+          });
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder('utf-8');
+          if (!response.ok) {
+            const errText = await response.text();
+            console.warn(`[Gemini Adapter HTTP ${response.status} - Key ${masked} - ${candModel}]:`, errText.slice(0, 300));
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-              const jsonStr = trimmed.slice(6).trim();
-              if (jsonStr === '[DONE]') continue;
-              try {
-                const data = JSON.parse(jsonStr);
-                if (data.usageMetadata) {
-                  usageMetadata = data.usageMetadata;
-                }
-                const parts = data.candidates?.[0]?.content?.parts || [];
-                for (const part of parts) {
-                  rawModelParts.push(part);
-                  if (part.thought && typeof part.text === 'string') {
-                    fullThought += part.text;
-                    if (callbacks.onThoughtChunk) callbacks.onThoughtChunk(part.text);
-                  } else if (part.functionCall) {
-                    functionCalls.push(part.functionCall);
-                    if (callbacks.onFunctionCall) callbacks.onFunctionCall(part.functionCall);
-                  } else if (typeof part.text === 'string' && part.text.length > 0) {
-                    fullText += part.text;
-                    if (callbacks.onResponseChunk) callbacks.onResponseChunk(part.text);
-                  }
-                }
-              } catch (err) {}
+            // Failover / Rotation handling based on error type
+            if (response.status === 429) {
+              console.warn(`[Gemini Adapter] Key ${masked} rate limited (HTTP 429). Rotating to next key...`);
+              this.markKeyFailure(apiKey, 429, 60000); // 60s cooldown
+              continue;
+            } else if (response.status === 403) {
+              console.warn(`[Gemini Adapter] Key ${masked} quota/permission error (HTTP 403). Rotating to next key...`);
+              this.markKeyFailure(apiKey, 403, 300000); // 5m cooldown
+              continue;
+            } else if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid') || errText.includes('keyExpired'))) {
+              console.warn(`[Gemini Adapter] Key ${masked} is invalid or expired. Rotating to next key...`);
+              this.markKeyFailure(apiKey, 400, 3600000); // 1h cooldown
+              continue;
+            } else if (response.status === 503) {
+              // 503 means this specific model is overloaded on Google's side.
+              // Do not penalize healthy keys; immediately fail over to next candidate model!
+              console.warn(`[Gemini Adapter] Model ${candModel} returned 503 (High Demand). Immediately failing over to next candidate model...`);
+              modelOverloaded = true;
+              break;
+            } else if (response.status === 404) {
+              // Model not found on this endpoint/version, break to next candidate model
+              console.warn(`[Gemini Adapter] Model ${candModel} returned 404 Not Found. Failing over to next candidate model...`);
+              modelOverloaded = true;
+              break;
+            } else if (response.status >= 500) {
+              console.warn(`[Gemini Adapter] Server error (${response.status}) on ${candModel}. Failing over to next candidate model...`);
+              modelOverloaded = true;
+              break;
+            } else {
+              // Other errors (e.g. malformed or general), try other keys if available
+              this.markKeyFailure(apiKey, response.status, 30000);
+              continue;
             }
           }
-        }
 
-        const modelParts = consolidateGeminiParts(rawModelParts);
+          // Request succeeded! Record this healthy key as current
+          this.markKeySuccess(apiKey);
 
-        if (fullText || fullThought || functionCalls.length > 0 || modelParts.length > 0) {
-          return {
-            provider: 'gemini',
-            model: candModel,
-            thought: fullThought,
-            text: fullText,
-            functionCalls,
-            modelParts,
-            usageMetadata
-          };
+          let fullThought = '';
+          let fullText = '';
+          const functionCalls = [];
+          const rawModelParts = [];
+          let usageMetadata = null;
+          let buffer = '';
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data: ')) {
+                const jsonStr = trimmed.slice(6).trim();
+                if (jsonStr === '[DONE]') continue;
+                try {
+                  const data = JSON.parse(jsonStr);
+                  if (data.usageMetadata) {
+                    usageMetadata = data.usageMetadata;
+                  }
+                  const parts = data.candidates?.[0]?.content?.parts || [];
+                  for (const part of parts) {
+                    rawModelParts.push(part);
+                    if (part.thought && typeof part.text === 'string') {
+                      fullThought += part.text;
+                      if (callbacks.onThoughtChunk) callbacks.onThoughtChunk(part.text);
+                    } else if (part.functionCall) {
+                      functionCalls.push(part.functionCall);
+                      if (callbacks.onFunctionCall) callbacks.onFunctionCall(part.functionCall);
+                    } else if (typeof part.text === 'string' && part.text.length > 0) {
+                      fullText += part.text;
+                      if (callbacks.onResponseChunk) callbacks.onResponseChunk(part.text);
+                    }
+                  }
+                } catch (err) {}
+              }
+            }
+          }
+
+          const modelParts = consolidateGeminiParts(rawModelParts);
+
+          if (fullText || fullThought || functionCalls.length > 0 || modelParts.length > 0) {
+            return {
+              provider: 'gemini',
+              model: candModel,
+              thought: fullThought,
+              text: fullText,
+              functionCalls,
+              modelParts,
+              usageMetadata
+            };
+          }
+        } catch (e) {
+          console.warn(`[Gemini Adapter Request Error - Key ${masked} - ${candModel}]:`, e.message);
+          if (e.name === 'TimeoutError' || String(e.message).toLowerCase().includes('timeout') || String(e.message).toLowerCase().includes('aborted')) {
+            console.warn(`[Gemini Adapter] Model ${candModel} timed out. Immediately failing over to next candidate model...`);
+            modelOverloaded = true;
+            break;
+          }
+          this.markKeyFailure(apiKey, 0, 30000);
+          continue;
         }
-      } catch (e) {
-        console.warn(`[Gemini Adapter Request Error - ${candModel}]:`, e.message);
       }
     }
 
@@ -275,6 +402,7 @@ export class OpenAiCompatibleModelAdapter extends ModelAdapter {
     const oaiTools = toOpenAiTools(tools);
     if (oaiTools) payload.tools = oaiTools;
     if (generationConfig?.maxOutputTokens) payload.max_tokens = generationConfig.maxOutputTokens;
+    if (generationConfig?.effort) payload.reasoning_effort = String(generationConfig.effort).toLowerCase();
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120000);

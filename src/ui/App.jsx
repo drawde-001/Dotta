@@ -456,6 +456,12 @@ export default function App() {
           threadId: currentThreadIdRef.current,
           userId: getUserId(),
           instruction: chatInstruction,
+          attachments: orderedAttachments.map((a) => ({
+            name: a.name,
+            type: a.type,
+            size: a.size,
+            dataUrl: a.dataUrl
+          })),
           messages: newMessages
             .filter((m) => m.role === 'user' || (m.role === 'assistant' && (m.content || []).some((c) => c.type === 'text' && c.text)))
             .map((m) => ({
@@ -463,10 +469,17 @@ export default function App() {
               content: (m.content || [])
                 .filter((c) => c.type === 'text')
                 .map((c) => c.text)
-                .join('\n')
+                .join('\n'),
+              attachments: m.attachments?.map((a) => ({
+                name: a.name,
+                type: a.type,
+                size: a.size,
+                dataUrl: a.dataUrl
+              }))
             })),
           model: selectedModel,
           mode: agentMode,
+          effort: (options.effort || 'medium').toLowerCase(),
           resume: options.resume || null
         }),
         signal: controller.signal
@@ -547,11 +560,15 @@ export default function App() {
               const contentParts = [...(last.content || [])];
 
               const settleReasoning = () => {
+                const now = Date.now();
                 for (let i = 0; i < contentParts.length; i++) {
                   if (contentParts[i].type === 'reasoning' && contentParts[i].status?.type === 'running') {
+                    const started = contentParts[i].startedAt || now;
                     contentParts[i] = {
                       ...contentParts[i],
-                      status: { type: 'complete' }
+                      status: { type: 'complete' },
+                      completedAt: now,
+                      durationMs: Math.max(500, now - started)
                     };
                   }
                 }
@@ -585,7 +602,8 @@ export default function App() {
                     type: 'reasoning',
                     id: `reasoning-${contentParts.length}`,
                     text: event.chunk,
-                    status: { type: 'running' }
+                    status: { type: 'running' },
+                    startedAt: Date.now()
                   });
                 }
               } else if (event.type === 'TOOL_CALL') {
@@ -744,7 +762,14 @@ export default function App() {
           }
           last.content = (last.content || []).map((p) => {
             if (p.type === 'reasoning' && p.status?.type === 'running') {
-              return { ...p, status: { type: 'complete' } };
+              const now = Date.now();
+              const started = p.startedAt || last.runStartedAt || now;
+              return {
+                ...p,
+                status: { type: 'complete' },
+                completedAt: now,
+                durationMs: p.durationMs || Math.max(500, now - started)
+              };
             }
             if (p.type === 'tool-call' && p.status?.type === 'running') {
               return {

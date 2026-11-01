@@ -455,6 +455,22 @@ const handleHealth = (req, res) => {
 };
 app.get('/health', handleHealth);
 app.get('/api/health', handleHealth);
+app.get('/api/status', (req, res) => {
+  const providers = {
+    muse: { configured: Boolean(process.env.MODAL_API_KEY || process.env.META_MUSE_API_KEY) },
+    google: { configured: Boolean(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEYS) },
+    gemini: { configured: Boolean(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEYS) },
+    openai: { configured: Boolean(process.env.OPENAI_API_KEY) },
+    spark: { configured: Boolean(process.env.ANTHROPIC_API_KEY) },
+    kimi: { configured: Boolean(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) }
+  };
+  res.json({
+    status: 'healthy',
+    providers,
+    museConfigured: providers.muse.configured,
+    geminiConfigured: providers.google.configured
+  });
+});
 
 // AG-UI 1.0 Chat endpoint
 app.post('/api/chat', createAgUiHandler({ engine }));
@@ -497,7 +513,7 @@ app.post('/api/thread/title', async (req, res) => {
 // Audio & Video Transcription endpoint with 10-minute segmentation support
 app.post('/api/transcribe', async (req, res) => {
   try {
-    const { audio, durationSec, mimeType, filename, mockText } = req.body || {};
+    const { audio, durationSec, mimeType, filename, mockText, model } = req.body || {};
     const totalDuration = Number(durationSec) || 0;
 
     // Segment based on 10-minute (600s) threshold
@@ -516,7 +532,7 @@ app.post('/api/transcribe', async (req, res) => {
     const transcriptionResult = await transcribeAudioSequentially(
       segments,
       { buffer, mimeType: mimeType || 'audio/wav', filename },
-      { mockText }
+      { mockText, preferredModel: model }
     );
 
     res.json({

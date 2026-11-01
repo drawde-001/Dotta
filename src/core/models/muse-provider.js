@@ -157,6 +157,16 @@ export function toOpenAiMessages(contents, systemInstruction) {
           type: 'image_url',
           image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` }
         });
+      } else if (p.inlineData?.data && /^audio\//.test(p.inlineData.mimeType || '')) {
+        const rawMime = p.inlineData.mimeType || 'audio/wav';
+        const format = rawMime.includes('wav') ? 'wav' : rawMime.includes('mp3') ? 'mp3' : 'wav';
+        userContent.push({
+          type: 'input_audio',
+          input_audio: {
+            data: p.inlineData.data,
+            format
+          }
+        });
       }
     }
     if (userContent.length > 0) {

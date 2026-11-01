@@ -615,7 +615,14 @@ export const AGENT_TOOLS_CATALOG = {
         },
         steps: {
           type: 'ARRAY',
-          description: 'Ordered list of execution steps (strings or objects with label and description).'
+          description: 'Ordered list of execution steps (strings or objects with label and description).',
+          items: {
+            type: 'OBJECT',
+            properties: {
+              label: { type: 'STRING', description: 'Step label or title' },
+              description: { type: 'STRING', description: 'Step description or details' }
+            }
+          }
         },
         activeIndex: {
           type: 'INTEGER',

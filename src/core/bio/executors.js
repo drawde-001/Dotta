@@ -315,7 +315,25 @@ export async function collectBioMediaParts({ userId, fieldIds = [], model = '' }
   }
 
   for (const id of ids) {
-    if (!id.startsWith('entry:')) continue;
+    if (!id.startsWith('entry:')) {
+      if (nativeMedia) {
+        const abs = sandboxAbsPath(userId, id);
+        if (abs && fs.existsSync(abs)) {
+          const ext = path.extname(abs).toLowerCase();
+          if (['.wav', '.mp3', '.m4a', '.ogg', '.webm', '.flac'].includes(ext)) {
+            const mime =
+              { '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.flac': 'audio/flac' }[ext] ||
+              'audio/wav';
+            addFilePart(id, mime, 32 * 1024 * 1024);
+          } else if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
+            addFilePart(id, imageMimeFor(id, ''), 5 * 1024 * 1024);
+          } else if (ext === '.pdf') {
+            addFilePart(id, 'application/pdf', 15 * 1024 * 1024);
+          }
+        }
+      }
+      continue;
+    }
     const entry = (profile.entries || []).find((e) => e.id === id.slice(6));
     if (!entry || !entry.file?.path) continue;
     if (entry.type === 'image') {
@@ -324,9 +342,9 @@ export async function collectBioMediaParts({ userId, fieldIds = [], model = '' }
       continue;
     } else if (entry.type === 'document') {
       addFilePart(entry.file.path, 'application/pdf', 15 * 1024 * 1024);
-    } else if (entry.type === 'audio' && entry.agentReadable === true) {
+    } else if (entry.type === 'audio') {
       addFilePart(entry.file.path, entry.file.mime || 'audio/mpeg', 32 * 1024 * 1024);
-    } else if (entry.type === 'video' && entry.agentReadable === true) {
+    } else if (entry.type === 'video') {
       addFilePart(entry.file.path, entry.file.mime || 'video/mp4', 20 * 1024 * 1024);
     }
   }

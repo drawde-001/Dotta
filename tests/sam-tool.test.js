@@ -16,7 +16,7 @@ import {
   getModelRegistry,
   getSelectableModels
 } from '../src/core/models/model-registry.js';
-import { createWorkspace } from '../src/core/execution/workspace.js';
+import { createWorkspace, getWorkspaceRoot } from '../src/core/execution/workspace.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -59,7 +59,7 @@ console.log('✓ Tool permission and per-run caps verified.');
 // Setup temporary test workspace
 const testRunId = `test-sam-${Date.now()}`;
 const wsMeta = createWorkspace(testRunId);
-const wsRoot = wsMeta.workspaceRoot;
+const wsRoot = getWorkspaceRoot(testRunId);
 
 // Create dummy BMP image inside workspace
 const dummyImageRel = 'test_sample.bmp';

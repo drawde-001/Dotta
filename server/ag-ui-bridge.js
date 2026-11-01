@@ -29,6 +29,11 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
     const runId = body.runId || `run-${Date.now()}`;
     const model = body.model || process.env.DEFAULT_MODEL || 'muse-spark-open';
     const messages = Array.isArray(body.messages) ? body.messages : [];
+    const attachments = Array.isArray(body.attachments)
+      ? body.attachments
+      : Array.isArray(messages[messages.length - 1]?.attachments)
+      ? messages[messages.length - 1].attachments
+      : [];
     const latestUserMsg = [...messages].reverse().find((m) => m.role === 'user');
     const instruction =
       body.instruction ||
@@ -39,13 +44,14 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         : '');
     const resume = body.resume || null;
     const mode = body.mode || 'turbo';
+    const effort = body.effort || 'medium';
     // Per-user sandbox: agent file tools are confined to this user's folder.
     // The server-issued session (req.userId) wins over any client-supplied ID.
     const userId = sanitizeUserId(req.userId || body.userId || req.get('x-user-id'));
     const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
 
     console.log(
-      `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | prompt: "${instruction.slice(0, 100)}"`
+      `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | attachments: ${attachments.length} | prompt: "${instruction.slice(0, 100)}"`
     );
 
     let interruptEmitted = false;
@@ -84,10 +90,12 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
       const result = await engine.run({
         instruction,
         messages,
+        attachments,
         threadId,
         runId,
         model,
         mode,
+        effort,
         resume,
         workspaceRoot,
         userId

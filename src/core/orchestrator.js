@@ -33,7 +33,8 @@ import {
   executeBioIndex,
   executeBioGet,
   resolveBioWrite,
-  collectBioMediaParts
+  collectBioMediaParts,
+  isNativeMediaModel
 } from './bio/executors.js';
 import {
   getActiveProfile as getActiveBioProfile,
@@ -93,6 +94,11 @@ You possess direct, real-world execution tools to fulfill user instructions:
 2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
 - "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text. NEVER generate an image to serve as the user's photo, portrait, or an application/profile asset unless the user explicitly asked you to generate an image in this conversation. If a needed photo or file is missing from BIO, politely tell the user and recommend uploading it to BIO instead.
 - "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
+2b. Multimodal Perception & Provider Family Routing:
+- You possess multimodal perception and processing capabilities aligned with your active model family:
+  * Google Gemini models natively perceive inline audio, speech, sound, images, video, and PDF documents. When an audio recording or file is attached as an inline part (inlineData), directly listen to, perceive, analyze, and transcribe it natively. Never claim you cannot listen to or process audio files when an audio part is present.
+  * Meta models perceive audio and vision across Meta's multimodal family (Muse Voice Transcribe muse-voice-transcribe-1.0, Muse Image muse-image-1.0, and SAM sam-3.1).
+  * Media processing requests are routed to the selected model's provider family first, with third-party providers serving as fallbacks.
 3. Workspace & Files (Strict Root Directory Isolation):
 - "workspace_create": Initialize a dedicated run workspace directory.
 - "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
@@ -277,7 +283,7 @@ export class OmniEngine extends EventEmitter {
       case 'image_generation':
       case 'create_image':
       case 'edit_image':
-        return await executeGenerateImage(toolArgs);
+        return await executeGenerateImage(toolArgs, { activeModel: context.model });
 
       case 'agent_plan':
       case 'create_plan':
@@ -384,10 +390,12 @@ export class OmniEngine extends EventEmitter {
   async run({
     instruction,
     messages = [],
+    attachments = [],
     threadId = `thread-${Date.now()}`,
     runId = `run-${Date.now()}`,
     model = this.defaultModel,
     mode = 'turbo',
+    effort = 'medium',
     maxTurns = 25,
     maxBudgetUsd = 2.0,
     workspaceRoot = null,
@@ -480,6 +488,105 @@ export class OmniEngine extends EventEmitter {
         : [{ role: 'user', parts: [{ text: instruction || 'Start execution' }] }]
     );
 
+    // Extract and attach media parts (audio, image, video, PDF) from attachments or messages
+    const incomingAttachments = Array.isArray(attachments) && attachments.length > 0
+      ? attachments
+      : Array.isArray(messages[messages.length - 1]?.attachments)
+      ? messages[messages.length - 1].attachments
+      : [];
+
+    const attachmentMediaParts = [];
+    for (const att of incomingAttachments) {
+      let base64 = '';
+      let mimeType = att.type || '';
+
+      if (att.dataUrl && att.dataUrl.startsWith('data:')) {
+        const comma = att.dataUrl.indexOf(',');
+        if (comma !== -1) {
+          if (!mimeType) {
+            mimeType = att.dataUrl.slice(5, comma).split(';')[0];
+          }
+          base64 = att.dataUrl.slice(comma + 1);
+        }
+      } else if (workspaceRoot && att.workspacePath) {
+        try {
+          const abs = validateAndResolvePath(workspaceRoot, att.workspacePath);
+          if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+            base64 = fs.readFileSync(abs).toString('base64');
+            if (!mimeType) {
+              const ext = path.extname(abs).toLowerCase();
+              mimeType = {
+                '.wav': 'audio/wav',
+                '.mp3': 'audio/mpeg',
+                '.m4a': 'audio/mp4',
+                '.ogg': 'audio/ogg',
+                '.webm': 'audio/webm',
+                '.flac': 'audio/flac',
+                '.png': 'image/png',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.webp': 'image/webp',
+                '.gif': 'image/gif',
+                '.pdf': 'application/pdf'
+              }[ext] || 'application/octet-stream';
+            }
+          }
+        } catch {}
+      }
+
+      if (base64) {
+        if (!mimeType) {
+          const ext = path.extname(att.name || '').toLowerCase();
+          mimeType = {
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mpeg',
+            '.m4a': 'audio/mp4',
+            '.ogg': 'audio/ogg',
+            '.webm': 'audio/webm',
+            '.flac': 'audio/flac',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.webp': 'image/webp',
+            '.gif': 'image/gif',
+            '.pdf': 'application/pdf'
+          }[ext] || 'audio/wav';
+        }
+
+        const isMedia =
+          mimeType.startsWith('audio/') ||
+          mimeType.startsWith('image/') ||
+          mimeType.startsWith('video/') ||
+          mimeType === 'application/pdf' ||
+          /\.(wav|mp3|m4a|ogg|webm|flac|png|jpe?g|webp|gif|pdf)$/i.test(att.name || '');
+
+        if (isMedia) {
+          attachmentMediaParts.push({
+            inlineData: {
+              mimeType,
+              data: base64
+            }
+          });
+        }
+      }
+    }
+
+    if (attachmentMediaParts.length > 0) {
+      const lastUser = [...contents].reverse().find((c) => c.role === 'user');
+      if (lastUser) {
+        for (const mp of attachmentMediaParts) {
+          const exists = lastUser.parts.some(
+            (p) => p.inlineData && p.inlineData.data === mp.inlineData.data
+          );
+          if (!exists) {
+            lastUser.parts.push(mp);
+          }
+        }
+      } else {
+        contents.push({ role: 'user', parts: attachmentMediaParts });
+      }
+    }
+
     // If resuming from interrupt, inject the user's answers/decisions into contents
     if (resume) {
       const qas = Array.isArray(resume.questionsAndAnswers) ? resume.questionsAndAnswers : [];
@@ -561,6 +668,7 @@ export class OmniEngine extends EventEmitter {
           systemInstruction: this.systemInstruction,
           model,
           tools: activeTools,
+          generationConfig: { effort },
           callbacks: {
             onThoughtChunk: (chunk) => {
               turnThought += chunk;

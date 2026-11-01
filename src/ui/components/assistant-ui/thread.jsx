@@ -790,8 +790,10 @@ function AssistantMessageBody() {
   }
 
   // Batch contiguous non-promoted tool-calls into parent groups when length >= 2
+  // Also batch contiguous reasoning parts so they form a single coherent thought card
   const batchedParts = [];
   let currentToolBatch = [];
+  let currentReasoningBatch = [];
 
   const flushToolBatch = () => {
     if (currentToolBatch.length === 0) return;
@@ -808,22 +810,61 @@ function AssistantMessageBody() {
     currentToolBatch = [];
   };
 
+  const flushReasoningBatch = () => {
+    if (currentReasoningBatch.length === 0) return;
+    if (currentReasoningBatch.length === 1) {
+      batchedParts.push(currentReasoningBatch[0]);
+    } else {
+      const mergedText = currentReasoningBatch
+        .map((item) => item.part.text || "")
+        .join("");
+      const firstItem = currentReasoningBatch[0];
+      const lastItem = currentReasoningBatch[currentReasoningBatch.length - 1];
+      const startedAt = firstItem.part.startedAt;
+      const completedAt = lastItem.part.completedAt;
+      const durationMs =
+        lastItem.part.durationMs ||
+        firstItem.part.durationMs ||
+        (startedAt && completedAt ? Math.max(500, completedAt - startedAt) : undefined);
+      batchedParts.push({
+        type: "reasoning-group",
+        id: `reasoning-group-${firstItem.idx}`,
+        part: {
+          type: "reasoning",
+          text: mergedText,
+          status: lastItem.part.status,
+          id: `reasoning-${firstItem.idx}`,
+          startedAt,
+          completedAt,
+          durationMs,
+        },
+        idx: firstItem.idx,
+      });
+    }
+    currentReasoningBatch = [];
+  };
+
   rawParts.forEach((part, idx) => {
     if (!part) return;
     const lowerTool = String(part.toolName || part.name || "").toLowerCase();
     const isPromoted = part.type === "tool-call" && PROMOTED_VISUAL_TOOLS.has(lowerTool);
 
     if (part.type === "tool-call" && !isPromoted) {
+      flushReasoningBatch();
       currentToolBatch.push({ part, idx });
+    } else if (part.type === "reasoning") {
+      flushToolBatch();
+      currentReasoningBatch.push({ part, idx });
     } else {
       flushToolBatch();
+      flushReasoningBatch();
       batchedParts.push({ part, idx });
     }
   });
   flushToolBatch();
+  flushReasoningBatch();
 
   const entries = [];
-  const reasoningNodes = [];
   const promotedVisualNodes = [];
   const finalAnswerParts = [];
   const sourceParts = [];
@@ -882,22 +923,45 @@ function AssistantMessageBody() {
       }
     } else if (part.type === "reasoning") {
       const entryId = part.id || `reasoning-${idx}`;
-      const stepLabel = extractThinkingStepLabel(part.text);
       const isStreamingReasoning = Boolean(
         isRunning && (part.status?.type === "running" || idx === rawParts.length - 1)
       );
 
-      reasoningNodes.push(
-        <div key={entryId} className="my-1 w-full">
-          <Reasoning
-            text={part.text}
-            status={part.status}
-            label={stepLabel}
-            streaming={isStreamingReasoning}
-            variant="ghost"
-          />
-        </div>
-      );
+      let durationSec = undefined;
+      if (part.durationMs) {
+        durationSec = Math.max(1, Math.round(part.durationMs / 1000));
+      } else if (part.startedAt && part.completedAt) {
+        durationSec = Math.max(1, Math.round((part.completedAt - part.startedAt) / 1000));
+      } else if (!isStreamingReasoning && part.startedAt) {
+        durationSec = Math.max(1, Math.round((Date.now() - part.startedAt) / 1000));
+      } else if (!isStreamingReasoning && runStartedAt && runCompletedAt) {
+        durationSec = Math.max(1, Math.round((runCompletedAt - runStartedAt) / 1000));
+      } else if (!isStreamingReasoning && typeof part.text === "string" && part.text.length > 0) {
+        durationSec = Math.max(1, Math.round(part.text.length / 100));
+      }
+
+      const stepLabel = isStreamingReasoning
+        ? extractThinkingStepLabel(part.text)
+        : `Thought for ${durationSec || 1}s`;
+
+      entries.push({
+        id: entryId,
+        kind: "reasoning",
+        label: stepLabel,
+        content: (
+          <div key={entryId} className="w-full">
+            <Reasoning
+              text={part.text}
+              status={part.status}
+              label={stepLabel}
+              duration={durationSec}
+              streaming={isStreamingReasoning}
+              variant="ghost"
+              defaultOpen={false}
+            />
+          </div>
+        ),
+      });
     } else if (isSubmittedQAPart(part)) {
       const qData =
         part.questions ||
@@ -1017,27 +1081,20 @@ function AssistantMessageBody() {
 
   const groupOpen = userOpen !== null ? userOpen : isGroupActive;
 
-  if (entries.length > 0 || reasoningNodes.length > 0) {
+  if (entries.length > 0) {
     return (
       <div className="flex flex-col gap-3">
-        {reasoningNodes.length > 0 && (
-          <div className="flex flex-col gap-1.5 w-full">
-            {reasoningNodes}
-          </div>
-        )}
-        {entries.length > 0 && (
-          <RunActivity
-            status={status}
-            statusLabel={statusLabel}
-            durationLabel={durationLabel}
-            entries={entries}
-            open={groupOpen}
-            onOpenChange={(next) => {
-              setUserOpen(next);
-              if (!next) setManualEntryId(null);
-            }}
-          />
-        )}
+        <RunActivity
+          status={status}
+          statusLabel={statusLabel}
+          durationLabel={durationLabel}
+          entries={entries}
+          open={groupOpen}
+          onOpenChange={(next) => {
+            setUserOpen(next);
+            if (!next) setManualEntryId(null);
+          }}
+        />
         {promotedVisualNodes.length > 0 && (
           <div className="flex flex-col gap-2">
             {promotedVisualNodes}

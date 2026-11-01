@@ -44,7 +44,7 @@ const ReasoningRoot = forwardRef(function ReasoningRoot(
     variant = "ghost",
     open: controlledOpen,
     onOpenChange: controlledOnOpenChange,
-    defaultOpen = true,
+    defaultOpen = false,
     streaming,
     onAnimationStart,
     children,
@@ -58,7 +58,9 @@ const ReasoningRoot = forwardRef(function ReasoningRoot(
   const isControlled = controlledOpen !== undefined;
   const isOpen = isControlled
     ? controlledOpen
-    : userOpen ?? (streaming || initialOpen);
+    : userOpen !== null
+      ? userOpen
+      : (streaming ? true : initialOpen);
   const isPreview = streaming === true && isOpen;
 
   const prevStreamingRef = useRef(streaming);
@@ -67,12 +69,10 @@ const ReasoningRoot = forwardRef(function ReasoningRoot(
     const wasStreaming = prevStreamingRef.current;
     prevStreamingRef.current = streaming;
     if (wasStreaming && !streaming && !isControlled) {
-      setUserOpen(null);
-    }
-    if (!isControlled && userOpen === null && !initialOpen) {
+      setUserOpen(false);
       onAnimationStart?.();
     }
-  }, [streaming, isControlled, userOpen, initialOpen, onAnimationStart]);
+  }, [streaming, isControlled, onAnimationStart]);
 
   const handleOpenChange = useCallback(
     (open) => {
@@ -145,7 +145,8 @@ function ReasoningTrigger({
   className,
   ...props
 }) {
-  const durationText = duration ? ` (${duration}s)` : "";
+  const hasEmbeddedDuration = typeof label === "string" && (label.includes("Thought for") || label.includes("for "));
+  const durationText = (!hasEmbeddedDuration && duration) ? ` (${duration}s)` : "";
 
   return (
     <CollapsibleTrigger
@@ -275,9 +276,15 @@ function ReasoningText({ className, children, ...props }) {
   );
 }
 
-function deriveReasoningLabel(text, streaming, explicitLabel) {
+function deriveReasoningLabel(text, streaming, explicitLabel, duration) {
   if (explicitLabel) return explicitLabel;
-  if (!streaming) return "Thought process";
+  if (!streaming) {
+    if (duration != null) {
+      const durSec = typeof duration === "number" ? Math.max(1, Math.round(duration)) : String(duration);
+      return `Thought for ${durSec}${String(durSec).endsWith("s") ? "" : "s"}`;
+    }
+    return "Thought process";
+  }
   if (typeof text === "string" && text.trim()) {
     const lines = text
       .trim()
@@ -308,15 +315,17 @@ export function Reasoning({
   open,
   onOpenChange,
   variant = "ghost",
+  defaultOpen = false,
   children,
   className,
 }) {
   const streaming = propStreaming ?? status?.type === "running";
-  const resolvedLabel = deriveReasoningLabel(text, streaming, label);
+  const resolvedLabel = deriveReasoningLabel(text, streaming, label, duration);
   return (
     <ReasoningRoot
       variant={variant}
       streaming={streaming}
+      defaultOpen={defaultOpen}
       open={open}
       onOpenChange={onOpenChange}
       className={className}
