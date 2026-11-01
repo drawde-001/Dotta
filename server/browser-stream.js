@@ -12,6 +12,24 @@ let page = null;
 let cdp = null;
 let isStarting = false;
 let terminationTimer = null;
+let isAgentRunning = false;
+let globalBroadcast = null;
+
+export function setBrowserBroadcast(fn) {
+  globalBroadcast = fn;
+}
+
+export function onAgentRunStart() {
+  isAgentRunning = true;
+  cancelBrowserTermination();
+  console.log('[BrowserStream] Agent run started. Browser locked active (termination suspended).');
+}
+
+export function onAgentRunEnd(broadcast) {
+  isAgentRunning = false;
+  console.log('[BrowserStream] Agent run completed. Starting 30-second post-run termination countdown...');
+  scheduleBrowserTermination(broadcast || globalBroadcast, 30000);
+}
 
 export function cancelBrowserTermination() {
   if (terminationTimer) {
@@ -22,14 +40,25 @@ export function cancelBrowserTermination() {
 
 export function scheduleBrowserTermination(broadcast, delayMs = 30000) {
   cancelBrowserTermination();
+  if (isAgentRunning) {
+    console.log('[BrowserStream] Termination timer skipped: agent run is currently active.');
+    return;
+  }
+  const bc = broadcast || globalBroadcast;
   terminationTimer = setTimeout(async () => {
-    console.log(`[BrowserStream] Inactivity timeout (${delayMs / 1000}s) reached. Auto-terminating Chromium...`);
-    await closeLiveBrowser(broadcast);
+    if (isAgentRunning) {
+      console.log('[BrowserStream] Inactivity timer fired, but agent is running. Aborting shutdown.');
+      return;
+    }
+    console.log(`[BrowserStream] 30s post-run inactivity reached. Auto-terminating Chromium process completely...`);
+    await closeLiveBrowser(bc);
   }, delayMs);
 }
 
 export async function closeLiveBrowser(broadcast) {
   cancelBrowserTermination();
+  isAgentRunning = false;
+  const bc = broadcast || globalBroadcast;
   if (cdp) {
     try {
       await cdp.send('Page.stopScreencast').catch(() => {});
@@ -47,18 +76,27 @@ export async function closeLiveBrowser(broadcast) {
     try {
       const proc = typeof browser.process === 'function' ? browser.process() : null;
       await browser.close().catch(() => {});
-      if (proc && !proc.killed) {
-        try {
-          proc.kill('SIGKILL');
-        } catch {}
+      if (proc && proc.pid) {
+        if (process.platform === 'win32') {
+          try {
+            const { execSync } = await import('child_process');
+            execSync(`taskkill /pid ${proc.pid} /T /F`, { stdio: 'ignore' });
+          } catch {}
+        } else {
+          try {
+            process.kill(-proc.pid, 'SIGKILL');
+          } catch {
+            try { proc.kill('SIGKILL'); } catch {}
+          }
+        }
       }
     } catch {}
     browser = null;
   }
   isStarting = false;
-  console.log('[BrowserStream] Chromium process killed and instance destroyed.');
-  if (typeof broadcast === 'function') {
-    broadcast({ type: 'browser_closed', timestamp: Date.now() });
+  console.log('[BrowserStream] Chromium process tree completely killed and instance destroyed.');
+  if (typeof bc === 'function') {
+    bc({ type: 'browser_closed', timestamp: Date.now() });
   }
 }
 
@@ -89,7 +127,7 @@ export function findChromeExecutable() {
   return null;
 }
 
-export async function initLiveBrowser(broadcast) {
+export async function initLiveBrowser(broadcast, initialUrl = null) {
   cancelBrowserTermination();
   if (browser && page) return { browser, page };
   if (isStarting) {
@@ -156,10 +194,11 @@ export async function initLiveBrowser(broadcast) {
       everyNthFrame: 1
     });
 
-    // Navigate to default start page
-    await page.goto('https://duckduckgo.com', { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
+    // Navigate to initial URL or default start page
+    const startUrl = initialUrl || 'https://duckduckgo.com';
+    await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
 
-    console.log('[BrowserStream] Chromium screencast successfully started.');
+    console.log(`[BrowserStream] Chromium screencast successfully started on ${startUrl}.`);
     return { browser, page };
   } catch (err) {
     console.error('[BrowserStream] Failed to initialize live Chromium:', err.message);
@@ -174,7 +213,7 @@ export function getLiveBrowserPage() {
 }
 
 export async function handleBrowserWsMessage(data, broadcast) {
-  if (data?.type === 'close_browser') {
+  if (data?.type === 'close_browser' || data?.type === 'browser_close' || data?.type === 'close') {
     await closeLiveBrowser(broadcast);
     return;
   }
@@ -277,7 +316,9 @@ export async function handleBrowserWsMessage(data, broadcast) {
   } catch (err) {
     console.error('[BrowserStream] Error executing action:', err.message);
   } finally {
-    scheduleBrowserTermination(broadcast, 30000);
+    if (!isAgentRunning) {
+      scheduleBrowserTermination(broadcast, 30000);
+    }
   }
 }
 

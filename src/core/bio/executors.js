@@ -187,9 +187,7 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
 
       if (entry.type === 'document') {
         let text = entry.textContent || '';
-        if (nativeMedia && /\.pdf$/i.test(entry.file?.name || entry.name || '')) {
-          text = '[The full document is attached to this result and will be processed natively by you.]';
-        } else if (!text && abs) {
+        if (!text && abs) {
           try {
             text = await extractFileText(abs, entry.file?.mime || '', entry.file?.name || entry.name);
             if (text) {
@@ -329,8 +327,6 @@ export async function collectBioMediaParts({ userId, fieldIds = [], model = '' }
             addFilePart(id, mime, 32 * 1024 * 1024);
           } else if (['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(ext)) {
             addFilePart(id, imageMimeFor(id, ''), 5 * 1024 * 1024);
-          } else if (ext === '.pdf') {
-            addFilePart(id, 'application/pdf', 15 * 1024 * 1024);
           }
         }
       }
@@ -342,8 +338,6 @@ export async function collectBioMediaParts({ userId, fieldIds = [], model = '' }
       addFilePart(entry.file.path, imageMimeFor(entry.file.path, entry.file.mime || ''), 5 * 1024 * 1024);
     } else if (!nativeMedia) {
       continue;
-    } else if (entry.type === 'document') {
-      addFilePart(entry.file.path, 'application/pdf', 15 * 1024 * 1024);
     } else if (entry.type === 'audio') {
       addFilePart(entry.file.path, entry.file.mime || 'audio/mpeg', 32 * 1024 * 1024);
     } else if (entry.type === 'video') {

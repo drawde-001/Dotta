@@ -4,6 +4,7 @@ import {
   getUserWorkspaceRoot
 } from '../src/core/execution/workspace.js';
 import { applyBioProposal, discardBioProposal } from '../src/core/bio/store.js';
+import { onAgentRunStart, onAgentRunEnd } from './browser-stream.js';
 
 export function writeAgUiEvent(res, event) {
   if (res.writableEnded) return;
@@ -86,6 +87,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
       }
     }
 
+    onAgentRunStart();
     try {
       const result = await engine.run({
         instruction,
@@ -121,6 +123,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
       res.end();
     } finally {
       engine.off('event', eventListener);
+      onAgentRunEnd();
     }
   };
 }

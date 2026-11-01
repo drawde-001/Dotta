@@ -54,7 +54,8 @@ import {
   getLiveBrowserPage,
   scheduleBrowserTermination,
   cancelBrowserTermination,
-  closeLiveBrowser
+  closeLiveBrowser,
+  setBrowserBroadcast
 } from './browser-stream.js';
 
 dotenv.config();
@@ -128,6 +129,7 @@ function broadcast(msg) {
     }
   }
 }
+setBrowserBroadcast(broadcast);
 
 wss.on('connection', async (ws) => {
   wsClients.add(ws);
@@ -208,11 +210,23 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
 engine.registerTool({ name: 'browser_read_page' }, async (args) => {
   cancelBrowserTermination();
   try {
-    const targetUrl = args.url?.startsWith('http') ? args.url : `https://${args.url}`;
+    const rawTarget = String(args.url || '').trim();
+    const targetUrl = rawTarget.startsWith('http') ? rawTarget : `https://${rawTarget}`;
     let page = getLiveBrowserPage();
     if (!page) {
-      const res = await initLiveBrowser(broadcast);
+      const res = await initLiveBrowser(broadcast, targetUrl);
       page = res.page;
+    }
+
+    const currentUrl = page ? page.url() : '';
+    const normalizeUrl = (u) => String(u || '').replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
+    const isAlreadyOnPage = currentUrl && normalizeUrl(currentUrl) === normalizeUrl(targetUrl);
+
+    if (isAlreadyOnPage) {
+      console.log(`[Omni Engine] Live browser already on ${targetUrl}. Extracting live DOM directly without refresh to preserve form inputs.`);
+      const title = await page.title().catch(() => targetUrl);
+      const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
+      return `### Page: ${title}\n**URL**: ${targetUrl} (already active, form inputs preserved)\n\n${text}`;
     }
 
     console.log(`[Omni Engine] Navigating live browser to ${targetUrl}...`);
