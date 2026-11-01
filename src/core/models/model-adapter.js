@@ -72,7 +72,8 @@ export function resolveGenerationConfig(model = 'gemini-3.8-flash', userGenConfi
 
   if (effort) {
     const ef = String(effort).toLowerCase();
-    if (ef === 'low') defaultBudget = 1024;
+    if (ef === 'minimal') defaultBudget = 512;
+    else if (ef === 'low') defaultBudget = 1024;
     else if (ef === 'medium') defaultBudget = 2048;
     else if (ef === 'high' || ef === 'max') {
       defaultBudget = model.includes('pro') ? 8192 : 4096;

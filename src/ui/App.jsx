@@ -90,6 +90,76 @@ export default function App() {
     threadMessagesMapRef.current[activeThreadId] = messages;
   }, [messages, activeThreadId]);
 
+  // Load persistent threads tied to user profile on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function initUserThreads() {
+      try {
+        const res = await fetch('/api/threads', {
+          headers: { 'x-user-id': getUserId() }
+        });
+        if (!res.ok) return;
+        const data = await res.json().catch(() => null);
+        if (cancelled || !data?.ok || !Array.isArray(data.threads)) return;
+
+        if (data.threads.length > 0) {
+          const loadedThreads = data.threads.map((t) => ({
+            id: t.id,
+            title: t.title || 'New chat',
+            status: t.status || 'regular',
+            lastMessageAt: new Date(t.lastMessageAt || t.createdAt || Date.now()),
+            isGeneratingTitle: false
+          }));
+          setThreads(loadedThreads);
+
+          const firstId = loadedThreads[0].id;
+          setActiveThreadId(firstId);
+          currentThreadIdRef.current = firstId;
+
+          try {
+            const threadRes = await fetch(`/api/threads/${firstId}`, {
+              headers: { 'x-user-id': getUserId() }
+            });
+            if (threadRes.ok) {
+              const threadData = await threadRes.json();
+              if (!cancelled && threadData?.ok && Array.isArray(threadData?.thread?.messages)) {
+                threadMessagesMapRef.current[firstId] = threadData.thread.messages;
+                setMessages(threadData.thread.messages);
+              }
+            }
+          } catch {}
+        } else {
+          // Initialize first thread in user database
+          const freshId = `thread-${Date.now()}`;
+          const initThread = {
+            id: freshId,
+            title: 'New chat',
+            status: 'regular',
+            lastMessageAt: new Date(),
+            isGeneratingTitle: false
+          };
+          setThreads([initThread]);
+          setActiveThreadId(freshId);
+          currentThreadIdRef.current = freshId;
+          threadMessagesMapRef.current[freshId] = [];
+          setMessages([]);
+          fetch('/api/threads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+            body: JSON.stringify({ id: freshId, title: 'New chat', status: 'regular', messages: [] })
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.warn('[App] Error initializing user threads:', err);
+      }
+    }
+
+    initUserThreads();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleOpenFileTab = (fileData) => {
     if (!fileData) return;
     const fileId = fileData.id || fileData.path || fileData.name || `file-${Date.now()}`;
@@ -223,37 +293,76 @@ export default function App() {
     if (isRunning) return;
     const newId = `thread-${Date.now()}`;
     threadMessagesMapRef.current[newId] = [];
-    setThreads((prev) => [
-      {
-        id: newId,
-        title: 'New chat',
-        status: 'regular',
-        lastMessageAt: new Date(),
-        isGeneratingTitle: false
-      },
-      ...prev
-    ]);
+    const newThread = {
+      id: newId,
+      title: 'New chat',
+      status: 'regular',
+      lastMessageAt: new Date(),
+      isGeneratingTitle: false
+    };
+    setThreads((prev) => [newThread, ...prev]);
     setActiveThreadId(newId);
     currentThreadIdRef.current = newId;
     setMessages([]);
     setActiveInterrupt(null);
+
+    fetch('/api/threads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+      body: JSON.stringify({
+        id: newId,
+        title: 'New chat',
+        status: 'regular',
+        messages: []
+      })
+    }).catch(() => {});
   }, [isRunning]);
 
-  const handleSwitchThread = useCallback((targetId) => {
+  const handleSwitchThread = useCallback(async (targetId) => {
     if (isRunning || targetId === activeThreadId) return;
     setActiveThreadId(targetId);
     currentThreadIdRef.current = targetId;
-    setMessages(threadMessagesMapRef.current[targetId] || []);
     setActiveInterrupt(null);
+
+    const cached = threadMessagesMapRef.current[targetId];
+    if (Array.isArray(cached) && cached.length > 0) {
+      setMessages(cached);
+    } else {
+      try {
+        const res = await fetch(`/api/threads/${targetId}`, {
+          headers: { 'x-user-id': getUserId() }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const msgs = Array.isArray(data?.thread?.messages) ? data.thread.messages : [];
+          threadMessagesMapRef.current[targetId] = msgs;
+          setMessages(msgs);
+        } else {
+          setMessages(cached || []);
+        }
+      } catch {
+        setMessages(cached || []);
+      }
+    }
   }, [isRunning, activeThreadId]);
 
   const handleRenameThread = useCallback((targetId, newTitle) => {
     setThreads((prev) =>
       prev.map((t) => (t.id === targetId ? { ...t, title: newTitle } : t))
     );
+    fetch(`/api/threads/${targetId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+      body: JSON.stringify({ title: newTitle })
+    }).catch(() => {});
   }, []);
 
   const handleDeleteThread = useCallback((targetId) => {
+    fetch(`/api/threads/${targetId}`, {
+      method: 'DELETE',
+      headers: { 'x-user-id': getUserId() }
+    }).catch(() => {});
+
     setThreads((prev) => {
       const remaining = prev.filter((t) => t.id !== targetId);
       if (remaining.length === 0) {
@@ -262,6 +371,11 @@ export default function App() {
         setActiveThreadId(freshId);
         currentThreadIdRef.current = freshId;
         setMessages([]);
+        fetch('/api/threads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+          body: JSON.stringify({ id: freshId, title: 'New chat', status: 'regular', messages: [] })
+        }).catch(() => {});
         return [
           {
             id: freshId,
@@ -276,7 +390,8 @@ export default function App() {
         const nextActive = remaining[0].id;
         setActiveThreadId(nextActive);
         currentThreadIdRef.current = nextActive;
-        setMessages(threadMessagesMapRef.current[nextActive] || []);
+        const cached = threadMessagesMapRef.current[nextActive] || [];
+        setMessages(cached);
       }
       return remaining;
     });
@@ -356,6 +471,12 @@ export default function App() {
                 : t
             )
           );
+
+          fetch(`/api/threads/${currentTId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+            body: JSON.stringify({ title: genTitle || 'New chat', lastMessageAt: Date.now() })
+          }).catch(() => {});
         } catch {
           setThreads((prev) =>
             prev.map((t) =>
@@ -372,24 +493,6 @@ export default function App() {
     if (browserIdleTimerRef.current) {
       clearTimeout(browserIdleTimerRef.current);
       browserIdleTimerRef.current = null;
-    }
-
-    // Process attachments sequentially in the background if attachments are present
-    let attachmentSystemContext = '';
-    if (orderedAttachments.length > 0) {
-      try {
-        const attRes = await fetch('/api/attachments/process', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attachments: orderedAttachments })
-        });
-        if (attRes.ok) {
-          const attData = await attRes.json();
-          attachmentSystemContext = attData.contextPrompt || '';
-        }
-      } catch (err) {
-        console.warn('[Attachments] Background sequential processing error:', err);
-      }
     }
 
     const now = Date.now();
@@ -431,6 +534,7 @@ export default function App() {
       ];
     }
 
+    // Optimistically render user message, attachments, and running assistant immediately!
     setMessages(newMessages);
     setIsRunning(true);
 
@@ -439,6 +543,27 @@ export default function App() {
     if (urlMatch) {
       setWorkspaceMode('work');
       setActiveTabId('browser');
+    }
+
+    // Process attachments sequentially in the background if attachments are present
+    let attachmentSystemContext = '';
+    if (orderedAttachments.length > 0) {
+      try {
+        const attRes = await fetch('/api/attachments/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            attachments: orderedAttachments,
+            userId: getUserId()
+          })
+        });
+        if (attRes.ok) {
+          const attData = await attRes.json();
+          attachmentSystemContext = attData.contextPrompt || '';
+        }
+      } catch (err) {
+        console.warn('[Attachments] Background sequential processing error:', err);
+      }
     }
 
     const controller = new AbortController();
@@ -621,7 +746,8 @@ export default function App() {
                 // Auto-open live browser only when interactive browser tools run (not background web_search)
                 if (
                   event.name.startsWith('browser_') ||
-                  event.name.startsWith('snapshot_')
+                  event.name.startsWith('snapshot_') ||
+                  event.name === 'read_page'
                 ) {
                   setWorkspaceMode('work');
                   setActiveTabId('browser');
@@ -787,6 +913,22 @@ export default function App() {
         return updated;
       });
       setIsRunning(false);
+
+      // Persist full conversation messages for active thread tied to user profile
+      const activeTId = currentThreadIdRef.current;
+      setTimeout(() => {
+        const msgsToSave = threadMessagesMapRef.current[activeTId];
+        if (Array.isArray(msgsToSave) && msgsToSave.length > 0) {
+          fetch(`/api/threads/${activeTId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+            body: JSON.stringify({
+              messages: msgsToSave,
+              lastMessageAt: Date.now()
+            })
+          }).catch(() => {});
+        }
+      }, 50);
     }
   };
 

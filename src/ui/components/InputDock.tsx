@@ -1301,7 +1301,7 @@ export const InputDock: React.FC<InputDockProps> = ({
     }
   };
 
-  const handleSubmitPrompt = () => {
+  const handleSubmitPrompt = async () => {
     if (isWorking) {
       onStopWorking();
       return;
@@ -1313,18 +1313,31 @@ export const InputDock: React.FC<InputDockProps> = ({
       return;
     }
 
-    const orderedAttachments = stagedAttachments
-      .map((att, idx) => ({
-        id: att.id,
-        order: idx + 1,
-        name: att.name,
-        size: att.size,
-        type: att.type,
-        state: 'done' as const,
-        previewUrl: att.dataUrl || att.previewUrl,
-        dataUrl: att.dataUrl,
-        textContent: att.textContent
-      }));
+    // Ensure any attachments that are still reading their dataUrl finish reading before submitting
+    const orderedAttachments = await Promise.all(
+      stagedAttachments.map(async (att, idx) => {
+        let dataUrl = att.dataUrl;
+        let textContent = att.textContent;
+        if (!dataUrl && !textContent && att.file) {
+          try {
+            const payload = await readFilePayloadInBackground(att.file);
+            dataUrl = payload.dataUrl;
+            textContent = payload.textContent;
+          } catch {}
+        }
+        return {
+          id: att.id,
+          order: idx + 1,
+          name: att.name,
+          size: att.size,
+          type: att.type,
+          state: 'done' as const,
+          previewUrl: dataUrl || att.previewUrl,
+          dataUrl: dataUrl,
+          textContent: textContent
+        };
+      })
+    );
 
     onSendMessage(trimmed, {
       attachments: orderedAttachments,

@@ -202,6 +202,27 @@ export const AGENT_TOOLS_CATALOG = {
     }
   },
 
+  bio_search: {
+    name: 'bio_search',
+    readOnly: true,
+    description:
+      'Searches the user\'s active BIO profile for specific data, fields, or file references (e.g. query: "name", "photo", "audio", "cv", "resume", "github", "address", "phone"). Use this tool whenever you only need specific pieces of personal data or want to check if a specific item (like an audio clip, photo, or contact detail) exists in BIO. Do NOT use this tool for general web search or non-personal questions. Parameter "query" specifies what you are searching for in BIO; "stepTitle" describes the search goal.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: {
+          type: 'STRING',
+          description: 'Search keywords or data type to find in BIO (e.g., "photo", "audio", "resume", "fullName", "email")'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Concise human-readable step description (e.g., "Search BIO for profile photo and name")'
+        }
+      },
+      required: ['query']
+    }
+  },
+
   bio_get: {
     name: 'bio_get',
     readOnly: true,
@@ -1021,6 +1042,7 @@ const READ_ONLY_RUN_TOOLS = new Set([
   'shell_output',
   'generate_image',
   'bio_index',
+  'bio_search',
   'bio_get',
   'process_document',
   'process_image',

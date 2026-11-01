@@ -62,6 +62,33 @@ export async function closeLiveBrowser(broadcast) {
   }
 }
 
+export function findChromeExecutable() {
+  if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) {
+    return process.env.CHROME_BIN;
+  }
+  const localAppData = process.env.LOCALAPPDATA || '';
+  const candidates = [
+    process.env.CHROME_BIN,
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/google-chrome',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+    localAppData ? `${localAppData}\\Google\\Chrome\\Application\\chrome.exe` : null,
+    'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+    'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge'
+  ].filter(Boolean);
+
+  for (const c of candidates) {
+    try {
+      if (fs.existsSync(c)) return c;
+    } catch {}
+  }
+  return null;
+}
+
 export async function initLiveBrowser(broadcast) {
   cancelBrowserTermination();
   if (browser && page) return { browser, page };
@@ -75,7 +102,7 @@ export async function initLiveBrowser(broadcast) {
   isStarting = true;
   console.log('[BrowserStream] Launching live Chromium with CDP screencasting...');
 
-  const chromeBin = process.env.CHROME_BIN || '/usr/bin/chromium';
+  const execPath = findChromeExecutable();
   const launchOptions = {
     headless: true,
     args: [
@@ -88,8 +115,12 @@ export async function initLiveBrowser(broadcast) {
     ]
   };
 
-  if (fs.existsSync(chromeBin)) {
-    launchOptions.executablePath = chromeBin;
+  if (execPath) {
+    launchOptions.executablePath = execPath;
+    console.log(`[BrowserStream] Using detected browser binary: ${execPath}`);
+  } else {
+    launchOptions.channel = 'chrome';
+    console.log('[BrowserStream] No explicit binary path found; attempting channel: chrome');
   }
 
   try {

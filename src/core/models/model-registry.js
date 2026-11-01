@@ -49,7 +49,7 @@ export const MODEL_REGISTRY = {
       tools: true,
       vision: true, // Models doc glance table confirms text, image, video, audio, pdf
       imageGeneration: false,
-      speechToText: false,
+      speechToText: true,
       segmentation: false
     },
     contextWindow: 1048576,
@@ -71,7 +71,7 @@ export const MODEL_REGISTRY = {
       tools: true,
       vision: true,
       imageGeneration: false,
-      speechToText: false,
+      speechToText: true,
       segmentation: false
     },
     contextWindow: 1048576,
@@ -93,7 +93,7 @@ export const MODEL_REGISTRY = {
       tools: true,
       vision: true,
       imageGeneration: false,
-      speechToText: false,
+      speechToText: true,
       segmentation: false
     },
     contextWindow: 1048576,
@@ -115,7 +115,7 @@ export const MODEL_REGISTRY = {
       tools: true,
       vision: true,
       imageGeneration: false,
-      speechToText: false,
+      speechToText: true,
       segmentation: false
     },
     contextWindow: 1048576,
@@ -137,7 +137,7 @@ export const MODEL_REGISTRY = {
       tools: true,
       vision: true,
       imageGeneration: false,
-      speechToText: false,
+      speechToText: true,
       segmentation: false
     },
     contextWindow: 1048576,

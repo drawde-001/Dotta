@@ -42,6 +42,13 @@ import {
 } from '../src/core/bio/store.js';
 import { resolveStagedFile } from '../src/core/bio/staging.js';
 import {
+  listUserThreads,
+  getUserThread,
+  saveUserThread,
+  deleteUserThread,
+  renameUserThread
+} from '../src/core/state/store.js';
+import {
   initLiveBrowser,
   handleBrowserWsMessage,
   getLiveBrowserPage,
@@ -192,7 +199,10 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
     // Fallback to text extract if structured cards not caught
     const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 3000)).catch(() => '');
     return `### Live Browser Search for "${query}":\n\n${bodyText}`;
-  } catch {}
+  } catch (err) {
+    console.error('[Omni Engine] browser_search failed:', err?.message || err);
+    return `Browser search error: ${err?.message || 'Failed to execute search in live browser'}`;
+  }
 });
 
 engine.registerTool({ name: 'browser_read_page' }, async (args) => {
@@ -211,7 +221,10 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
     const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
 
     return `### Page: ${title}\n**URL**: ${targetUrl}\n\n${text}`;
-  } catch {}
+  } catch (err) {
+    console.error('[Omni Engine] browser_read_page failed:', err?.message || err);
+    return `Browser read page error: ${err?.message || 'Failed to navigate in live browser'}`;
+  }
 });
 
 engine.registerTool({ name: 'browser_action' }, async (args) => {
@@ -426,7 +439,10 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
       }))
       .catch((err) => ({ error: err.message }));
     return JSON.stringify(snapshot, null, 2);
-  } catch {}
+  } catch (err) {
+    console.error('[Omni Engine] snapshot_read failed:', err?.message || err);
+    return JSON.stringify({ error: `Snapshot error: ${err?.message || 'Failed to read snapshot'}` });
+  }
 });
 
 engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
@@ -440,7 +456,10 @@ engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
     const buffer = await page.screenshot({ fullPage: !!args?.fullPage }).catch(() => null);
     if (!buffer) return 'Failed to capture screenshot.';
     return `Captured live screenshot (${buffer.length} bytes). Viewport is streaming live in sidebar.`;
-  } catch {}
+  } catch (err) {
+    console.error('[Omni Engine] browser_screenshot failed:', err?.message || err);
+    return `Browser screenshot error: ${err?.message || 'Failed to take screenshot'}`;
+  }
 });
 
 // Health check endpoints (both /health and /api/health)
@@ -507,6 +526,71 @@ app.post('/api/thread/title', async (req, res) => {
     res.json({ title: title || 'New chat' });
   } catch (err) {
     res.json({ title: 'New chat' });
+  }
+});
+
+// ---- Chat Threads & Context Persistence (User-tied) ----
+app.get('/api/threads', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const threads = listUserThreads(userId);
+    res.json({ ok: true, threads });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/threads/:threadId', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const thread = getUserThread(userId, req.params.threadId);
+    if (!thread) {
+      return res.status(404).json({ ok: false, error: 'Thread not found' });
+    }
+    res.json({ ok: true, thread });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/threads', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const body = req.body || {};
+    const threadId = body.id || body.threadId || `thread-${Date.now()}`;
+    const thread = saveUserThread(userId, threadId, {
+      ...body,
+      id: threadId,
+      threadId
+    });
+    res.json({ ok: true, thread });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.patch('/api/threads/:threadId', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const thread = saveUserThread(userId, req.params.threadId, req.body || {});
+    res.json({ ok: true, thread });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/threads/:threadId', (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const deleted = deleteUserThread(userId, req.params.threadId);
+    res.json({ ok: true, deleted });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 

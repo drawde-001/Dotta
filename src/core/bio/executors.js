@@ -159,9 +159,11 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
 
     if (id === 'photo') {
       const photoRel = profile.fields.photo || '';
-      const abs = sandboxAbsPath(userId, photoRel);
+      const abs = photoRel ? sandboxAbsPath(userId, photoRel) : null;
       if (abs) stageFile('photo', abs, path.basename(abs), '');
-      values.photo = abs
+      values.photo = !photoRel
+        ? '[No profile photo has been set in BIO.]'
+        : abs
         ? '[Profile photo attached to this result for viewing, and staged for upload.]'
         : '[Profile photo is set but no sandbox file is attached.]';
       continue;
@@ -390,4 +392,88 @@ export function resolveBioWrite({ userId, threadId, fieldId, answerId, profileId
     value: answer.answer,
     oldValue: profile.fields[fieldDef.id] ?? null
   };
+}
+
+/**
+ * bio_search: Searches the ACTIVE profile for specific keywords, data types,
+ * or field names (e.g. query: "name", "role", "photo", "audio", "cv", "resume", "github", "address").
+ * Returns ONLY the specific matching fields, entries, and values, avoiding
+ * loading the entire BIO data context.
+ */
+export async function executeBioSearch({ userId, query = '', profileId = null, model = '' } = {}) {
+  if (!userId) return 'Error: BIO requires an identified user.';
+  const profile = getActiveProfile(userId);
+  if (!profile) return 'Error: No active BIO profile exists for this user.';
+  if (profileId && profileId !== profile.id) {
+    return 'Error: BIO access denied: the requested profile is not the active profile for this run.';
+  }
+  const cleanQ = String(query || '').trim().toLowerCase();
+  if (!cleanQ) {
+    return 'Error: bio_search requires a non-empty search query.';
+  }
+
+  const matchingFieldIds = [];
+  for (const f of BIO_FIELDS) {
+    const idMatch = f.id.toLowerCase().includes(cleanQ);
+    const labelMatch = (f.label || '').toLowerCase().includes(cleanQ);
+    const descMatch = (f.description || '').toLowerCase().includes(cleanQ);
+    let valMatch = false;
+    const val = profile.fields[f.id];
+    if (typeof val === 'string') {
+      valMatch = val.toLowerCase().includes(cleanQ);
+    } else if (Array.isArray(val)) {
+      valMatch = val.some((item) => String(item).toLowerCase().includes(cleanQ));
+    } else if (typeof val === 'object' && val !== null) {
+      valMatch = Object.values(val).some((v) => String(v).toLowerCase().includes(cleanQ));
+    }
+
+    const synonymMatch =
+      ((cleanQ.includes('resume') || cleanQ.includes('cv')) && f.id === 'cv') ||
+      ((cleanQ.includes('picture') || cleanQ.includes('photo') || cleanQ.includes('avatar') || cleanQ.includes('headshot')) && f.id === 'photo') ||
+      (cleanQ.includes('name') && (f.id === 'fullName' || f.id === 'headline')) ||
+      (cleanQ.includes('contact') && (f.id === 'email' || f.id === 'phone' || f.id === 'address')) ||
+      (cleanQ.includes('job') && (f.id === 'role' || f.id === 'workHistory')) ||
+      (cleanQ.includes('website') && f.id === 'website') ||
+      (cleanQ.includes('portfolio') && (f.id === 'website' || f.id === 'hobbyProjects')) ||
+      (cleanQ.includes('social') && f.id === 'socialLinks');
+
+    if (idMatch || labelMatch || descMatch || valMatch || synonymMatch) {
+      matchingFieldIds.push(f.id);
+    }
+  }
+
+  const matchingEntryIds = [];
+  for (const e of profile.entries || []) {
+    const nameMatch = (e.name || '').toLowerCase().includes(cleanQ);
+    const typeMatch = (e.type || '').toLowerCase().includes(cleanQ);
+    const descMatch = (e.description || '').toLowerCase().includes(cleanQ);
+    const textMatch = (e.textContent || '').toLowerCase().includes(cleanQ);
+
+    const synonymMatch =
+      ((cleanQ.includes('audio') || cleanQ.includes('voice') || cleanQ.includes('speech') || cleanQ.includes('sound')) && e.type === 'audio') ||
+      ((cleanQ.includes('video') || cleanQ.includes('recording') || cleanQ.includes('clip')) && e.type === 'video') ||
+      ((cleanQ.includes('image') || cleanQ.includes('picture') || cleanQ.includes('photo')) && e.type === 'image') ||
+      ((cleanQ.includes('document') || cleanQ.includes('doc') || cleanQ.includes('pdf')) && e.type === 'document');
+
+    if (nameMatch || typeMatch || descMatch || textMatch || synonymMatch) {
+      matchingEntryIds.push(`entry:${e.id}`);
+    }
+  }
+
+  const allTargetIds = [...new Set([...matchingFieldIds, ...matchingEntryIds])];
+  if (allTargetIds.length === 0) {
+    return JSON.stringify({
+      query: cleanQ,
+      matches: [],
+      message: `No matching BIO fields or entries found for "${cleanQ}". Use bio_index if you need to browse all available fields.`
+    }, null, 2);
+  }
+
+  // Fetch only the specific matching fields (max 8)
+  return await executeBioGet({
+    userId,
+    fieldIds: allTargetIds.slice(0, 8),
+    profileId,
+    model
+  });
 }

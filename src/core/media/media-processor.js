@@ -316,6 +316,81 @@ async function callMetaMuseVoiceTranscribe({
 }
 
 /**
+ * Helper: Call Meta Muse Spark Open via Modal vLLM endpoint natively with input_audio.
+ * The model itself transcribes the audio natively without third-party services.
+ */
+export async function callModalMuseSparkAudio({
+  base64,
+  rawMime = 'audio/wav',
+  timeoutMs = 25000
+} = {}) {
+  const modalToken =
+    process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
+      ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
+      : process.env.MODAL_API_KEY;
+
+  const key = modalToken || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+  if (!key || !base64) return null;
+
+  const modalUrl = (
+    process.env.MODAL_MUSE_SPARK_URL ||
+    'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1'
+  ).replace(/\/+$/, '');
+
+  const format = rawMime.includes('mp3') ? 'mp3' : 'wav';
+
+  try {
+    const res = await fetch(`${modalUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: 'meta-models/Muse-Spark-Open-816B-A42B',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_audio',
+                input_audio: {
+                  data: base64,
+                  format
+                }
+              },
+              {
+                type: 'text',
+                text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else.'
+              }
+            ]
+          }
+        ],
+        max_tokens: 4096,
+        temperature: 0.1
+      }),
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      const text = extractTranscriptFromResponseJson(json);
+      if (text) {
+        return {
+          ok: true,
+          text,
+          source: 'meta-models/Muse-Spark-Open-816B-A42B:modal_audio',
+          data: json
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[MediaProcessor] Modal Muse Spark Open audio error:', err.message);
+  }
+  return null;
+}
+
+/**
  * Helper: Call Google Gemini Multimodal Audio across Gemini endpoints/models.
  * Uses candidate model cascade (gemini-3.8-flash -> gemini-3.6-flash -> gemini-2.5-flash -> gemini-3-flash-preview -> gemini-3.5-flash-lite)
  * with multi-key rotation and failover.
@@ -408,6 +483,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   const preferredModel = options.preferredModel || audioPayload.preferredModel || '';
   const isGeminiCategory = /gemini/i.test(preferredModel);
   const isOpenAiCategory = /whisper|openai|gpt/i.test(preferredModel);
+  const isMetaCategory = /muse|meta|spark|modal/i.test(preferredModel) || (!isGeminiCategory && !isOpenAiCategory);
 
   // Resolve the audio blob/buffer and base64
   let blob;
@@ -441,7 +517,51 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 2. If OpenAI is selected: Route directly to OpenAI Whisper FIRST
+  // 2. If Meta is selected:
+  // Primary: Selected Meta model itself (e.g. Modal Muse Spark Open or Meta Muse Wonder via input_audio)
+  // Fallback: muse-voice-transcribe-1.0 dedicated endpoint if the selected model fails or cannot process it
+  if (isMetaCategory) {
+    // A. If Muse Spark Open or Modal is preferred, invoke the model directly first
+    if (base64 && (/open|modal|816b/i.test(preferredModel) || !preferredModel || preferredModel === 'muse-spark-open')) {
+      const modalRes = await callModalMuseSparkAudio({
+        base64,
+        rawMime,
+        timeoutMs: 25000
+      });
+      if (modalRes && modalRes.ok && modalRes.text) {
+        return modalRes;
+      }
+    }
+
+    // B. Fallback to muse-voice-transcribe-1.0 across Meta / Fireworks / Llama endpoints
+    const museVoiceRes = await callMetaMuseVoiceTranscribe({
+      blob,
+      base64,
+      rawMime,
+      defaultExt,
+      filename,
+      options,
+      timeoutMs: 25000,
+      isFinalFallback: false
+    });
+    if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text) {
+      return museVoiceRes;
+    }
+
+    // C. Additional sister Meta models fallback (Modal if not tried above)
+    if (base64 && !/open|modal|816b/i.test(preferredModel)) {
+      const modalFallback = await callModalMuseSparkAudio({
+        base64,
+        rawMime,
+        timeoutMs: 25000
+      });
+      if (modalFallback && modalFallback.ok && modalFallback.text) {
+        return modalFallback;
+      }
+    }
+  }
+
+  // 3. If OpenAI is selected: Route directly to OpenAI Whisper FIRST
   if (isOpenAiCategory) {
     const openaiKey = getApiKey('OPENAI_API_KEY');
     if (openaiKey) {
@@ -470,22 +590,24 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 3. Meta Muse Voice Transcribe (PRIMARY for Meta models, SECONDARY fallback for other models)
-  const primaryMuseResult = await callMetaMuseVoiceTranscribe({
-    blob,
-    base64,
-    rawMime,
-    defaultExt,
-    filename,
-    options,
-    timeoutMs: 25000,
-    isFinalFallback: false
-  });
-  if (primaryMuseResult && primaryMuseResult.ok && primaryMuseResult.text) {
-    return primaryMuseResult;
+  // 4. Non-Meta Fallback: Meta Muse Voice Transcribe (if not already tried)
+  if (!isMetaCategory) {
+    const primaryMuseResult = await callMetaMuseVoiceTranscribe({
+      blob,
+      base64,
+      rawMime,
+      defaultExt,
+      filename,
+      options,
+      timeoutMs: 25000,
+      isFinalFallback: false
+    });
+    if (primaryMuseResult && primaryMuseResult.ok && primaryMuseResult.text) {
+      return primaryMuseResult;
+    }
   }
 
-  // 4. Intermediate Fallback: OpenAI Whisper (if not already tried)
+  // 5. Intermediate Fallback: OpenAI Whisper (if not already tried)
   if (!isOpenAiCategory) {
     const openaiKey = getApiKey('OPENAI_API_KEY');
     if (openaiKey) {
@@ -514,7 +636,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 5. Intermediate Fallback: Gemini Multimodal Audio (if not already tried)
+  // 6. Intermediate Fallback: Gemini Multimodal Audio (if not already tried)
   if (!isGeminiCategory && base64) {
     const geminiFallback = await callGeminiAudioTranscribe({
       base64,

@@ -255,7 +255,7 @@ export async function callMuseStream({
     stream_options: { include_usage: true },
     temperature: generationConfig?.temperature ?? 0.3,
     top_p: generationConfig?.topP ?? 0.95,
-    reasoning_effort: generationConfig?.reasoningEffort || 'medium'
+    reasoning_effort: String(generationConfig?.reasoningEffort || generationConfig?.effort || 'medium').toLowerCase()
   };
   const oaiTools = toOpenAiTools(tools);
   if (oaiTools) {
