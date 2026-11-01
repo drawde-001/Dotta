@@ -42,7 +42,7 @@ export const BIO_FIELDS = [
   { id: 'role', label: 'Role', type: 'text', description: 'Current professional role.' },
   { id: 'residence', label: 'Residence', type: 'text', description: 'Where the user currently lives (city, state, country).' },
   { id: 'stateOfOrigin', label: 'State of origin', type: 'text', description: 'State of origin of the user.' },
-  { id: 'socialLinks', label: 'Social links', type: 'object', description: 'GitHub, LinkedIn, X and Instagram profile URLs.' },
+  { id: 'socialLinks', label: 'Social links', type: 'object', description: 'Facebook, GitHub, LinkedIn, X and Instagram profile URLs.' },
   { id: 'website', label: 'Personal website', type: 'url', description: 'Personal website or portfolio URL. Core field for applications.' },
   { id: 'cv', label: 'CV / Resume', type: 'file', description: 'CV or resume file reference (name and sandbox path). Core field.' },
   { id: 'background', label: 'Background / Biography', type: 'text', description: 'Biography / background summary of the user.' },
@@ -102,7 +102,7 @@ function emptyFields() {
     role: '',
     residence: '',
     stateOfOrigin: '',
-    socialLinks: { github: '', linkedin: '', x: '', instagram: '' },
+    socialLinks: { facebook: '', github: '', linkedin: '', x: '', instagram: '' },
     website: '',
     cv: null,
     background: '',
@@ -149,6 +149,7 @@ function seedProfile() {
       stateOfOrigin: 'Washington, US',
       website: 'https://alexmorgan.dev',
       socialLinks: {
+        facebook: 'https://facebook.com',
         github: 'https://github.com',
         linkedin: 'https://linkedin.com',
         x: 'https://twitter.com',
@@ -347,6 +348,13 @@ export function loadUserBio(userId) {
         profile.fields[key] = val;
         repaired = true;
       }
+    }
+    if (!profile.fields.socialLinks) {
+      profile.fields.socialLinks = { facebook: 'https://facebook.com', github: 'https://github.com', linkedin: 'https://linkedin.com', x: 'https://twitter.com', instagram: 'https://instagram.com' };
+      repaired = true;
+    } else if (profile.fields.socialLinks.facebook === undefined) {
+      profile.fields.socialLinks = { facebook: 'https://facebook.com', ...profile.fields.socialLinks };
+      repaired = true;
     }
     if (materializeProfileFiles(userId, profile)) repaired = true;
   }

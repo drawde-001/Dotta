@@ -7,6 +7,7 @@ import {
   Bookmark,
   MoreHorizontal,
   Camera,
+  Facebook,
   Github,
   Linkedin,
   Twitter,
@@ -399,6 +400,7 @@ export function BioDashboard() {
 
   const socials = fields.socialLinks || {};
   const socialList = [
+    { key: 'facebook', Icon: Facebook, label: 'Facebook' },
     { key: 'github', Icon: Github, label: 'GitHub' },
     { key: 'linkedin', Icon: Linkedin, label: 'LinkedIn' },
     { key: 'x', Icon: Twitter, label: 'X (Twitter)' },
@@ -894,7 +896,7 @@ export function BioDashboard() {
               <div className="flex flex-col gap-1 border-b border-white/[0.05] pb-3">
                 <span className="text-xs font-medium text-zinc-400">Social links</span>
                 <div className="flex flex-col gap-1.5 text-xs">
-                  {['github', 'linkedin', 'x', 'instagram'].map((key) => (
+                  {['facebook', 'github', 'linkedin', 'x', 'instagram'].map((key) => (
                     <div key={key} className="flex items-baseline gap-2">
                       <span className="w-28 shrink-0 font-mono capitalize text-zinc-400">{key}:</span>
                       <div className="min-w-0 flex-1">
