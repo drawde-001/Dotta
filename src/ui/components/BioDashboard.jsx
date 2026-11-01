@@ -720,11 +720,11 @@ export function BioDashboard() {
               <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">Contact Information</span>
-                  <span className="text-[10px] text-zinc-500">* Required for applications</span>
+                  <span className="text-[10px] text-zinc-500">Required for applications</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">First Name *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">First Name</span>
                     <Editable
                       value={fields.firstName}
                       placeholder="Add first name"
@@ -732,7 +732,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Last Name *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Last Name</span>
                     <Editable
                       value={fields.lastName}
                       placeholder="Add last name"
@@ -740,7 +740,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">DOB *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">DOB</span>
                     <Editable
                       value={fields.dob}
                       placeholder="YYYY-MM-DD"
@@ -748,7 +748,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Address *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Address</span>
                     <Editable
                       value={fields.address}
                       placeholder="Street address"
@@ -764,7 +764,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">City *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">City</span>
                     <Editable
                       value={fields.city}
                       placeholder="City"
@@ -772,7 +772,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">State *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">State</span>
                     <Editable
                       value={fields.state}
                       placeholder="Select or enter state"
@@ -780,7 +780,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Zip Code *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Zip Code</span>
                     <Editable
                       value={fields.zipCode}
                       placeholder="Zip code"
@@ -788,7 +788,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Country *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Country</span>
                     <Editable
                       value={fields.country || 'United States'}
                       placeholder="United States"
@@ -796,7 +796,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Email *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Email</span>
                     <Editable
                       value={fields.email}
                       placeholder="Add email"
@@ -818,11 +818,11 @@ export function BioDashboard() {
               <div className="flex flex-col gap-2 border-b border-white/[0.05] pb-3.5">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase tracking-wider text-zinc-300">About You</span>
-                  <span className="text-[10px] text-zinc-500">* Talent &amp; Casting profile</span>
+                  <span className="text-[10px] text-zinc-500">Talent &amp; Casting profile</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2 text-xs text-zinc-200 sm:grid-cols-2">
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Gender *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Gender</span>
                     <Editable
                       value={fields.gender || 'Female'}
                       placeholder="Female"
@@ -838,7 +838,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Union Status *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Union Status</span>
                     <Editable
                       value={fields.unionStatus || 'Non-Union'}
                       placeholder="Non-Union"
@@ -854,7 +854,7 @@ export function BioDashboard() {
                     />
                   </div>
                   <div className="col-span-full flex flex-col gap-0.5">
-                    <span className="text-[11px] font-mono text-zinc-400">Dialects *</span>
+                    <span className="text-[11px] font-mono text-zinc-400">Dialects</span>
                     <Editable
                       value={fields.dialects || 'General American, Standard British'}
                       placeholder="General American, Standard British"
