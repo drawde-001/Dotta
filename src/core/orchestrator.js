@@ -70,6 +70,11 @@ import {
   killSandboxCommand
 } from './execution/sandbox.js';
 import {
+  createRunSandbox,
+  destroyRunSandbox
+} from './execution/run-sandbox.js';
+import { setActiveStagingRunId } from './bio/staging.js';
+import {
   executeWebSearch,
   executeReadPage,
   executeBrowserAction,
@@ -520,16 +525,19 @@ export class OmniEngine extends EventEmitter {
     model = this.defaultModel,
     mode = 'turbo',
     effort = 'medium',
-    maxTurns = 25,
+    maxTurns = null,
     maxBudgetUsd = 2.0,
     workspaceRoot = null,
     userId = null,
-    resume = null
+    resume = null,
+    signal = null,
+    sandboxOptions = {}
   }) {
     const budgetTracker = new AgentBudgetTracker({
       maxTurns,
       maxBudgetUsd,
-      model
+      model,
+      instruction
     });
 
     // BIO access for this run: exactly one active profile, permissions from
@@ -563,11 +571,32 @@ export class OmniEngine extends EventEmitter {
     );
     let currentBrowserHost = '';
 
+    // Create an isolated, temporary per-run sandbox strictly outside the project workspace
+    const runSandbox = createRunSandbox({
+      runId,
+      userId,
+      profileId: bioAccess.profileId,
+      networkAllowlist: Array.from(approvedHosts),
+      signal,
+      ...sandboxOptions,
+      onOutput: (entry) => {
+        this.emit('event', {
+          type: 'SANDBOX_OUTPUT',
+          threadId,
+          runId,
+          entry,
+          timestamp: entry.timestamp
+        });
+      }
+    });
+    setActiveStagingRunId(runId);
+
     this.emit('event', {
       type: 'RUN_STARTED',
       threadId,
       runId,
       model,
+      sandboxRoot: '/sandbox',
       timestamp: Date.now()
     });
 
@@ -1169,7 +1198,7 @@ export class OmniEngine extends EventEmitter {
               };
             }
 
-            // 3. Execution with retry
+            // 3. Execution with retry (always confined to isolated runSandbox.workDir)
             const toolDef = this.toolCatalog[toolName];
             const startTime = Date.now();
             const execResult = await executeToolWithRetry({
@@ -1180,7 +1209,15 @@ export class OmniEngine extends EventEmitter {
                 toolName.startsWith('bio_') || toolName.startsWith('process_')
                   ? 24000
                   : 4000,
-              executor: (args) => this.executeTool(toolName, args, { workspaceRoot, runId, threadId, userId, model })
+              executor: (args) =>
+                this.executeTool(toolName, args, {
+                  workspaceRoot: runSandbox.workDir,
+                  runSandbox,
+                  runId,
+                  threadId,
+                  userId,
+                  model
+                })
             });
 
             const isBioTool = toolName.startsWith('bio_');
@@ -1429,6 +1466,9 @@ export class OmniEngine extends EventEmitter {
         stack: err.stack
       });
       throw err;
+    } finally {
+      setActiveStagingRunId(null);
+      await destroyRunSandbox(runId, budgetTracker.stopReason || 'run_ended').catch(() => {});
     }
   }
 }

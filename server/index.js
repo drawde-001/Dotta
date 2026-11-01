@@ -241,7 +241,7 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
   }
 });
 
-engine.registerTool({ name: 'browser_action' }, async (args) => {
+engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
   cancelBrowserTermination();
   try {
     const { action, selectorOrText, value, direction = 'down', amount = 500, pressEnter } = args || {};
@@ -325,15 +325,16 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
       if (pressEnter) await page.keyboard.press('Enter');
       return `Typed "${text}" into "${target || 'focused element'}".${pressEnter ? ' Pressed Enter.' : ''} Take a snapshot_read to confirm before continuing.`;
     } else if (action === 'upload') {
-      const stagedFile = resolveStagedFile(String(value || '').trim());
+      const stagedFile = resolveStagedFile(String(value || '').trim(), context?.runId);
       if (!stagedFile) {
         return 'Browser action error: Unknown upload reference. Call bio_get first to stage the BIO file, then upload with its uploadRef. Nothing was uploaded.';
       }
+      const uploadPath = stagedFile.sandboxPath || stagedFile.absPath;
       const selector = String(selectorOrText || '').trim();
       let uploaded = false;
       if (selector) {
         try {
-          await page.locator(selector).first().setInputFiles(stagedFile.absPath, { timeout: 6000 });
+          await page.locator(selector).first().setInputFiles(uploadPath, { timeout: 6000 });
           uploaded = true;
         } catch {}
       }
@@ -359,7 +360,7 @@ engine.registerTool({ name: 'browser_action' }, async (args) => {
             });
           if (!matches) continue;
           try {
-            await candidate.setInputFiles(stagedFile.absPath, { timeout: 6000 });
+            await candidate.setInputFiles(uploadPath, { timeout: 6000 });
             uploaded = true;
             break;
           } catch {}

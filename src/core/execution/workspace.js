@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { capToolOutput } from '../tools/policy.js';
+import { getRunSandbox, getOrCreateRunSandbox } from './run-sandbox.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, '../../..');
@@ -16,8 +17,12 @@ export function getWorkspacesBaseDir() {
 }
 
 export function getWorkspaceRoot(runId) {
-  const safeRunId = String(runId || 'default-run').replace(/[^a-zA-Z0-9_.-]/g, '_');
-  return path.resolve(getWorkspacesBaseDir(), safeRunId);
+  const activeSandbox = runId ? getRunSandbox(runId) : null;
+  if (activeSandbox) {
+    return activeSandbox.workDir;
+  }
+  const sb = getOrCreateRunSandbox(runId || 'default-run');
+  return sb.workDir;
 }
 
 /**
@@ -229,6 +234,11 @@ export function validateAndResolvePath(workspaceRoot, relativePath) {
   }
 
   const normalizedRoot = path.normalize(path.resolve(workspaceRoot));
+  const normalizedProjectRoot = path.normalize(PROJECT_ROOT);
+  if (normalizedRoot.toLowerCase() === normalizedProjectRoot.toLowerCase()) {
+    throw new Error('Access to the host project root workspace is strictly prohibited.');
+  }
+
   const resolved = path.normalize(path.resolve(normalizedRoot, raw));
 
   if (resolved !== normalizedRoot && !resolved.startsWith(normalizedRoot + path.sep)) {
@@ -303,45 +313,28 @@ export function getLatestFileArtifact(runId) {
 }
 
 function resolveEffectiveRoot({ workspaceRoot, runId }) {
+  // If an isolated RunSandbox is active for this runId, always confine agent file operations to it
+  if (runId) {
+    const activeSandbox = getRunSandbox(runId);
+    if (activeSandbox) {
+      return activeSandbox.workDir;
+    }
+  }
   if (workspaceRoot && typeof workspaceRoot === 'string') {
+    const normWs = path.normalize(path.resolve(workspaceRoot)).toLowerCase();
+    const normProject = path.normalize(PROJECT_ROOT).toLowerCase();
+    const normWorkspacesBase = path.normalize(getWorkspacesBaseDir()).toLowerCase();
+    // Never allow agent run tools to mount the project root or the BIO storage root directly
+    if (normWs === normProject || normWs.startsWith(normWorkspacesBase)) {
+      return getWorkspaceRoot(runId || 'default-run');
+    }
     return workspaceRoot;
   }
-  if (runId) {
-    return getWorkspaceRoot(runId);
-  }
-  return path.resolve(process.cwd(), 'workspace');
-}
-
-/**
- * If a run workspace doesn't have an interior project file yet (e.g. "src/...")
- * and no explicit test workspaceRoot was passed, safely seed it into the run's sandbox
- * so the agent can view/edit interior files without ever accessing the host root directory.
- */
-function ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot }) {
-  if (workspaceRoot) return; // Explicit workspaceRoot (e.g. unit tests) stays isolated
-  const cleanRel = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
-  if (!cleanRel || cleanRel === '.' || cleanRel === 'file') return;
-
-  // Only allow safe interior subdirectories (e.g. src/, server/, public/, docs/) — never root-level files
-  if (!/^(src|server|public|docs)\//i.test(cleanRel)) return;
-
-  const targetInSandbox = path.resolve(effectiveRoot, cleanRel);
-  if (fs.existsSync(targetInSandbox)) return;
-
-  const sourceInProject = path.resolve(PROJECT_ROOT, cleanRel);
-  if (
-    sourceInProject.startsWith(PROJECT_ROOT + path.sep) &&
-    fs.existsSync(sourceInProject) &&
-    fs.statSync(sourceInProject).isFile()
-  ) {
-    fs.mkdirSync(path.dirname(targetInSandbox), { recursive: true });
-    fs.copyFileSync(sourceInProject, targetInSandbox);
-  }
+  return getWorkspaceRoot(runId || 'default-run');
 }
 
 export function workspaceFileRead({ path: relPath, runId, workspaceRoot, maxChars = 4000 }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
-  ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
   const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
@@ -500,7 +493,6 @@ export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runI
 
 export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, workspaceRoot }) {
   const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
-  ensureSandboxInteriorFile({ workspaceRoot, runId, relPath, effectiveRoot });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
   const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
