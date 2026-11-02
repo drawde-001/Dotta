@@ -357,6 +357,13 @@ engine.registerTool({ name: 'browser_read_page' }, async (args, context = {}) =>
             useLiveModel: true,
             browserExecutor: createLiveBrowserExecutor(page, context?.runId),
             onEvent: (evt) => {
+              try {
+                broadcast({
+                  type: 'agent_action_stream',
+                  runId: context?.runId,
+                  event: evt
+                });
+              } catch (_) {}
               if (typeof context?.formTask?.onEvent === 'function') {
                 context.formTask.onEvent(evt);
               }
