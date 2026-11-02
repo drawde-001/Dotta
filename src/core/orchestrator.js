@@ -22,7 +22,8 @@ import {
   checkToolRunCap,
   collectApprovedHosts,
   evaluateBrowserDataAction,
-  isApprovedHost
+  isApprovedHost,
+  hostOf
 } from './tools/policy.js';
 import {
   scanForInjection,
