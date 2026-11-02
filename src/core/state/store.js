@@ -319,24 +319,24 @@ export function getThreadApprovals(threadId, userId = null) {
   return new Set(Array.isArray(state?.approvals) ? state.approvals : []);
 }
 
-export function addThreadApproval(threadId, approvalKey) {
+export function addThreadApproval(threadId, approvalKey, userId = null) {
   if (!threadId || !approvalKey) return;
-  const state = getThreadState(threadId) || { threadId, status: 'active', approvals: [] };
+  const state = getThreadState(threadId, userId) || { threadId, userId: userId || null, status: 'active', approvals: [] };
   const current = new Set(Array.isArray(state.approvals) ? state.approvals : []);
   current.add(String(approvalKey));
-  return saveThreadState(threadId, { approvals: Array.from(current) });
+  return saveThreadState(threadId, { approvals: Array.from(current) }, userId);
 }
 
-export function getInterruptHistory(threadId) {
+export function getInterruptHistory(threadId, userId = null) {
   if (!threadId) return [];
-  const state = getThreadState(threadId);
+  const state = getThreadState(threadId, userId);
   const raw = Array.isArray(state?.interruptHistory) ? state.interruptHistory : [];
   return raw.map((item) => (typeof item === 'object' && item !== null ? item.key : String(item)));
 }
 
-export function getInterruptAnswer(threadId, interruptKey) {
+export function getInterruptAnswer(threadId, interruptKey, userId = null) {
   if (!threadId || !interruptKey) return undefined;
-  const state = getThreadState(threadId);
+  const state = getThreadState(threadId, userId);
   const raw = Array.isArray(state?.interruptHistory) ? state.interruptHistory : [];
   const normKey = String(interruptKey).trim().toLowerCase();
 
@@ -351,9 +351,9 @@ export function getInterruptAnswer(threadId, interruptKey) {
   return found && found.answer !== undefined ? found.answer : undefined;
 }
 
-export function recordInterruptHistory(threadId, interruptKey, answer = undefined) {
+export function recordInterruptHistory(threadId, interruptKey, answer = undefined, userId = null) {
   if (!threadId || !interruptKey) return;
-  const state = getThreadState(threadId) || { threadId, status: 'active', interruptHistory: [] };
+  const state = getThreadState(threadId, userId) || { threadId, userId: userId || null, status: 'active', interruptHistory: [] };
   const list = Array.isArray(state.interruptHistory) ? [...state.interruptHistory] : [];
   const strKey = String(interruptKey);
 
@@ -364,11 +364,11 @@ export function recordInterruptHistory(threadId, interruptKey, answer = undefine
   if (existingIdx >= 0) {
     if (answer !== undefined) {
       list[existingIdx] = { key: strKey, answer, timestamp: Date.now() };
-      return saveThreadState(threadId, { interruptHistory: list });
+      return saveThreadState(threadId, { interruptHistory: list }, userId);
     }
   } else {
     list.push({ key: strKey, answer, timestamp: Date.now() });
-    return saveThreadState(threadId, { interruptHistory: list });
+    return saveThreadState(threadId, { interruptHistory: list }, userId);
   }
 }
 

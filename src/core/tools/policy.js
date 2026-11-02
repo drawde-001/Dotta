@@ -220,6 +220,9 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
         isLocal ||
         approvalSet.has(targetHost) ||
         approvalSet.has(`host:${targetHost}`) ||
+        approvalSet.has(normTool) ||
+        approvalSet.has('*') ||
+        (context?.navigation?.approvedHosts && isApprovedHost(targetHost, context.navigation.approvedHosts)) ||
         Boolean(context?.navigation?.userApproved);
 
       if (!alreadyApproved) {

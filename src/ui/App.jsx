@@ -589,20 +589,45 @@ export default function App() {
             dataUrl: a.dataUrl
           })),
           messages: newMessages
-            .filter((m) => m.role === 'user' || (m.role === 'assistant' && (m.content || []).some((c) => c.type === 'text' && c.text)))
-            .map((m) => ({
-              role: m.role,
-              content: (m.content || [])
+            .filter(
+              (m) =>
+                m.role === 'user' ||
+                (m.role === 'assistant' &&
+                  (m.content || []).some(
+                    (c) =>
+                      (c.type === 'text' && c.text) ||
+                      c.type === 'data-submitted-ask-user' ||
+                      c.type === 'submitted-ask-user'
+                  ))
+            )
+            .map((m) => {
+              const textParts = (m.content || [])
                 .filter((c) => c.type === 'text')
-                .map((c) => c.text)
-                .join('\n'),
-              attachments: m.attachments?.map((a) => ({
-                name: a.name,
-                type: a.type,
-                size: a.size,
-                dataUrl: a.dataUrl
-              }))
-            })),
+                .map((c) => c.text);
+              const qaParts = (m.content || [])
+                .filter(
+                  (c) =>
+                    c.type === 'data-submitted-ask-user' ||
+                    c.type === 'submitted-ask-user'
+                )
+                .map((c) => {
+                  const list = c.questions || c.data?.questions || [];
+                  return list
+                    .map((qa) => `[Confirmed Answer]: ${qa.question} -> ${qa.answer}`)
+                    .join('\n');
+                });
+              const combinedText = [...textParts, ...qaParts].filter(Boolean).join('\n');
+              return {
+                role: m.role,
+                content: combinedText,
+                attachments: m.attachments?.map((a) => ({
+                  name: a.name,
+                  type: a.type,
+                  size: a.size,
+                  dataUrl: a.dataUrl
+                }))
+              };
+            }),
           model: selectedModel,
           mode: agentMode,
           effort: (options.effort || 'medium').toLowerCase(),
@@ -988,6 +1013,7 @@ export default function App() {
       baseMessages: nextMessages,
       resume: {
         toolName: interrupt.metadata?.toolName,
+        args: interrupt.metadata?.toolArgs,
         approved: payload?.approved,
         answer: payload?.answer,
         customText: payload?.customText,

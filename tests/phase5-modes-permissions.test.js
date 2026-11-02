@@ -103,8 +103,53 @@ async function runPhase5Tests() {
   assert.strictEqual(fillOnlySubmit.requiresUserConfirmation, true);
   console.log('✓ Test 4 PASSED: "Do not submit" intent enforced.\n');
 
+  // ---------------------------------------------------------------------------
+  // TEST 5: Repeating permission prevention & user answer persistence
+  // ---------------------------------------------------------------------------
+  console.log('[Test 5] Testing repeating permission prevention & user answer persistence...');
+  const { addThreadApproval, getThreadApprovals, recordInterruptHistory, getInterruptAnswer } = await import('../src/core/state/store.js');
+  const dummyThreadId = `test-thread-perm-${Date.now()}`;
+  const testUserId = 'test-user-repeat-check';
+  const targetSite = 'https://dummy-jobs.example.org/apply';
+  const targetHost = 'dummy-jobs.example.org';
+
+  // Initially unapproved
+  const initialPerm = checkPermission('browser_read_page', { url: targetSite }, 'turbo', getThreadApprovals(dummyThreadId, testUserId), {
+    bio: { userId: testUserId, read: true },
+    navigation: { approvedHosts: new Set() }
+  });
+  assert.strictEqual(initialPerm.decision, 'ask', 'Unapproved domain must ask permission initially');
+
+  // If the user prompt provided the URL, approvedHosts immediately allows it without asking repeatedly
+  const promptProvidedPerm = checkPermission('browser_read_page', { url: targetSite }, 'turbo', getThreadApprovals(dummyThreadId, testUserId), {
+    bio: { userId: testUserId, read: true },
+    navigation: { approvedHosts: new Set([targetHost]) }
+  });
+  assert.strictEqual(promptProvidedPerm.decision, 'allow', 'Domain provided in user prompt must be pre-approved');
+
+  // When user approves via card, approval is persisted under testUserId
+  addThreadApproval(dummyThreadId, targetHost, testUserId);
+  addThreadApproval(dummyThreadId, `host:${targetHost}`, testUserId);
+  addThreadApproval(dummyThreadId, 'browser_read_page', testUserId);
+
+  const persistedApprovals = getThreadApprovals(dummyThreadId, testUserId);
+  assert(persistedApprovals.has(targetHost), 'Must persist approved host in user thread');
+  assert(persistedApprovals.has(`host:${targetHost}`), 'Must persist host key in user thread');
+
+  const afterApprovalPerm = checkPermission('browser_read_page', { url: targetSite }, 'turbo', persistedApprovals, {
+    bio: { userId: testUserId, read: true },
+    navigation: { approvedHosts: new Set() }
+  });
+  assert.strictEqual(afterApprovalPerm.decision, 'allow', 'Approved domain must allow without asking repeatedly');
+
+  // Verify user question answer is stored and retrieved under testUserId
+  recordInterruptHistory(dummyThreadId, 'preferred_shift', 'Morning Shift', testUserId);
+  const retrievedAns = getInterruptAnswer(dummyThreadId, 'preferred_shift', testUserId);
+  assert.strictEqual(retrievedAns, 'Morning Shift', 'Answer must be retrieved properly under userId');
+  console.log('✓ Test 5 PASSED: Repeating permissions eliminated and user answers verified.\n');
+
   console.log('===================================================================');
-  console.log('ALL PHASE 5 MODES & PERMISSIONS TESTS PASSED (4/4)!');
+  console.log('ALL PHASE 5 MODES & PERMISSIONS TESTS PASSED (5/5)!');
   console.log('===================================================================');
 }
 

@@ -648,9 +648,29 @@ export class OmniEngine extends EventEmitter {
 
     const resumeAnswerRecords = [];
     if (resume) {
-      const approvedTool = resume.toolName || resume.pendingToolName;
-      if (resume.approved && approvedTool && approvedTool !== 'ask_user') {
-        addThreadApproval(threadId, approvedTool);
+      const savedState = getThreadState(threadId, userId);
+      const savedInterrupt = savedState?.interrupt;
+      const approvedTool = resume.toolName || resume.pendingToolName || savedInterrupt?.pendingToolName;
+      const isApproved =
+        resume.approved === true ||
+        /allow|proceed|approve|yes/i.test(String(resume.answer || ''));
+
+      if (isApproved) {
+        const pendingArgs = resume.args || resume.toolArgs || savedInterrupt?.pendingToolArgs || {};
+        const targetUrl = pendingArgs.url || pendingArgs.targetUrl || '';
+        if (targetUrl) {
+          const h = hostOf(targetUrl);
+          if (h) {
+            approvedHosts.add(h);
+            addThreadApproval(threadId, h, userId);
+            addThreadApproval(threadId, `host:${h}`, userId);
+          }
+        }
+        if (approvedTool && approvedTool !== 'ask_user') {
+          addThreadApproval(threadId, approvedTool, userId);
+          addThreadApproval(threadId, `${approvedTool}:*`, userId);
+        }
+        addThreadApproval(threadId, '*', userId);
       }
       clearInterrupt(threadId, userId);
 
@@ -659,7 +679,7 @@ export class OmniEngine extends EventEmitter {
       if (qas.length > 0) {
         for (const qa of qas) {
           if (qa.question) {
-            recordInterruptHistory(threadId, qa.question, qa.answer);
+            recordInterruptHistory(threadId, qa.question, qa.answer, userId);
             if (userId) {
               resumeAnswerRecords.push(
                 recordBioAnswer(userId, threadId, { question: qa.question, answer: qa.answer })
@@ -668,7 +688,7 @@ export class OmniEngine extends EventEmitter {
           }
         }
       } else if (resume.answer !== undefined) {
-        recordInterruptHistory(threadId, approvedTool || 'ask_user', resume.answer);
+        recordInterruptHistory(threadId, approvedTool || 'ask_user', resume.answer, userId);
         if (userId) {
           resumeAnswerRecords.push(
             recordBioAnswer(userId, threadId, {
@@ -1013,11 +1033,12 @@ export class OmniEngine extends EventEmitter {
             let perm = checkPermission(toolName, toolArgs, mode, getThreadApprovals(threadId, userId), {
               bio: bioAccess,
               navigation: {
-                currentHost: currentBrowserHost,
+                currentHost: currentBrowserHost || hostOf(toolArgs.url || toolArgs.targetUrl),
                 approvedHosts,
                 formWorkApproved,
                 fillOnlyIntent,
-                explicitGoAhead
+                explicitGoAhead,
+                userApproved: Boolean(resume?.approved || resumeApprovedBrowserAction || /allow|proceed|approve|yes/i.test(String(resume?.answer || '')))
               }
             });
 
@@ -1184,9 +1205,28 @@ export class OmniEngine extends EventEmitter {
                 ...(normalizedQuestions.length > 0 ? { questions: normalizedQuestions } : {})
               };
 
-              // Check if question(s) were already answered in this thread's interrupt history
-              if (toolName === 'ask_user') {
-                const checkAnswer = (q) => getInterruptAnswer(threadId, q);
+              // Check if question(s) or permissions were already answered/approved in this thread
+              const threadApprovals = getThreadApprovals(threadId, userId);
+              const targetHost = hostOf(toolArgs.url || toolArgs.targetUrl || '');
+              const hostAlreadyApproved =
+                targetHost &&
+                (threadApprovals.has(targetHost) ||
+                  threadApprovals.has(`host:${targetHost}`) ||
+                  isApprovedHost(targetHost, approvedHosts));
+
+              const isToolAlreadyApproved =
+                threadApprovals.has('*') ||
+                threadApprovals.has(toolName) ||
+                threadApprovals.has(`${toolName}:*`) ||
+                hostAlreadyApproved;
+
+              if (isToolAlreadyApproved) {
+                console.log(
+                  `[Omni Engine] Permission for "${toolName}" (${targetHost || 'action'}) already approved in thread ${threadId}. Proceeding with execution.`
+                );
+                // Fall through to tool execution step 3 instead of interrupting again
+              } else if (toolName === 'ask_user') {
+                const checkAnswer = (q) => getInterruptAnswer(threadId, q, userId);
                 const questionsToCheck =
                   normalizedQuestions.length > 0 ? normalizedQuestions : [{ question: rawQuestion }];
                 const allAnswered = questionsToCheck.every((q) => checkAnswer(q.question) !== undefined);
@@ -1215,35 +1255,63 @@ export class OmniEngine extends EventEmitter {
                   });
                   continue;
                 }
-              }
 
-              saveInterrupt(threadId, {
-                runId,
-                pendingToolName: toolName,
-                pendingToolArgs: enrichedArgs
-              }, userId);
-              this.emit('event', {
-                type: 'INTERRUPT',
-                threadId,
-                runId,
-                tool: toolName,
-                args: enrichedArgs,
-                question: rawQuestion,
-                options: normalizedOptions,
-                questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined,
-                context: toolArgs.context || (toolName !== 'ask_user' ? perm.reason : undefined),
-                reason: toolName === 'ask_user' ? 'user_question' : perm.reason || 'user_confirmation'
-              });
-              return {
-                status: 'interrupted',
-                threadId,
-                runId,
-                pendingTool: toolName,
-                args: enrichedArgs,
-                question: rawQuestion,
-                options: normalizedOptions,
-                questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined
-              };
+                saveInterrupt(threadId, {
+                  runId,
+                  pendingToolName: toolName,
+                  pendingToolArgs: enrichedArgs
+                }, userId);
+                this.emit('event', {
+                  type: 'INTERRUPT',
+                  threadId,
+                  runId,
+                  tool: toolName,
+                  args: enrichedArgs,
+                  question: rawQuestion,
+                  options: normalizedOptions,
+                  questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined,
+                  context: toolArgs.context || undefined,
+                  reason: 'user_question'
+                });
+                return {
+                  status: 'interrupted',
+                  threadId,
+                  runId,
+                  pendingTool: toolName,
+                  args: enrichedArgs,
+                  question: rawQuestion,
+                  options: normalizedOptions,
+                  questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined
+                };
+              } else {
+                saveInterrupt(threadId, {
+                  runId,
+                  pendingToolName: toolName,
+                  pendingToolArgs: enrichedArgs
+                }, userId);
+                this.emit('event', {
+                  type: 'INTERRUPT',
+                  threadId,
+                  runId,
+                  tool: toolName,
+                  args: enrichedArgs,
+                  question: rawQuestion,
+                  options: normalizedOptions,
+                  questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined,
+                  context: toolArgs.context || perm.reason || undefined,
+                  reason: perm.reason || 'user_confirmation'
+                });
+                return {
+                  status: 'interrupted',
+                  threadId,
+                  runId,
+                  pendingTool: toolName,
+                  args: enrichedArgs,
+                  question: rawQuestion,
+                  options: normalizedOptions,
+                  questions: normalizedQuestions.length > 0 ? normalizedQuestions : undefined
+                };
+              }
             }
 
             // 3. Execution with retry (always confined to isolated runSandbox.workDir)
