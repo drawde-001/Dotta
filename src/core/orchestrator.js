@@ -91,6 +91,7 @@ import {
 import { redactPiiAndInternalIds } from './levels/plan-file.js';
 import { runMultiLevelFormPipeline } from './levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from './levels/extractor.js';
+import { hasNaturalUserApprovalIntent, hasDoNotSubmitIntent } from './levels/reviewer.js';
 
 export { runMultiLevelFormPipeline, extractLiveDomSchemaInPlaywright };
 
@@ -186,9 +187,9 @@ You possess direct, real-world execution tools to fulfill user instructions:
   * When an application form has an optional "Comments", "Cover Letter", or "Tell us about yourself" field, synthesize a tailored response grounded strictly in the user's BIO facts and stored answers.
 - MODE-AWARE FINAL SUBMIT GATE (Turbo, Default, Review):
   * Intermediate step buttons ("Next", "Continue", "Save & Continue") may be clicked to advance multi-step forms.
-  * Final submission buttons ("Submit", "Submit Application", "Send Application", "Finish") MUST respect the active execution mode and user intent:
-    - In Default and Review modes, or whenever the user asked only to "fill" / "prepare" the form without explicitly asking to submit, ALWAYS pause and request user confirmation before clicking the final submit button.
-    - In Turbo mode, click the final submit button autonomously ONLY when the user explicitly instructed you to submit/apply AND all required fields are verified with zero unresolved prompt-injection warnings.
+  * Final submission buttons ("Submit", "Submit Application", "Send Application", "Finish") follow the active execution mode, BIO rules, and user intent:
+    - In Turbo mode: once all required fields and file uploads are completed using data available in BIO, autonomously click the final submit button without pausing to ask for approval — UNLESS the user or BIO Dos/Don'ts explicitly said not to submit / to ask first, or it is a high-risk application where the user did not explicitly say "go ahead".
+    - In Default and Request-a-Review modes: pause and ask for user approval before clicking the final submit button, unless (in Default mode or on a high-risk application) the user explicitly stated "go ahead" and all required BIO contexts and data are available.
 
 6. Structured UI Components & Execution Plans:
 - "agent_plan": Create and render an interactive multi-step execution plan card in the UI.
@@ -569,9 +570,19 @@ export class OmniEngine extends EventEmitter {
       })
     ];
     const approvedHosts = collectApprovedHosts(userTexts);
-    const formWorkApproved = /\b(fill|apply|application|upload|submit)\b/i.test(
-      String(instruction || '')
-    );
+    const instrStr = String(instruction || '');
+    const bioRulesStr = [bioProfile?.fields?.dosAndDonts, bioProfile?.fields?.rules]
+      .filter(Boolean)
+      .join('\n');
+    const resumeApprovedBrowserAction =
+      resume?.approved === true &&
+      (resume.toolName || resume.pendingToolName) === 'browser_action';
+    const explicitGoAhead =
+      !hasDoNotSubmitIntent(instrStr) &&
+      hasNaturalUserApprovalIntent(instrStr, { userApproved: resumeApprovedBrowserAction });
+    const fillOnlyIntent =
+      hasDoNotSubmitIntent(instrStr) || (hasDoNotSubmitIntent(bioRulesStr) && !explicitGoAhead);
+    const formWorkApproved = /\b(fill|apply|application|upload|submit)\b/i.test(instrStr);
     let currentBrowserHost = '';
 
     // Create an isolated, temporary per-run sandbox strictly outside the project workspace
@@ -972,7 +983,9 @@ export class OmniEngine extends EventEmitter {
               navigation: {
                 currentHost: currentBrowserHost,
                 approvedHosts,
-                formWorkApproved
+                formWorkApproved,
+                fillOnlyIntent,
+                explicitGoAhead
               }
             });
 
@@ -1219,7 +1232,17 @@ export class OmniEngine extends EventEmitter {
                   runId,
                   threadId,
                   userId,
-                  model
+                  model,
+                  formTask: {
+                    userInstruction: instrStr,
+                    mode,
+                    formWorkApproved,
+                    fillOnlyIntent,
+                    userApproved: resumeApprovedBrowserAction,
+                    approvals: getThreadApprovals(threadId, userId),
+                    approvedHosts: Array.from(approvedHosts),
+                    onEvent: (evt) => this.emit('event', { ...evt, threadId, runId })
+                  }
                 })
             });
 
@@ -1247,10 +1270,25 @@ export class OmniEngine extends EventEmitter {
               toolName === 'file_delete';
             const fileArtifact = isFileOperation ? getLatestFileArtifact(runId || 'default') : null;
 
+            // UI-facing output: BIO/process tools never stream raw personal
+            // values or internal IDs to the chat. The model still receives
+            // the full output via toolResults below.
+            let uiOutput = execResult.output;
+            if (toolName === 'bio_get' || toolName === 'bio_search' || toolName === 'bio_index') {
+              uiOutput =
+                execResult.status === 'error'
+                  ? redactPiiAndInternalIds(String(execResult.output || ''), bioProfile)
+                  : toolName === 'bio_index'
+                    ? 'Indexed the active BIO profile.'
+                    : 'Retrieved BIO fields for the active profile.';
+            } else if (typeof uiOutput === 'string') {
+              uiOutput = redactPiiAndInternalIds(uiOutput, bioProfile);
+            }
+
             this.emit('event', {
               type: 'TOOL_RESULT',
               name: toolName,
-              output: execResult.output,
+              output: uiOutput,
               fileArtifact: fileArtifact || undefined,
               id: fc.id,
               status: execResult.status,
@@ -1369,7 +1407,13 @@ export class OmniEngine extends EventEmitter {
 
           persistTurn(threadId, {
             role: 'model',
-            parts: streamResult.modelParts,
+            parts: Array.isArray(streamResult.modelParts)
+              ? streamResult.modelParts.map((p) =>
+                  typeof p?.text === 'string' && !p.thought
+                    ? { ...p, text: redactPiiAndInternalIds(p.text, bioProfile) }
+                    : p
+                )
+              : streamResult.modelParts,
             turnIndex: turnCount,
             usageMetadata: streamResult.usageMetadata,
             userId

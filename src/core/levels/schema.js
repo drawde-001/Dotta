@@ -281,12 +281,20 @@ export function validateReviewerDecision(payload) {
     return recordDrop('reviewer_decision', ['Reviewer reason must be a non-empty string.'], JSON.stringify(obj));
   }
 
+  const requiresUserConfirmation =
+    typeof obj.requiresUserConfirmation === 'boolean'
+      ? obj.requiresUserConfirmation
+      : typeof obj.userAuthorizedSubmit === 'boolean'
+        ? !obj.userAuthorizedSubmit
+        : undefined;
+
   return {
     valid: true,
     dropped: false,
     data: {
       decision,
-      reason: obj.reason.trim().slice(0, 400)
+      reason: obj.reason.trim().slice(0, 400),
+      ...(typeof requiresUserConfirmation === 'boolean' ? { requiresUserConfirmation } : {})
     }
   };
 }

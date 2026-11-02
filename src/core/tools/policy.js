@@ -230,13 +230,19 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
       if (isFinalSubmit) {
         const normMode = String(mode || 'turbo').toLowerCase();
         const fillOnlyIntent = Boolean(context?.navigation?.fillOnlyIntent);
-        if (
-          normMode === 'default' ||
-          normMode === 'review' ||
-          normMode === 'request_review' ||
-          normMode === 'confirm' ||
-          fillOnlyIntent
-        ) {
+        const explicitGoAhead = Boolean(context?.navigation?.explicitGoAhead) && !fillOnlyIntent;
+        const isHighRiskApp =
+          Boolean(context?.navigation?.isHighRiskApplication) ||
+          /\b(wire\s+transfer|bank\s+transfer|payment|binding\s+legal|tax\s+filing|loan\s+application|credit\s+application|legally\s+binding|non-refundable|financial\s+commitment)\b/i.test(
+            target
+          );
+        if (fillOnlyIntent || normMode === 'review' || normMode === 'request_review') {
+          return {
+            decision: 'ask',
+            reason: `Final submission ("${args.selectorOrText}") requires user confirmation before submitting the form.`
+          };
+        }
+        if (!explicitGoAhead && (normMode === 'default' || normMode === 'confirm' || isHighRiskApp)) {
           return {
             decision: 'ask',
             reason: `Final submission ("${args.selectorOrText}") requires user confirmation before submitting the form.`

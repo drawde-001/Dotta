@@ -12,6 +12,7 @@ import { AppRail } from '@/components/AppRail';
 import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
 import { getUserId } from '@/lib/user';
+import { sanitizeChatText } from '../core/levels/redact-text.js';
 import {
   Globe,
   PenLine,
@@ -703,15 +704,18 @@ export default function App() {
                 settleReasoning();
                 const lastPart = contentParts[contentParts.length - 1];
                 if (lastPart && lastPart.type === 'text') {
+                  const rawText = (lastPart.rawText ?? lastPart.text) + event.chunk;
                   contentParts[contentParts.length - 1] = {
                     ...lastPart,
-                    text: lastPart.text + event.chunk
+                    rawText,
+                    text: sanitizeChatText(rawText)
                   };
                 } else {
                   contentParts.push({
                     type: 'text',
                     id: `text-${contentParts.length}`,
-                    text: event.chunk
+                    rawText: event.chunk,
+                    text: sanitizeChatText(event.chunk)
                   });
                 }
               } else if (event.type === 'THOUGHT_CHUNK' && event.chunk) {
@@ -1021,6 +1025,11 @@ export default function App() {
             data: { questions: part.questions || part.questionsAndAnswers || [] },
             questions: part.questions || part.questionsAndAnswers || []
           };
+        }
+        if (pType === 'text' && msg.role === 'assistant') {
+          // eslint-disable-next-line no-unused-vars
+          const { rawText, ...safePart } = part;
+          return { ...safePart, text: sanitizeChatText(safePart.text) };
         }
         if (
           pType === 'text' ||

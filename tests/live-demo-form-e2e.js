@@ -73,7 +73,7 @@ const DEMO_INJECTION_FORM_HTML = `<!DOCTYPE html>
     <label for="photo">Profile Photo *</label>
     <input id="photo" name="photo" type="file" required />
 
-    <button id="submitBtn" type="submit">Submit Application</button>
+    <button id="submitBtn" type="submit" onclick="window.__formSubmitted = true; return false;">Submit Application</button>
   </form>
 </body>
 </html>`;
@@ -384,6 +384,66 @@ async function main() {
     assert.equal(unseenDomState.clickedFilterAI, true, 'Clicked AI Startups filter button');
     assert.equal(unseenDomState.openedFirstResult, true, 'Clicked Open First Result link');
     assert.equal(unseenDomState.clickedContactTeam, true, 'Clicked Contact Team action button');
+
+    // =========================================================================
+    // PART 3: LIVE TURBO MODE AUTONOMOUS SUBMISSION & HIGH-RISK "GO AHEAD"
+    // =========================================================================
+    console.log('\n================================================================================');
+    console.log('PART 3: LIVE TURBO MODE AUTONOMOUS SUBMISSION & HIGH-RISK "GO AHEAD" VERIFICATION');
+    console.log('================================================================================\n');
+
+    await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
+    const turboHtml = await page.content();
+
+    const turboRun = await runMultiLevelFormPipeline({
+      runId: `live-turbo-${Date.now()}`,
+      userId: LIVE_USER_ID,
+      userInstruction: `Fill out the job application form at ${liveUrl}`,
+      url: liveUrl,
+      html: turboHtml,
+      mode: 'turbo',
+      model: 'muse-spark-open',
+      browserExecutor: livePlaywrightExecutor
+    });
+
+    const turboSubmittedInDom = await page.evaluate(() => Boolean(window.__formSubmitted));
+    console.log('Turbo Mode Reviewer Decision:', JSON.stringify(turboRun.reviewer.decisions[0], null, 2));
+    console.log('Turbo Mode submittedAutomatically:', turboRun.reviewer.submittedAutomatically);
+    console.log('Live Playwright DOM window.__formSubmitted:', turboSubmittedInDom);
+    console.log('Turbo Mode Safe Summary:', turboRun.safeUserMessage);
+
+    assert.equal(turboRun.ok, true);
+    assert.equal(
+      turboRun.reviewer.decisions[0].requiresUserConfirmation,
+      false,
+      'Turbo mode does NOT pause for confirmation when all required BIO data are ready'
+    );
+    assert.equal(turboRun.reviewer.submittedAutomatically, true, 'Turbo mode automatically submitted the form');
+    assert.equal(turboSubmittedInDom, true, 'Submit button was clicked in the live Playwright DOM in Turbo mode');
+
+    // High-Risk Application WITH explicit "go ahead"
+    await page.goto(liveUrl, { waitUntil: 'domcontentloaded' });
+    const highRiskGoAheadRun = await runMultiLevelFormPipeline({
+      runId: `live-highrisk-goahead-${Date.now()}`,
+      userId: LIVE_USER_ID,
+      userInstruction: `Fill out the application at ${liveUrl} and go ahead`,
+      url: liveUrl,
+      html: turboHtml,
+      mode: 'turbo',
+      isHighRiskApplication: true,
+      model: 'muse-spark-open',
+      browserExecutor: livePlaywrightExecutor
+    });
+
+    const highRiskSubmittedInDom = await page.evaluate(() => Boolean(window.__formSubmitted));
+    console.log('High-Risk + Explicit "Go Ahead" Reviewer Decision:', JSON.stringify(highRiskGoAheadRun.reviewer.decisions[0], null, 2));
+    assert.equal(
+      highRiskGoAheadRun.reviewer.decisions[0].requiresUserConfirmation,
+      false,
+      'High-risk application with explicit "go ahead" and complete BIO data submits without pausing'
+    );
+    assert.equal(highRiskGoAheadRun.reviewer.submittedAutomatically, true);
+    assert.equal(highRiskSubmittedInDom, true, 'High-risk application clicked submit in live DOM when user said go ahead');
 
     console.log('\n================================================================================');
     console.log('LIVE END-TO-END ADVERSARIAL DEMO FORM & UNSEEN MODERN WEB APP PASSED 100%!');

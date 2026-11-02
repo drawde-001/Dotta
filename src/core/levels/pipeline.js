@@ -17,11 +17,16 @@ import { createRunSandbox, destroyRunSandbox } from '../execution/run-sandbox.js
 import { collectApprovedHosts } from '../tools/policy.js';
 import { getActiveProfile } from '../bio/store.js';
 import { getSameFamilyModelCandidates } from '../media/media-processor.js';
+import { executeLevelTool } from './registries.js';
 import { extractFormSchemaFromHtml } from './extractor.js';
 import { runReaderLevel } from './reader.js';
 import { compareExtractorAndReaderSchemas } from './comparator.js';
 import { runPlannerLevel } from './planner.js';
-import { runCustomPlanExecutor } from './executor.js';
+import {
+  runCustomPlanExecutor,
+  buildCustomWebTaskScript,
+  verifyCustomBrowserScriptSafety
+} from './executor.js';
 import { runReviewerLevel } from './reviewer.js';
 import {
   readTemporaryFillPlan,
@@ -39,13 +44,19 @@ export async function runMultiLevelFormPipeline({
   model = 'muse-spark-open',
   attachments = [],
   storedAnswers = {},
+  isHighRiskApplication = false,
   mockReaderCall = null,
   mockReviewerCall = null,
   browserExecutor = null,
   proposedPostFillActions = [],
   previousCheckpoint = null,
   onEvent = null,
-  simulateCrashAfterPlanWrite = false
+  simulateCrashAfterPlanWrite = false,
+  userApproved = false,
+  approvals = null,
+  useLiveModel = false,
+  mockPlannerCall = null,
+  liveExtractedSchema = null
 } = {}) {
   const startTimeMs = Date.now();
   const emit = (evt) => {
@@ -81,7 +92,11 @@ export async function runMultiLevelFormPipeline({
     });
 
     // LEVEL 2A: Deterministic Code Extractor inside Level 1 sandbox
-    const extractorResult = extractFormSchemaFromHtml(html, { url });
+    // (prefer the live Playwright DOM + computed-style extraction when available)
+    const extractorResult =
+      liveExtractedSchema && liveExtractedSchema.schema
+        ? liveExtractedSchema
+        : extractFormSchemaFromHtml(html, { url });
     emit({
       type: 'PIPELINE_LEVEL_COMPLETE',
       level: 'level2a_extractor',
@@ -95,7 +110,8 @@ export async function runMultiLevelFormPipeline({
     const readerResult = await runReaderLevel({
       rawPageText: extractorResult.visiblePageText,
       model: activeModel,
-      mockModelCall: mockReaderCall
+      mockModelCall: mockReaderCall,
+      useLiveModel
     });
     emit({
       type: 'PIPELINE_LEVEL_COMPLETE',
@@ -146,7 +162,14 @@ export async function runMultiLevelFormPipeline({
       interactiveElements: extractorResult.schema?.interactiveElements || [],
       requiredDisputedForUser: comparison.requiredDisputedForUser,
       attachmentOverrides,
-      storedAnswers
+      storedAnswers,
+      userApproved,
+      approvals,
+      useLiveModel,
+      mockPlannerModelCall: mockPlannerCall,
+      submitSelectors: (extractorResult.schema?.submitButtons || [])
+        .map((b) => b.selector)
+        .filter(Boolean)
     });
 
     if (!plannerResult.valid) {
@@ -202,6 +225,11 @@ export async function runMultiLevelFormPipeline({
       ...(plannerResult.unsupportedLog || [])
     ];
 
+    const bioRulesText = [profile?.fields?.dosAndDonts, profile?.fields?.rules]
+      .filter(Boolean)
+      .join('\n');
+    const allRequiredFieldsReady = plannerResult.batchedQuestions.length === 0;
+
     const reviewerDecisions = [];
     const actionsToReview = [...proposedPostFillActions];
     if (
@@ -211,9 +239,23 @@ export async function runMultiLevelFormPipeline({
     ) {
       actionsToReview.push({
         kind: 'submit',
-        buttonLabel: extractorResult.schema.submitButtons[0].label
+        buttonLabel: extractorResult.schema.submitButtons[0].label,
+        selector:
+          extractorResult.schema.submitButtons[0].selector ||
+          'button[type="submit"], input[type="submit"]',
+        isHighRiskApplication
       });
     }
+
+    let submittedAutomatically = false;
+    let submittedButtonLabel = null;
+
+    const defaultBrowserExec = async (toolName, toolArgs) => {
+      if (typeof browserExecutor === 'function') {
+        return await browserExecutor(toolName, toolArgs);
+      }
+      return { ok: true, toolName, toolArgs };
+    };
 
     for (const action of actionsToReview) {
       const decision = await runReviewerLevel({
@@ -224,8 +266,14 @@ export async function runMultiLevelFormPipeline({
         currentOriginHost,
         approvedHosts,
         scannerWarnings: allScannerWarnings,
+        bioRulesText,
+        allRequiredFieldsReady,
+        isHighRiskApplication: Boolean(isHighRiskApplication || action.isHighRiskApplication),
         model: activeModel,
-        mockModelCall: mockReviewerCall
+        mockModelCall: mockReviewerCall,
+        userApproved,
+        approvals,
+        useLiveModel
       });
       reviewerDecisions.push(decision);
       emit({
@@ -237,6 +285,46 @@ export async function runMultiLevelFormPipeline({
         proposedAction: decision.proposedAction,
         timestamp: Date.now()
       });
+
+      // When Reviewer allows final submit without user confirmation (e.g. Turbo mode or explicit "go ahead" with required BIO data ready),
+      // execute the submit click autonomously inside the Level 1 Browser Sandbox!
+      if (
+        String(action.kind || '').toLowerCase() === 'submit' &&
+        decision.decision === 'allow' &&
+        decision.requiresUserConfirmation === false
+      ) {
+        const submitActionItem = {
+          elementKey: 'final_submit_btn',
+          action: 'click',
+          label: action.buttonLabel || 'Submit',
+          selector: action.selector || 'button[type="submit"], input[type="submit"]'
+        };
+        const { scriptSource } = buildCustomWebTaskScript([submitActionItem]);
+        const safety = verifyCustomBrowserScriptSafety(scriptSource);
+        if (!safety.safe) {
+          throw new Error(`Blocked unsafe submit script: ${safety.violations.join('; ')}`);
+        }
+        await executeLevelTool({
+          level: 'browser_subagent',
+          toolName: 'browser_action',
+          toolArgs: {
+            action: 'batch_fill_section',
+            section: 'Final Submission',
+            script: scriptSource,
+            actions: [submitActionItem]
+          },
+          context: {},
+          executor: defaultBrowserExec
+        });
+        submittedAutomatically = true;
+        submittedButtonLabel = submitActionItem.label;
+        emit({
+          type: 'FINAL_SUBMIT_EXECUTED',
+          buttonLabel: submittedButtonLabel,
+          mode,
+          timestamp: Date.now()
+        });
+      }
     }
 
     // Build redacted user-facing summary (NEVER contains raw DOB, street address, or internal IDs)
@@ -267,6 +355,11 @@ export async function runMultiLevelFormPipeline({
     if (plannerResult.batchedQuestions.length > 0) {
       rawSummaryLines.push(
         `Please provide answers for ${plannerResult.batchedQuestions.length} remaining required question(s) in a single step.`
+      );
+    }
+    if (submittedAutomatically) {
+      rawSummaryLines.push(
+        `Submitted the application automatically via "${submittedButtonLabel}".`
       );
     }
 
@@ -306,9 +399,15 @@ export async function runMultiLevelFormPipeline({
         batchedQuestions: plannerResult.batchedQuestions,
         planFilePathDuringRun: planFileRecord?.planFilePath || null
       },
-      executor: executorResult,
+      executor: {
+        ...executorResult,
+        submittedAutomatically,
+        submittedButtonLabel
+      },
       reviewer: {
-        decisions: reviewerDecisions
+        decisions: reviewerDecisions,
+        submittedAutomatically,
+        submittedButtonLabel
       },
       safeUserMessage,
       getCleanupStatus: () => ({

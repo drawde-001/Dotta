@@ -57,6 +57,8 @@ import {
   closeLiveBrowser,
   setBrowserBroadcast
 } from './browser-stream.js';
+import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
+import { extractLiveDomSchemaInPlaywright } from '../src/core/levels/extractor.js';
 
 dotenv.config();
 
@@ -207,7 +209,81 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
   }
 });
 
-engine.registerTool({ name: 'browser_read_page' }, async (args) => {
+function createLiveBrowserExecutor(page, runId) {
+  return async (toolName, toolArgs) => {
+    if (toolName === 'browser_action') {
+      const { action, script, selector, selectorOrText, value } = toolArgs || {};
+      if (action === 'batch_fill_section' && script) {
+        const evalRes = await page.evaluate((code) => {
+          try {
+            return (0, eval)(code);
+          } catch (e) {
+            return { error: e.message };
+          }
+        }, script).catch((e) => ({ error: e.message }));
+        await page.waitForTimeout(300);
+        return { ok: true, evalRes };
+      }
+      if (action === 'upload') {
+        const stagedFile = resolveStagedFile(String(value || '').trim(), runId);
+        if (stagedFile) {
+          const uploadPath = stagedFile.sandboxPath || stagedFile.absPath;
+          const targetSel = selector || selectorOrText;
+          let uploaded = false;
+          if (targetSel) {
+            try {
+              await page.locator(targetSel).first().setInputFiles(uploadPath, { timeout: 6000 });
+              uploaded = true;
+            } catch {}
+          }
+          if (!uploaded) {
+            const inputs = page.locator('input[type="file"]');
+            const count = await inputs.count().catch(() => 0);
+            for (let i = 0; i < count; i++) {
+              try {
+                await inputs.nth(i).setInputFiles(uploadPath, { timeout: 6000 });
+                uploaded = true;
+                break;
+              } catch {}
+            }
+          }
+          await page.waitForTimeout(350);
+          return { ok: uploaded, action: 'upload' };
+        }
+        return { ok: false, error: 'unknown_upload_ref' };
+      }
+      if (action === 'click') {
+        const target = selector || selectorOrText;
+        if (target) {
+          const looksLikeCss = /^[.#\[]/.test(target) || target.includes('>') || target.includes('=');
+          if (looksLikeCss) {
+            await page.click(target, { timeout: 3500 }).catch(() => {});
+          } else {
+            await page.getByRole('button', { name: target }).first().click({ timeout: 2500 }).catch(async () => {
+              await page.click(target, { timeout: 2000 }).catch(() => {});
+            });
+          }
+        }
+        await page.waitForTimeout(350);
+        return { ok: true, action: 'click' };
+      }
+      if (action === 'type') {
+        const target = selector || selectorOrText;
+        if (target) {
+          await page.fill(target, String(value || ''), { timeout: 3500 }).catch(() => {});
+        }
+        await page.waitForTimeout(200);
+        return { ok: true, action: 'type' };
+      }
+    }
+    if (toolName === 'snapshot_read') {
+      return { ok: true, url: page.url(), title: await page.title().catch(() => '') };
+    }
+    return { ok: true };
+  };
+}
+
+engine.registerTool({ name: 'browser_read_page' }, async (args, context = {}) => {
   cancelBrowserTermination();
   try {
     const rawTarget = String(args.url || '').trim();
@@ -222,19 +298,52 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
     const normalizeUrl = (u) => String(u || '').replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
     const isAlreadyOnPage = currentUrl && normalizeUrl(currentUrl) === normalizeUrl(targetUrl);
 
-    if (isAlreadyOnPage) {
+    if (!isAlreadyOnPage) {
+      console.log(`[Omni Engine] Navigating live browser to ${targetUrl}...`);
+      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
+    } else {
       console.log(`[Omni Engine] Live browser already on ${targetUrl}. Extracting live DOM directly without refresh to preserve form inputs.`);
-      const title = await page.title().catch(() => targetUrl);
-      const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
-      return `### Page: ${title}\n**URL**: ${targetUrl} (already active, form inputs preserved)\n\n${text}`;
     }
 
-    console.log(`[Omni Engine] Navigating live browser to ${targetUrl}...`);
-    await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
     const title = await page.title().catch(() => targetUrl);
-    const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
 
-    return `### Page: ${title}\n**URL**: ${targetUrl}\n\n${text}`;
+    // If this is a form or application filling task, execute the Multi-Level Form Pipeline in batches!
+    if (context?.formTask?.formWorkApproved) {
+      try {
+        const liveSchema = await extractLiveDomSchemaInPlaywright(page).catch(() => null);
+        if (liveSchema && Array.isArray(liveSchema.schema?.fields) && liveSchema.schema.fields.length >= 2) {
+          console.log(`[Omni Engine] Detected form on ${targetUrl} with ${liveSchema.schema.fields.length} field(s). Running Multi-Level Form Pipeline in batches...`);
+          const pipeRes = await runMultiLevelFormPipeline({
+            runId: context?.runId || `live-pipe-${Date.now()}`,
+            userId: context?.userId,
+            userInstruction: context?.formTask?.userInstruction || 'Fill out this application form',
+            url: targetUrl,
+            html: await page.content().catch(() => ''),
+            mode: context?.formTask?.mode || 'turbo',
+            model: context?.model || 'muse-spark-open',
+            liveExtractedSchema: liveSchema,
+            userApproved: Boolean(context?.formTask?.userApproved),
+            approvals: context?.formTask?.approvals,
+            useLiveModel: true,
+            browserExecutor: createLiveBrowserExecutor(page, context?.runId),
+            onEvent: (evt) => {
+              if (typeof context?.formTask?.onEvent === 'function') {
+                context.formTask.onEvent(evt);
+              }
+            }
+          });
+
+          if (pipeRes && pipeRes.ok) {
+            return `### Page: ${title}\n**URL**: ${targetUrl}\n\n${pipeRes.safeUserMessage}`;
+          }
+        }
+      } catch (pipeErr) {
+        console.error('[Omni Engine] Multi-level form pipeline failed in browser_read_page:', pipeErr?.message || pipeErr);
+      }
+    }
+
+    const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
+    return `### Page: ${title}\n**URL**: ${targetUrl}${isAlreadyOnPage ? ' (already active, form inputs preserved)' : ''}\n\n${text}`;
   } catch (err) {
     console.error('[Omni Engine] browser_read_page failed:', err?.message || err);
     return `Browser read page error: ${err?.message || 'Failed to navigate in live browser'}`;
@@ -244,11 +353,23 @@ engine.registerTool({ name: 'browser_read_page' }, async (args) => {
 engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
   cancelBrowserTermination();
   try {
-    const { action, selectorOrText, value, direction = 'down', amount = 500, pressEnter } = args || {};
+    const { action, selectorOrText, value, direction = 'down', amount = 500, pressEnter, script } = args || {};
     let page = getLiveBrowserPage();
     if (!page) {
       const res = await initLiveBrowser(broadcast);
       page = res.page;
+    }
+
+    if (action === 'batch_fill_section' && script) {
+      const scriptResult = await page.evaluate((code) => {
+        try {
+          return (0, eval)(code);
+        } catch (e) {
+          return { error: e.message };
+        }
+      }, script).catch((e) => ({ error: e.message }));
+      await page.waitForTimeout(300);
+      return `Executed batch fill section "${args.section || 'General'}": ${JSON.stringify(scriptResult)}`;
     }
 
     if (action === 'click') {
