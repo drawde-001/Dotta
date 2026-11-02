@@ -64,7 +64,7 @@ export function isRiskyAction(proposedAction = {}, { currentOriginHost = '', app
   if (kind === 'out_of_plan_tool') return { risky: true, category: 'out_of_plan_tool' };
 
   if (kind === 'navigate') {
-    const targetHost = extractHost(proposedAction.targetUrl || '');
+    const targetHost = extractHost(proposedAction.targetUrl || proposedAction.targetOrigin || '');
     if (!targetHost) return { risky: false, category: null };
     if (currentOriginHost && targetHost !== currentOriginHost.toLowerCase()) {
       return { risky: true, category: 'cross_domain_navigation', targetHost };
@@ -76,7 +76,7 @@ export function isRiskyAction(proposedAction = {}, { currentOriginHost = '', app
   }
 
   if (kind === 'upload') {
-    const targetHost = extractHost(proposedAction.targetUrl || '');
+    const targetHost = extractHost(proposedAction.targetUrl || proposedAction.targetOrigin || '');
     if (
       (currentOriginHost && targetHost && targetHost !== currentOriginHost.toLowerCase()) ||
       (targetHost && !isApprovedHost(targetHost, approvedHosts))
@@ -98,7 +98,7 @@ function evaluateDeterministicPolicy({
   scannerWarnings = []
 }) {
   const kind = String(proposedAction.kind || '').toLowerCase();
-  const targetHost = extractHost(proposedAction.targetUrl || '');
+  const targetHost = extractHost(proposedAction.targetUrl || proposedAction.targetOrigin || '');
 
   // 1. Out-of-plan tool call is always denied
   if (kind === 'out_of_plan_tool') {
