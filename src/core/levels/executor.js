@@ -174,28 +174,128 @@ export function buildCustomSectionFillScript(sectionItems = []) {
       } else if (item.type === 'radio') {
         const radios = document.querySelectorAll('input[type="radio"][name="' + (el.name || item.fieldKey) + '"]');
         let matched = false;
+        const itemVal = String(item.value || '').trim().toLowerCase();
         radios.forEach((r) => {
-          if (String(r.value).toLowerCase() === String(item.value).toLowerCase()) {
+          const rVal = String(r.value || '').trim().toLowerCase();
+          if (
+            rVal === itemVal ||
+            (itemVal.startsWith('f') && rVal === 'f') ||
+            (itemVal.startsWith('m') && rVal === 'm')
+          ) {
             r.checked = true;
             r.dispatchEvent(new Event('change', { bubbles: true }));
             matched = true;
           }
         });
         if (!matched) el.checked = true;
+      } else if (tag === 'SELECT') {
+        const valStr = String(item.value || '').trim().toLowerCase();
+        let matched = false;
+        // Pass 1: Exact match on value or text
+        for (let i = 0; i < el.options.length; i++) {
+          const opt = el.options[i];
+          const oVal = (opt.value || '').trim().toLowerCase();
+          const oText = (opt.text || '').trim().toLowerCase();
+          if (valStr && (oVal === valStr || oText === valStr)) {
+            el.selectedIndex = i;
+            matched = true;
+            break;
+          }
+        }
+        // Pass 2: Prefix match on text or value only if no exact match
+        if (!matched && valStr) {
+          for (let i = 0; i < el.options.length; i++) {
+            const opt = el.options[i];
+            const oVal = (opt.value || '').trim().toLowerCase();
+            const oText = (opt.text || '').trim().toLowerCase();
+            if (oVal && (oVal.startsWith(valStr) || valStr.startsWith(oVal))) {
+              el.selectedIndex = i;
+              matched = true;
+              break;
+            }
+            if (oText && (oText.startsWith(valStr) || valStr.startsWith(oText))) {
+              el.selectedIndex = i;
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (!matched && el.options.length > 1 && item.value) {
+          const num = parseInt(item.value, 10);
+          if (!isNaN(num) && num >= 0 && num < el.options.length) {
+            el.selectedIndex = num;
+            matched = true;
+          }
+        }
+        if (!matched) {
+          const proto = window.HTMLSelectElement?.prototype;
+          const nativeSetter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (nativeSetter) nativeSetter.call(el, String(item.value));
+          else el.value = String(item.value);
+        }
       } else {
         const proto = tag === 'TEXTAREA'
           ? window.HTMLTextAreaElement?.prototype
-          : tag === 'SELECT'
-            ? window.HTMLSelectElement?.prototype
-            : window.HTMLInputElement?.prototype;
+          : window.HTMLInputElement?.prototype;
         const nativeSetter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
         if (nativeSetter) nativeSetter.call(el, String(item.value));
         else el.value = String(item.value);
       }
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      el.dispatchEvent(new Event('blur', { bubbles: true }));
-      results.push({ fieldKey: item.fieldKey, label: item.label, status: 'filled_batch' });
+      try {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('blur', { bubbles: true }));
+        if (typeof window.jQuery === 'function') {
+          try {
+            window.jQuery(el).trigger('input').trigger('change').trigger('blur');
+          } catch {}
+        }
+      } catch {}
+
+      // Inspect DOM validation state immediately after filling
+      let isValid = true;
+      let errorReason = null;
+      try {
+        if (typeof el.checkValidity === 'function' && !el.checkValidity()) {
+          isValid = false;
+          errorReason = el.validationMessage || 'HTML5 checkValidity failed';
+        }
+        const container = el.closest('.form-group, .form-row, .field, div') || el.parentElement;
+        if (container) {
+          const hasErrClass = container.classList.contains('has-error') ||
+                              container.classList.contains('is-invalid') ||
+                              container.classList.contains('error');
+          if (hasErrClass) {
+            isValid = false;
+            errorReason = 'Container marked with validation error (.has-error/.is-invalid)';
+          }
+          const errEl = container.querySelector('.help-block, .invalid-feedback, .error-message, .text-danger, [role="alert"]');
+          if (errEl && (errEl.innerText || '').trim()) {
+            isValid = false;
+            errorReason = (errEl.innerText || '').trim();
+          }
+        }
+        if (el.getAttribute('aria-invalid') === 'true') {
+          isValid = false;
+          errorReason = 'aria-invalid="true"';
+        }
+        const cs = window.getComputedStyle(el);
+        const bc = cs.borderColor || '';
+        const m = bc.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        if (m) {
+          const r = parseInt(m[1], 10), g = parseInt(m[2], 10), b = parseInt(m[3], 10);
+          if (r > 170 && g < 90 && b < 90) {
+            isValid = false;
+            errorReason = 'Input border highlighted red';
+          }
+        }
+      } catch {}
+
+      if (!isValid) {
+        results.push({ fieldKey: item.fieldKey, label: item.label, status: 'needs_human_fallback', reason: errorReason || 'DOM validation error' });
+      } else {
+        results.push({ fieldKey: item.fieldKey, label: item.label, status: 'filled_batch', verifiedValid: true });
+      }
     } catch (err) {
       results.push({ fieldKey: item.fieldKey, label: item.label, status: 'needs_human_fallback', reason: err.message });
     }
@@ -305,7 +405,7 @@ export async function runCustomPlanExecutor({
       if (!safety.safe) {
         throw new Error(`Blocked unsafe custom browser script: ${safety.violations.join('; ')}`);
       }
-      await executeLevelTool({
+      const batchResultRaw = await executeLevelTool({
         level: 'browser_subagent',
         toolName: 'browser_action',
         toolArgs: {
@@ -324,20 +424,53 @@ export async function runCustomPlanExecutor({
       });
       batchScriptRuns++;
 
+      let evalList = [];
+      try {
+        const rawObj = typeof batchResultRaw === 'string' ? JSON.parse(batchResultRaw) : batchResultRaw;
+        if (Array.isArray(rawObj)) evalList = rawObj;
+        else if (Array.isArray(rawObj?.evalRes)) evalList = rawObj.evalRes;
+        else if (Array.isArray(rawObj?.res)) evalList = rawObj.res;
+      } catch {}
+
+      const evalMap = new Map();
+      for (const res of evalList) {
+        if (res?.fieldKey) evalMap.set(res.fieldKey, res);
+      }
+
       for (const item of nonFileBatchable) {
+        const evalItem = evalMap.get(item.fieldKey);
+        const needsFallback = evalItem && evalItem.status === 'needs_human_fallback';
+
+        if (needsFallback) {
+          humanFallbackRuns++;
+          const actType = item.type === 'select' ? 'select' : item.type === 'radio' || item.type === 'checkbox' ? 'click' : 'type';
+          await executeLevelTool({
+            level: 'browser_subagent',
+            toolName: 'browser_action',
+            toolArgs: {
+              action: actType,
+              selector: item.selector,
+              value: String(item.value),
+              humanLike: true
+            },
+            context: {},
+            executor: defaultBrowserExec
+          });
+        }
+
         completedFieldKeys.add(item.fieldKey);
         const masked = maskPersonalValue(item.value);
         sectionFilledMasked.push({
           fieldKey: item.fieldKey,
           label: item.label,
-          method: 'batch_script',
+          method: needsFallback ? 'human_adaptive_fallback' : 'batch_script',
           maskedValue: masked
         });
         executionLog.push({
           section: sectionName,
           fieldKey: item.fieldKey,
           label: item.label,
-          method: 'batch_script',
+          method: needsFallback ? 'human_adaptive_fallback' : 'batch_script',
           maskedValue: masked,
           status: 'filled'
         });

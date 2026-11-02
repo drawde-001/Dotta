@@ -172,12 +172,17 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
   };
 
   const resolveProximityLabel = (pos) => {
-    const slice = visibleHtml.slice(Math.max(0, pos - 280), pos);
+    const slice = visibleHtml.slice(Math.max(0, pos - 380), pos);
     const openLabelMatch = slice.match(/<label\b[^>]*>([^<]*)$/i);
     if (openLabelMatch && openLabelMatch[1].trim()) {
       return sanitizeExtractedString(openLabelMatch[1], 140).text;
     }
-    const nearTagMatch = slice.match(/<(?:label|span|div|p|strong|dt)\b[^>]*>([^<>]{2,120})<\/(?:label|span|div|p|strong|dt)>\s*$/i);
+    const labelMatch = slice.match(/<label\b[^>]*>([\s\S]*?)<\/label>(?:(?!<label\b)[\s\S])*$/i);
+    if (labelMatch && labelMatch[1].trim()) {
+      const cleaned = sanitizeExtractedString(labelMatch[1], 140).text;
+      if (cleaned) return cleaned;
+    }
+    const nearTagMatch = slice.match(/<(?:label|span|div|p|strong|dt)\b[^>]*>([^<>]{2,120})<\/(?:label|span|div|p|strong|dt)>\s*(?:<div[^>]*>\s*)*$/i);
     if (nearTagMatch && nearTagMatch[1].trim()) {
       return sanitizeExtractedString(nearTagMatch[1], 140).text;
     }
@@ -627,6 +632,28 @@ export async function extractLiveDomSchemaInPlaywright(page) {
         });
       }
     }
+
+    // Associate unlinked inputs with container labels (Bootstrap .form-group, table rows, fieldsets)
+    const formInputs = Array.from(document.querySelectorAll('input, select, textarea'));
+    for (const input of formInputs) {
+      if (input.type === 'hidden') continue;
+      const id = input.id || input.name;
+      if (!id) continue;
+      const hasDirectLabel = document.querySelector(`label[for="${id}"]`) || input.closest('label');
+      if (!hasDirectLabel) {
+        const container = input.closest('.form-group, .row, tr, fieldset, [class*="form-"], div');
+        const containerLabel = container ? container.querySelector('label') : null;
+        if (containerLabel) {
+          const cleanLabelText = (containerLabel.innerText || '').trim();
+          if (cleanLabelText && !containerLabel.getAttribute('for')) {
+            containerLabel.setAttribute('for', id);
+          } else if (cleanLabelText && !input.getAttribute('aria-label')) {
+            input.setAttribute('aria-label', cleanLabelText);
+          }
+        }
+      }
+    }
+
     return {
       html: document.documentElement.outerHTML,
       url: window.location.href,

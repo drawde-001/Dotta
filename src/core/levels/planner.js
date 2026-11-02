@@ -123,35 +123,112 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
       if (f.email) return { value: String(f.email), bioSource: { profileId: pid, fieldId: 'email' }, confidence: 1.0 };
       break;
     case 'phone':
-      if (f.phone) return { value: String(f.phone), bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
+      if (f.phone) {
+        const rawDigits = String(f.phone).replace(/\D+/g, '');
+        const tenDigits = rawDigits.length === 11 && rawDigits.startsWith('1') ? rawDigits.slice(1) : rawDigits;
+        const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+        if (fk.includes('p1') || fk.includes('area')) {
+          const p1Val = tenDigits.slice(0, 3);
+          if (p1Val) return { value: p1Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
+        } else if (fk.includes('p2') || fk.includes('prefix')) {
+          const p2Val = tenDigits.slice(3, 6);
+          if (p2Val) return { value: p2Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
+        } else if (fk.includes('p3') || fk.includes('line')) {
+          const p3Val = tenDigits.slice(6, 10);
+          if (p3Val) return { value: p3Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
+        }
+        return { value: String(f.phone), bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
+      }
       break;
-    case 'dateOfBirth':
-      if (f.dob) return { value: String(f.dob), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
-      if (f.dateOfBirth) return { value: String(f.dateOfBirth), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+    case 'dateOfBirth': {
+      const dobStr = f.dob || f.dateOfBirth;
+      if (dobStr) {
+        const dMatch = String(dobStr).match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        const yearVal = dMatch ? dMatch[1] : '';
+        const monthNum = dMatch ? parseInt(dMatch[2], 10) : NaN;
+        const dayNum = dMatch ? parseInt(dMatch[3], 10) : NaN;
+        const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+
+        if (fk.includes('month') || fk === 'dob') {
+          if (!isNaN(monthNum)) {
+            return { value: String(monthNum), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+          }
+        } else if (fk.includes('day')) {
+          if (!isNaN(dayNum)) {
+            return { value: String(dayNum), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+          }
+        } else if (fk.includes('year')) {
+          if (yearVal) {
+            return { value: yearVal, bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+          }
+        }
+        return { value: String(dobStr), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+      }
       break;
-    case 'street':
+    }
+    case 'gender':
+      if (f.gender) return { value: String(f.gender), bioSource: { profileId: pid, fieldId: 'gender' }, confidence: 1.0 };
+      break;
+    case 'street': {
+      const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+      if (fk.includes('address2') || fk.includes('suite') || fk.includes('apt')) {
+        const suiteVal = f.suiteApt || f.address2 || f.suite || '';
+        return { value: String(suiteVal), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 0.95 };
+      }
       if (typeof f.address === 'string' && f.address.trim()) {
         return { value: f.address.trim(), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
       }
       if (f.address?.street) return { value: String(f.address.street), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
       break;
+    }
     case 'city':
       if (f.city) return { value: String(f.city), bioSource: { profileId: pid, fieldId: 'city' }, confidence: 1.0 };
       if (f.address?.city) return { value: String(f.address.city), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
       break;
-    case 'region':
-      if (f.state) return { value: String(f.state), bioSource: { profileId: pid, fieldId: 'state' }, confidence: 1.0 };
-      if (f.address?.region) return { value: String(f.address.region), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
+    case 'region': {
+      const rawState = String(f.state || f.address?.region || '').trim();
+      const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+      if (rawState) {
+        if (fk.includes('code') || field.type === 'select') {
+          const normKey = rawState.toLowerCase().replace(/[^a-z]/g, '');
+          const stateMap = {
+            california: 'CA', newyork: 'NY', texas: 'TX', florida: 'FL', ohio: 'OH', washington: 'WA',
+            illinois: 'IL', pennsylvania: 'PA', georgia: 'GA', northcarolina: 'NC', michigan: 'MI',
+            newjersey: 'NJ', virginia: 'VA', massachusetts: 'MA', arizona: 'AZ', indiana: 'IN',
+            tennessee: 'TN', missouri: 'MO', maryland: 'MD', wisconsin: 'WI', colorado: 'CO',
+            minnesota: 'MN', southcarolina: 'SC', alabama: 'AL', louisiana: 'LA', kentucky: 'KY',
+            oregon: 'OR', oklahoma: 'OK', connecticut: 'CT', utah: 'UT', iowa: 'IA', nevada: 'NV'
+          };
+          const code = stateMap[normKey] || (rawState.length === 2 ? rawState.toUpperCase() : rawState);
+          return { value: code, bioSource: { profileId: pid, fieldId: 'state' }, confidence: 1.0 };
+        }
+        return { value: rawState, bioSource: { profileId: pid, fieldId: 'state' }, confidence: 1.0 };
+      }
       break;
+    }
     case 'postalCode':
       if (f.zipCode) return { value: String(f.zipCode), bioSource: { profileId: pid, fieldId: 'zipCode' }, confidence: 1.0 };
       if (f.address?.postalCode) return { value: String(f.address.postalCode), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
       break;
-    case 'country':
-      if (f.country) return { value: String(f.country), bioSource: { profileId: pid, fieldId: 'country' }, confidence: 1.0 };
-      if (f.address?.country) return { value: String(f.address.country), bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
+    case 'country': {
+      const rawCountry = String(f.country || f.address?.country || '').trim();
+      const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+      if (rawCountry) {
+        if (fk.includes('code') || field.type === 'select') {
+          const norm = rawCountry.toLowerCase();
+          const code = (norm.includes('united states') || norm === 'usa' || norm === 'us') ? 'US' : (norm.includes('canada') || norm === 'ca') ? 'CA' : rawCountry;
+          return { value: code, bioSource: { profileId: pid, fieldId: 'country' }, confidence: 1.0 };
+        }
+        return { value: rawCountry, bioSource: { profileId: pid, fieldId: 'country' }, confidence: 1.0 };
+      }
       break;
-    case 'address':
+    }
+    case 'address': {
+      const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
+      if (fk.includes('address1') || fk.includes('street')) {
+        const streetVal = typeof f.address === 'string' ? f.address.trim() : f.address?.street || '';
+        if (streetVal) return { value: streetVal, bioSource: { profileId: pid, fieldId: 'address' }, confidence: 1.0 };
+      }
       if (typeof f.address === 'string' && f.address.trim()) {
         const fullAddr = [f.address, f.city, f.state, f.zipCode, f.country].filter(Boolean).join(', ');
         return { value: fullAddr, bioSource: { profileId: pid, fieldId: 'address' }, confidence: 0.98 };
@@ -163,6 +240,7 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
         if (formatted) return { value: formatted, bioSource: { profileId: pid, fieldId: 'address' }, confidence: 0.98 };
       }
       break;
+    }
     case 'role':
       if (f.role) return { value: String(f.role), bioSource: { profileId: pid, fieldId: 'role' }, confidence: 1.0 };
       break;
@@ -362,6 +440,44 @@ function resolveOpenQuestionFromBio(
       bioSource: { profileId: pid, fieldId: 'background' },
       confidence: 0.92
     };
+  }
+
+  if (/union/i.test(label) || /unioncode/i.test(field.fieldKey || field.selector || '')) {
+    const val = f.unionStatus || f.union || 'Non-Union';
+    return {
+      value: String(val),
+      bioSource: { profileId: pid || 'default', fieldId: 'unionStatus' },
+      confidence: 0.95
+    };
+  }
+
+  if (/office|branch|agency\s+location/i.test(label) && field.type === 'select') {
+    return {
+      value: (Array.isArray(field.options) && field.options.find(o => !/^select/i.test(o))) || 'Cincinnati',
+      bioSource: { profileId: pid || 'default', fieldId: 'office_selection' },
+      confidence: 0.9
+    };
+  }
+
+  if (/instagram/i.test(label) && f.socialLinks?.instagram) {
+    return {
+      value: String(f.socialLinks.instagram),
+      bioSource: { profileId: pid, fieldId: 'socialLinks' },
+      confidence: 0.95
+    };
+  }
+
+  if (/tiktok/i.test(label) && f.socialLinks?.tiktok) {
+    return {
+      value: String(f.socialLinks.tiktok),
+      bioSource: { profileId: pid, fieldId: 'socialLinks' },
+      confidence: 0.95
+    };
+  }
+
+  // If an open question is optional and not specifically matched, do not force long bio text into it
+  if (!field.required && !/background|about|bio|summary|goals|project|proud/i.test(label)) {
+    return null;
   }
 
   // 4. High-risk open questions (salary, compensation, visa, work authorization):
@@ -738,12 +854,15 @@ export async function runPlannerLevel({
       }
     }
 
-    // If select/radio has options, pick matching option case-insensitively
+    // If select/radio has options, pick matching option case-insensitively (exact match first!)
     if (resolved && sf.options && sf.options.length > 0) {
-      const valLower = String(resolved.value).toLowerCase();
-      const matchedOpt = sf.options.find(
-        (o) => o.toLowerCase() === valLower || o.toLowerCase().includes(valLower) || valLower.includes(o.toLowerCase())
-      );
+      const valLower = String(resolved.value).trim().toLowerCase();
+      const matchedOpt =
+        sf.options.find((o) => String(o).trim().toLowerCase() === valLower) ||
+        sf.options.find((o) => {
+          const optLower = String(o).trim().toLowerCase();
+          return optLower && (optLower.startsWith(valLower) || valLower.startsWith(optLower));
+        });
       if (matchedOpt) {
         resolved.value = matchedOpt;
       }

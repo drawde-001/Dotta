@@ -122,7 +122,7 @@ function seedProfile() {
     id,
     name: 'Alex Morgan (Default)',
     isActive: true,
-    grants: { read: false, write: false },
+    grants: { read: true, write: false },
     fields: {
       ...emptyFields(),
       photo: '/images/alex_morgan_portrait.jpg',

@@ -36,6 +36,7 @@ export const CLOSED_BIO_FIELD_KINDS = Object.freeze([
   'email',
   'phone',
   'dateOfBirth',
+  'gender',
   'address',
   'street',
   'city',
