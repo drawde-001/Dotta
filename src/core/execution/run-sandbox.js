@@ -223,8 +223,9 @@ export function assertNoHostPathAccess(input, sandboxRoot = '') {
 
   // 4. Windows drive paths (e.g. C:\...) or POSIX root paths (/etc, /home, /root, /var, /proc, /Users)
   // that are NOT inside the sandbox's own temp directory
-  const winDriveMatches = raw.match(/[a-zA-Z]:[/\\][^\s"';|&)]*/g) || [];
-  for (const m of winDriveMatches) {
+  const winDriveMatches = raw.match(/(?:^|[\s"'`([<{=])([a-zA-Z]:[/\\][^\s"';|&)]*)/g) || [];
+  for (const rawMatch of winDriveMatches) {
+    const m = rawMatch.replace(/^[\s"'`([<{=]+/, '');
     const cleanMatch = path.normalize(m).toLowerCase().replace(/\\/g, '/');
     if (!normSandbox || !cleanMatch.startsWith(normSandbox)) {
       return {

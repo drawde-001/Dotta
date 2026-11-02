@@ -21,9 +21,14 @@ import { AGENT_TOOLS_CATALOG } from '../tools/catalog.js';
 export const LEVEL_BROWSER_TOOL_NAMES = Object.freeze([
   'browser_read_page',
   'read_page',
+  'page_snapshot',
+  'notes_read',
+  'notes_write',
+  'sandbox_run_script',
   'browser_action',
   'snapshot_read',
   'browser_screenshot',
+  'browser_screenshot_vision',
   'browser_search',
   'web_search'
 ]);

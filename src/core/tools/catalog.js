@@ -118,6 +118,124 @@ export const AGENT_TOOLS_CATALOG = {
     }
   },
 
+  page_snapshot: {
+    name: 'page_snapshot',
+    readOnly: true,
+    description:
+      'Extracts the live webpage\'s accessibility tree, form inputs, buttons, and structural hierarchy directly into a markdown notes file inside the isolated sandbox scratch space (notes/page-structure.md). Use this tool when visiting any page with forms or interactive controls to understand its full structure without polluting chat context. Do NOT use snapshot_read when page_snapshot is available. The "filename" parameter specifies the notes path (default: "notes/page-structure.md"); "stepTitle" describes the inspection.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        filename: {
+          type: 'STRING',
+          description: 'Relative path in sandbox scratch space (default: "notes/page-structure.md")'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Short step description (e.g. "Extract page accessibility tree to notes")'
+        }
+      }
+    }
+  },
+
+  notes_read: {
+    name: 'notes_read',
+    readOnly: true,
+    description:
+      'Reads content from the agent\'s notes files inside the sandbox scratch directory (e.g. notes/page-structure.md, notes/checkpoint.json). Use this to review previously discovered form fields, section requirements, or saved progress without reloading the live page. Parameter "path" is the notes file path; "stepTitle" describes the inspection.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'Relative path in sandbox scratch directory (e.g. "notes/page-structure.md")'
+        },
+        maxChars: {
+          type: 'NUMBER',
+          description: 'Maximum characters to read (default 8000)'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Short step description'
+        }
+      }
+    }
+  },
+
+  notes_write: {
+    name: 'notes_write',
+    readOnly: false,
+    description:
+      'Writes notes, execution plans, or checkpoint data into the agent\'s scratch directory in the isolated sandbox (notes/). Use this to record planned field mappings, observations, or progress after each section. Parameter "path" is the relative path (e.g. "notes/plan.md"); "content" is the text to save.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        path: {
+          type: 'STRING',
+          description: 'Relative path in sandbox scratch directory (e.g. "notes/plan.md")'
+        },
+        content: {
+          type: 'STRING',
+          description: 'Text content to save'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Short step description'
+        }
+      },
+      required: ['content']
+    }
+  },
+
+  sandbox_run_script: {
+    name: 'sandbox_run_script',
+    readOnly: false,
+    description:
+      'Runs a custom batch DOM script (via safe browser evaluate) or sandboxed command confined strictly to the run sandbox. Use this to batch-fill multiple clean form fields in a single browser turn, query complex DOM elements, or format data. Parameter "script" is the JavaScript code to execute; "target" is "browser" (default) or "sandbox_node".',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        script: {
+          type: 'STRING',
+          description: 'JavaScript code to execute in the live page DOM or sandbox Node runtime'
+        },
+        target: {
+          type: 'STRING',
+          description: '"browser" to evaluate in live page DOM, or "sandbox_node" to run inside sandbox process'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Short step description (e.g. "Batch-fill personal information fields")'
+        }
+      },
+      required: ['script']
+    }
+  },
+
+  browser_screenshot_vision: {
+    name: 'browser_screenshot_vision',
+    readOnly: true,
+    description:
+      'Takes a screenshot of the current page viewport and analyzes custom interactive widgets, canvas elements, or visual layouts where DOM selectors are ambiguous. Use this as an autonomous fallback when structured DOM tools encounter non-standard controls. Parameter "prompt" describes what visual elements to analyze; "fullPage" captures the full scrollable page.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        prompt: {
+          type: 'STRING',
+          description: 'Description of what visual controls or layout elements to identify'
+        },
+        fullPage: {
+          type: 'BOOLEAN',
+          description: 'Whether to capture full page or current viewport only'
+        },
+        stepTitle: {
+          type: 'STRING',
+          description: 'Short step description'
+        }
+      }
+    }
+  },
+
   snapshot_read: {
     name: 'snapshot_read',
     readOnly: true,

@@ -59,6 +59,7 @@ import {
 } from './browser-stream.js';
 import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from '../src/core/levels/extractor.js';
+import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
 
 dotenv.config();
 
@@ -270,10 +271,31 @@ function createLiveBrowserExecutor(page, runId) {
       if (action === 'type') {
         const target = selector || selectorOrText;
         if (target) {
-          await page.fill(target, String(value || ''), { timeout: 3500 }).catch(() => {});
+          try {
+            await page.click(target, { timeout: 2500 });
+            await page.fill(target, '', { timeout: 2000 });
+            await page.type(target, String(value || ''), { delay: 15, timeout: 4000 });
+            await page.dispatchEvent(target, 'change');
+            await page.dispatchEvent(target, 'blur');
+          } catch {
+            await page.fill(target, String(value || ''), { timeout: 3500 }).catch(() => {});
+          }
         }
         await page.waitForTimeout(200);
         return { ok: true, action: 'type' };
+      }
+      if (action === 'select') {
+        const target = selector || selectorOrText;
+        if (target) {
+          try {
+            await page.selectOption(target, { value: String(value) }, { timeout: 2500 }).catch(async () => {
+              await page.selectOption(target, { label: String(value) }, { timeout: 2500 });
+            });
+            await page.dispatchEvent(target, 'change');
+          } catch {}
+        }
+        await page.waitForTimeout(200);
+        return { ok: true, action: 'select' };
       }
     }
     if (toolName === 'snapshot_read') {
@@ -595,6 +617,106 @@ engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
   } catch (err) {
     console.error('[Omni Engine] browser_screenshot failed:', err?.message || err);
     return `Browser screenshot error: ${err?.message || 'Failed to take screenshot'}`;
+  }
+});
+
+engine.registerTool({ name: 'page_snapshot' }, async (args, context = {}) => {
+  cancelBrowserTermination();
+  try {
+    let page = getLiveBrowserPage();
+    if (!page) {
+      const res = await initLiveBrowser(broadcast);
+      page = res.page;
+    }
+    const toolkit = createSandboxToolkit({
+      runSandbox: context?.runSandbox,
+      page,
+      emitEvent: (evt) => {
+        try { broadcast({ type: 'agent_action_stream', runId: context?.runId, event: evt }); } catch (_) {}
+        if (typeof context?.formTask?.onEvent === 'function') context.formTask.onEvent(evt);
+      }
+    });
+    return await toolkit.page_snapshot(args);
+  } catch (err) {
+    return `Page snapshot error: ${err.message}`;
+  }
+});
+
+engine.registerTool({ name: 'notes_read' }, async (args, context = {}) => {
+  try {
+    let page = getLiveBrowserPage();
+    const toolkit = createSandboxToolkit({
+      runSandbox: context?.runSandbox,
+      page,
+      emitEvent: (evt) => {
+        try { broadcast({ type: 'agent_action_stream', runId: context?.runId, event: evt }); } catch (_) {}
+        if (typeof context?.formTask?.onEvent === 'function') context.formTask.onEvent(evt);
+      }
+    });
+    return await toolkit.notes_read(args);
+  } catch (err) {
+    return `Notes read error: ${err.message}`;
+  }
+});
+
+engine.registerTool({ name: 'notes_write' }, async (args, context = {}) => {
+  try {
+    let page = getLiveBrowserPage();
+    const toolkit = createSandboxToolkit({
+      runSandbox: context?.runSandbox,
+      page,
+      emitEvent: (evt) => {
+        try { broadcast({ type: 'agent_action_stream', runId: context?.runId, event: evt }); } catch (_) {}
+        if (typeof context?.formTask?.onEvent === 'function') context.formTask.onEvent(evt);
+      }
+    });
+    return await toolkit.notes_write(args);
+  } catch (err) {
+    return `Notes write error: ${err.message}`;
+  }
+});
+
+engine.registerTool({ name: 'sandbox_run_script' }, async (args, context = {}) => {
+  cancelBrowserTermination();
+  try {
+    let page = getLiveBrowserPage();
+    if (!page) {
+      const res = await initLiveBrowser(broadcast);
+      page = res.page;
+    }
+    const toolkit = createSandboxToolkit({
+      runSandbox: context?.runSandbox,
+      page,
+      emitEvent: (evt) => {
+        try { broadcast({ type: 'agent_action_stream', runId: context?.runId, event: evt }); } catch (_) {}
+        if (typeof context?.formTask?.onEvent === 'function') context.formTask.onEvent(evt);
+      }
+    });
+    return await toolkit.sandbox_run_script(args);
+  } catch (err) {
+    return `Sandbox run script error: ${err.message}`;
+  }
+});
+
+engine.registerTool({ name: 'browser_screenshot_vision' }, async (args, context = {}) => {
+  cancelBrowserTermination();
+  try {
+    let page = getLiveBrowserPage();
+    if (!page) {
+      const res = await initLiveBrowser(broadcast);
+      page = res.page;
+    }
+    const toolkit = createSandboxToolkit({
+      runSandbox: context?.runSandbox,
+      page,
+      emitEvent: (evt) => {
+        try { broadcast({ type: 'agent_action_stream', runId: context?.runId, event: evt }); } catch (_) {}
+        if (typeof context?.formTask?.onEvent === 'function') context.formTask.onEvent(evt);
+      }
+    });
+    return await toolkit.browser_screenshot_vision(args);
+  } catch (err) {
+    return `Browser vision error: ${err.message}`;
   }
 });
 
