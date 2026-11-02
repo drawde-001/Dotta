@@ -259,7 +259,7 @@ export function createSandboxToolkit({
         notesPath: safeRel
       });
 
-      return `Page snapshot captured and saved to "${safeRel}" (${pageData.fields.length} interactive fields, ${pageData.fileInputs?.length || 0} file inputs, ${pageData.actionButtons.length} buttons). Inspect sections using notes_read or execute a batch script with sandbox_run_script.`;
+      return `Page snapshot captured and saved to "${safeRel}" (${pageData.fields.length} interactive fields, ${pageData.fileInputs?.length || 0} file inputs, ${pageData.actionButtons.length} buttons). Inspect sections using notes_read, then choose browser_action or sandbox_run_script based on the form structure and reactive requirements.`;
     },
 
     /**

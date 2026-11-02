@@ -521,7 +521,16 @@ export default function App() {
           role: 'user',
           parentId: messages.length > 0 ? messages[messages.length - 1].id : null,
           content: [{ type: 'text', text: userText || (orderedAttachments.length ? `[${orderedAttachments.length} attachments]` : '') }],
-          attachments: orderedAttachments
+          attachments: orderedAttachments,
+          createdAt: now,
+          model: selectedModel,
+          metadata: {
+            custom: {
+              createdAt: now,
+              model: selectedModel,
+              attachments: orderedAttachments
+            }
+          }
         },
         {
           id: assistantMsgId,
@@ -1097,7 +1106,9 @@ export default function App() {
             runStatus: msg.runStatus,
             error: msg.error,
             rawParts: msg.content || [],
-            attachments: msg.attachments || []
+            attachments: msg.attachments || [],
+            model: msg.model || msg.metadata?.custom?.model,
+            createdAt: msg.createdAt || msg.metadata?.custom?.createdAt
           }
         }
       };

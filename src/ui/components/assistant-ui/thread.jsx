@@ -87,13 +87,15 @@ import { cn } from "@/lib/utils";
 export { registerToolComponent, registerDataRenderer };
 
 const ReloadContext = React.createContext(null);
+export const ThreadModelContext = React.createContext('muse-spark-open');
 
 export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false, onReload }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
     <ReloadContext.Provider value={onReload}>
-      <ThreadPrimitive.Root
+      <ThreadModelContext.Provider value={selectedModel}>
+        <ThreadPrimitive.Root
         className="flex h-full flex-col bg-transparent text-foreground text-sm"
         style={{
           "--thread-max-width": "46rem",
@@ -150,6 +152,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
         </div>
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
+      </ThreadModelContext.Provider>
     </ReloadContext.Provider>
   );
 }
@@ -453,6 +456,102 @@ function ThreadScrollToBottom() {
   );
 }
 
+function UserMessageCopyButton() {
+  const [copied, setCopied] = useState(false);
+  const text = useAuiState((s) => {
+    const parts = s.message.parts || s.message.content || [];
+    if (typeof parts === 'string') return parts;
+    if (Array.isArray(parts)) {
+      return parts
+        .filter((p) => p && (p.type === 'text' || typeof p.text === 'string'))
+        .map((p) => (typeof p === 'string' ? p : p.text || ''))
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
+  });
+
+  const handleCopy = async (e) => {
+    e.stopPropagation();
+    try {
+      if (text) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    } catch (err) {
+      console.warn('Failed to copy user message:', err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? "Copied" : "Copy message"}
+      aria-label="Copy message"
+      className="inline-flex items-center justify-center text-zinc-400 hover:text-zinc-200 dark:hover:text-zinc-300 transition-colors cursor-pointer ml-0.5"
+    >
+      {copied ? (
+        <CheckIcon className="size-3 text-emerald-400" />
+      ) : (
+        <CopyIcon className="size-3" />
+      )}
+    </button>
+  );
+}
+
+export function formatDisplayModelName(modelId) {
+  if (!modelId) return 'Muse Spark Open';
+  const clean = String(modelId).trim().toLowerCase();
+  if (clean === 'muse-wonder-1.0' || clean === 'muse-wonder' || clean.includes('wonder')) return 'Muse Wonder';
+  if (clean === 'muse-spark-open') return 'Muse Spark Open';
+  if (clean === 'muse-spark-1.3') return 'Muse Spark 1.3';
+  if (clean === 'muse-spark-1.2') return 'Muse Spark 1.2';
+  if (clean === 'muse-spark-1.1') return 'Muse Spark 1.1';
+  if (clean === 'gemini-3.8-flash' || clean.includes('3.8-flash') || clean.includes('3.8')) return 'Gemini 3.8 Flash';
+  if (clean === 'gemini-2.5-flash' || clean.includes('2.5-flash') || clean.includes('2.5')) return 'Gemini 2.5 Flash';
+  if (clean === 'gpt-56-terra' || clean.includes('gpt-4o') || clean.includes('terra')) return 'GPT-5.6 Terra';
+  if (clean === 'gpt-56-sol' || clean.includes('gpt-4o-mini') || clean.includes('sol')) return 'GPT-5.6 Sol';
+  if (clean.includes('kimi')) return 'Kimi K2';
+  return String(modelId);
+}
+
+export function formatMessageTime(timestamp) {
+  if (!timestamp) return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
+
+function UserMessageFooter() {
+  const currentFallbackModel = React.useContext(ThreadModelContext);
+  const messageModel = useAuiState((s) => s.message.metadata?.custom?.model || s.message.model);
+  const rawCreatedAt = useAuiState((s) => s.message.metadata?.custom?.createdAt || s.message.createdAt);
+  const messageId = useAuiState((s) => s.message.id);
+
+  const createdAt = React.useMemo(() => {
+    if (rawCreatedAt) return rawCreatedAt;
+    if (typeof messageId === 'string') {
+      const match = messageId.match(/user-(\d+)/);
+      if (match) return parseInt(match[1], 10);
+    }
+    return undefined;
+  }, [rawCreatedAt, messageId]);
+
+  const displayModel = formatDisplayModelName(messageModel || currentFallbackModel);
+  const timeString = formatMessageTime(createdAt);
+
+  return (
+    <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 opacity-0 group-hover/user-msg:opacity-100 transition-opacity select-none px-1">
+      <span>{displayModel}</span>
+      <span className="text-zinc-500 dark:text-zinc-600">·</span>
+      <span>{timeString}</span>
+      <UserMessageCopyButton />
+    </div>
+  );
+}
+
 function UserMessage() {
   const attachments = useAuiState(
     (s) => s.message.metadata?.custom?.attachments || s.message.attachments || []
@@ -460,7 +559,7 @@ function UserMessage() {
 
   return (
     <MessagePrimitive.Root
-      className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col items-end gap-1.5 px-2 py-2 fade-in slide-in-from-bottom-1 animate-in duration-150 group/user-msg"
+      className="mx-auto flex w-full max-w-[var(--thread-max-width)] flex-col items-end gap-1 px-2 py-2 fade-in slide-in-from-bottom-1 animate-in duration-150 group/user-msg"
       data-role="user"
     >
       <UserMessageAttachments attachments={attachments} />
@@ -469,9 +568,7 @@ function UserMessage() {
         <div className="rounded-2xl bg-background dark:bg-[#18181c] px-4 py-2.5 text-sm text-foreground break-words leading-relaxed">
           <MessagePrimitive.Parts />
         </div>
-        <div className="absolute top-1/2 -left-8 -translate-y-1/2 opacity-0 group-hover/user-msg:opacity-100 transition-opacity">
-          <UserActionBar />
-        </div>
+        <UserMessageFooter />
       </div>
 
       <BranchPicker className="-mr-1 justify-end" />
@@ -480,19 +577,7 @@ function UserMessage() {
 }
 
 function UserActionBar() {
-  return (
-    <ActionBarPrimitive.Root
-      hideWhenRunning
-      autohide="not-last"
-      className="flex flex-col items-end"
-    >
-      <ActionBarPrimitive.Edit asChild>
-        <TooltipIconButton tooltip="Edit" className="p-4">
-          <PencilIcon />
-        </TooltipIconButton>
-      </ActionBarPrimitive.Edit>
-    </ActionBarPrimitive.Root>
-  );
+  return null;
 }
 
 function EditComposer() {

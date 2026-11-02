@@ -871,24 +871,110 @@ const UserImagePart: ImageMessagePartComponent = (part) => (
   </div>
 );
 
+const UserMessageCopyButton: FC = () => {
+  const [copied, setCopied] = useState(false);
+  const text = useAuiState((s) => {
+    const parts = (s.message as any).parts || (s.message as any).content || [];
+    if (typeof parts === 'string') return parts;
+    if (Array.isArray(parts)) {
+      return parts
+        .filter((p: any) => p && (p.type === 'text' || typeof p.text === 'string'))
+        .map((p: any) => (typeof p === 'string' ? p : p.text || ''))
+        .filter(Boolean)
+        .join('\n');
+    }
+    return '';
+  });
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (text) {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }
+    } catch (err) {
+      console.warn('Failed to copy user message:', err);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      title={copied ? "Copied" : "Copy message"}
+      aria-label="Copy message"
+      className="inline-flex items-center justify-center text-zinc-400 hover:text-zinc-200 dark:hover:text-zinc-300 transition-colors cursor-pointer ml-0.5"
+    >
+      {copied ? (
+        <CheckIcon className="size-3 text-emerald-400" />
+      ) : (
+        <CopyIcon className="size-3" />
+      )}
+    </button>
+  );
+};
+
+const formatDisplayModelName = (modelId?: string) => {
+  if (!modelId) return 'Muse Spark Open';
+  const clean = String(modelId).trim().toLowerCase();
+  if (clean === 'muse-wonder-1.0' || clean === 'muse-wonder' || clean.includes('wonder')) return 'Muse Wonder';
+  if (clean === 'muse-spark-open') return 'Muse Spark Open';
+  if (clean === 'muse-spark-1.3') return 'Muse Spark 1.3';
+  if (clean === 'muse-spark-1.2') return 'Muse Spark 1.2';
+  if (clean === 'muse-spark-1.1') return 'Muse Spark 1.1';
+  if (clean === 'gemini-3.8-flash' || clean.includes('3.8-flash') || clean.includes('3.8')) return 'Gemini 3.8 Flash';
+  if (clean === 'gemini-2.5-flash' || clean.includes('2.5-flash') || clean.includes('2.5')) return 'Gemini 2.5 Flash';
+  if (clean === 'gpt-56-terra' || clean.includes('gpt-4o') || clean.includes('terra')) return 'GPT-5.6 Terra';
+  if (clean === 'gpt-56-sol' || clean.includes('gpt-4o-mini') || clean.includes('sol')) return 'GPT-5.6 Sol';
+  if (clean.includes('kimi')) return 'Kimi K2';
+  return String(modelId);
+};
+
+const formatMessageTime = (timestamp?: number | string | Date) => {
+  if (!timestamp) return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const d = new Date(timestamp);
+  if (isNaN(d.getTime())) return new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
+const UserMessageFooter: FC = () => {
+  const messageModel = useAuiState((s) => (s.message.metadata as any)?.custom?.model || (s.message as any).model);
+  const rawCreatedAt = useAuiState((s) => (s.message.metadata as any)?.custom?.createdAt || (s.message as any).createdAt);
+  const messageId = useAuiState((s) => s.message.id);
+
+  const createdAt = (rawCreatedAt || (typeof messageId === 'string' && messageId.match(/user-(\d+)/) ? parseInt(messageId.match(/user-(\d+)/)![1], 10) : undefined));
+
+  const displayModel = formatDisplayModelName(messageModel);
+  const timeString = formatMessageTime(createdAt);
+
+  return (
+    <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 opacity-0 group-hover/user-msg:opacity-100 transition-opacity select-none px-1">
+      <span>{displayModel}</span>
+      <span className="text-zinc-500 dark:text-zinc-600">·</span>
+      <span>{timeString}</span>
+      <UserMessageCopyButton />
+    </div>
+  );
+};
+
 const UserMessage: FC = () => {
   return (
     <MessagePrimitive.Root
       data-slot="aui_user-message-root"
-      className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-2 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2"
+      className="fade-in slide-in-from-bottom-1 animate-in grid auto-rows-auto grid-cols-[minmax(72px,1fr)_auto] content-start gap-y-1 px-2 duration-150 [contain-intrinsic-size:auto_200px] [content-visibility:auto] [&:where(>*)]:col-start-2 group/user-msg"
       data-role="user"
     >
       <UserMessageAttachments />
 
-      <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0">
+      <div className="aui-user-message-content-wrapper relative col-start-2 min-w-0 flex flex-col items-end">
         <div className="aui-user-message-content peer bg-muted text-foreground rounded-(--composer-radius) px-4 py-2 wrap-break-word empty:hidden">
           <MessagePrimitive.Parts
             components={{ File: UserFilePart, Image: UserImagePart }}
           />
         </div>
-        <div className="aui-user-action-bar-wrapper absolute start-0 top-1/2 -translate-x-full -translate-y-1/2 pe-2 peer-empty:hidden rtl:translate-x-full">
-          <UserActionBar />
-        </div>
+        <UserMessageFooter />
       </div>
 
       <BranchPicker
@@ -900,19 +986,7 @@ const UserMessage: FC = () => {
 };
 
 const UserActionBar: FC = () => {
-  return (
-    <ActionBarPrimitive.Root
-      hideWhenRunning
-      autohide="not-last"
-      className="aui-user-action-bar-root flex flex-col items-end"
-    >
-      <ActionBarPrimitive.Edit asChild>
-        <TooltipIconButton tooltip="Edit" className="aui-user-action-edit">
-          <PencilIcon />
-        </TooltipIconButton>
-      </ActionBarPrimitive.Edit>
-    </ActionBarPrimitive.Root>
-  );
+  return null;
 };
 
 const EditComposer: FC = () => {

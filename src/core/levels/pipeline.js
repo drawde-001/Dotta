@@ -57,7 +57,8 @@ export async function runMultiLevelFormPipeline({
   approvals = null,
   useLiveModel = false,
   mockPlannerCall = null,
-  liveExtractedSchema = null
+  liveExtractedSchema = null,
+  executionStrategy = 'adaptive'
 } = {}) {
   const startTimeMs = Date.now();
   const emit = (evt) => {
@@ -247,6 +248,7 @@ export async function runMultiLevelFormPipeline({
       expectedProfileId: profile?.id || null,
       browserExecutor,
       previousCheckpoint,
+      executionStrategy,
       onProgress: (prog) => emit(prog)
     });
 

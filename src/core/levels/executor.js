@@ -435,6 +435,7 @@ export async function runCustomPlanExecutor({
   browserExecutor = null,
   previousCheckpoint = null,
   requireHumanFallbackForFields = new Set(),
+  executionStrategy = 'adaptive',
   onProgress = null
 } = {}) {
   const validation = validateFillPlan(fillPlan, { expectedProfileId });
@@ -476,10 +477,10 @@ export async function runCustomPlanExecutor({
 
   for (const [sectionName, sectionItems] of sectionsMap.entries()) {
     const nonFileBatchable = sectionItems.filter(
-      (i) => i.type !== 'file' && !requireHumanFallbackForFields.has(i.fieldKey)
+      (i) => executionStrategy !== 'browser_action' && i.type !== 'file' && !requireHumanFallbackForFields.has(i.fieldKey)
     );
     const humanOrFileItems = sectionItems.filter(
-      (i) => i.type === 'file' || requireHumanFallbackForFields.has(i.fieldKey)
+      (i) => executionStrategy === 'browser_action' || i.type === 'file' || requireHumanFallbackForFields.has(i.fieldKey)
     );
 
     const sectionFilledMasked = [];
