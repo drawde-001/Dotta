@@ -857,16 +857,16 @@ export default function App() {
                   last.error = last.error || 'The model completed the turn without generating a response.';
                 }
 
-                // End of run: kill browser instance after 30s
+                // End of run: kill browser instance after 60s
                 if (browserIdleTimerRef.current) {
                   clearTimeout(browserIdleTimerRef.current);
                 }
                 browserIdleTimerRef.current = setTimeout(() => {
-                  console.log('[App] 30s reached after run. Killing live browser instance...');
+                  console.log('[App] 60s reached after run. Killing live browser instance...');
                   setWorkspaceMode('chat');
                   handleSendWsMessage({ type: 'close_browser' });
                   fetch('/api/browser/close', { method: 'POST' }).catch(() => {});
-                }, 30000);
+                }, 60000);
               } else if (event.type === 'RUN_ERROR') {
                 settleReasoning();
                 last.runCompletedAt = Date.now();

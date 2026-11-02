@@ -42,8 +42,8 @@ export function onAgentRunStart() {
 
 export function onAgentRunEnd(broadcast) {
   isAgentRunning = false;
-  console.log('[BrowserStream] Agent run completed. Starting 30-second post-run termination countdown...');
-  scheduleBrowserTermination(broadcast || globalBroadcast, 30000);
+  console.log('[BrowserStream] Agent run completed. Starting 60-second post-run termination countdown...');
+  scheduleBrowserTermination(broadcast || globalBroadcast, 60000);
 }
 
 export function cancelBrowserTermination() {
@@ -53,7 +53,7 @@ export function cancelBrowserTermination() {
   }
 }
 
-export function scheduleBrowserTermination(broadcast, delayMs = 30000) {
+export function scheduleBrowserTermination(broadcast, delayMs = 60000) {
   cancelBrowserTermination();
   if (isAgentRunning) {
     console.log('[BrowserStream] Termination timer skipped: agent run is currently active.');
@@ -65,7 +65,7 @@ export function scheduleBrowserTermination(broadcast, delayMs = 30000) {
       console.log('[BrowserStream] Inactivity timer fired, but agent is running. Aborting shutdown.');
       return;
     }
-    console.log(`[BrowserStream] 30s post-run inactivity reached. Auto-terminating Chromium process completely...`);
+    console.log(`[BrowserStream] 60s post-run inactivity reached. Auto-terminating Chromium process completely...`);
     await closeLiveBrowser(bc);
   }, delayMs);
 }
@@ -374,7 +374,7 @@ export async function handleBrowserWsMessage(data, broadcast) {
     console.error('[BrowserStream] Error executing action:', err.message);
   } finally {
     if (!isAgentRunning) {
-      scheduleBrowserTermination(broadcast, 30000);
+      scheduleBrowserTermination(broadcast, 60000);
     }
   }
 }
