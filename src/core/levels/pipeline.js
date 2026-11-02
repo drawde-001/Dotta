@@ -139,9 +139,11 @@ export async function runMultiLevelFormPipeline({
     const plannerResult = await runPlannerLevel({
       runId,
       userId,
+      userInstruction,
       mode,
       model: activeModel,
       verifiedFields: comparison.verifiedFields,
+      interactiveElements: extractorResult.schema?.interactiveElements || [],
       requiredDisputedForUser: comparison.requiredDisputedForUser,
       attachmentOverrides,
       storedAnswers
@@ -239,6 +241,7 @@ export async function runMultiLevelFormPipeline({
 
     // Build redacted user-facing summary (NEVER contains raw DOB, street address, or internal IDs)
     const filledLabels = executorResult.executionLog.map((e) => e.label);
+    const webActionLabels = (executorResult.executedWebActions || []).map((a) => `${a.action}:${a.label}`);
     const rawSummaryLines = [];
     if (plannerResult.attachmentOverrideNotes.length > 0) {
       rawSummaryLines.push(...plannerResult.attachmentOverrideNotes);
@@ -246,6 +249,11 @@ export async function runMultiLevelFormPipeline({
     rawSummaryLines.push(
       `Completed ${filledLabels.length} verified field(s) across ${executorResult.sectionCheckpoints.length} section(s): ${filledLabels.join(', ') || 'none'}.`
     );
+    if (webActionLabels.length > 0) {
+      rawSummaryLines.push(
+        `Executed ${webActionLabels.length} verified web action(s): ${webActionLabels.join(', ')}.`
+      );
+    }
     if (comparison.disputedFields.length > 0) {
       rawSummaryLines.push(
         `Left ${comparison.disputedFields.length} unverified/disputed field(s) untouched.`

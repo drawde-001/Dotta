@@ -15,6 +15,14 @@
 import { validateFillPlan } from './schema.js';
 import { maskPersonalValue } from './plan-file.js';
 import { executeLevelTool } from './registries.js';
+import { streamModelTurn } from '../models/model-adapter.js';
+
+export const EXECUTOR_CODEGEN_SYSTEM_PROMPT = `You are the Level 1 Browser Subagent Custom DOM Code Generator.
+Write a self-contained JavaScript IIFE that populates the provided section fields in the live DOM and dispatches input/change/blur events.
+CRITICAL SECURITY RULES:
+- NEVER call fetch, XMLHttpRequest, WebSocket, sendBeacon, window.open, eval, Function, or modify window.location.
+- NEVER read document.cookie, localStorage, sessionStorage, or indexedDB.
+- Return ONLY the executable JavaScript IIFE string.`;
 
 const FORBIDDEN_BROWSER_SCRIPT_APIS = [
   /\bfetch\s*\(/i,
@@ -51,8 +59,62 @@ export function verifyCustomBrowserScriptSafety(scriptSource = '') {
 }
 
 /**
+ * Synthesize custom DOM code for a section using the Level 1 Browser Subagent model
+ * when `useLiveModel` or `mockCodegenCall` is provided, verifying it through
+ * `verifyCustomBrowserScriptSafety` and falling back to `buildCustomSectionFillScript`
+ * if offline or unsafe.
+ */
+export async function synthesizeCustomSectionScriptWithModel(
+  sectionItems = [],
+  { model = 'muse-spark-open', mockCodegenCall = null, useLiveModel = false } = {}
+) {
+  const fallback = buildCustomSectionFillScript(sectionItems);
+  if (!useLiveModel && typeof mockCodegenCall !== 'function') {
+    return fallback;
+  }
+  try {
+    const prompt = JSON.stringify(
+      sectionItems.map((i) => ({
+        fieldKey: i.fieldKey,
+        selector: i.selector,
+        type: i.type,
+        validationHints: i.validationHints || '',
+        value: i.value
+      }))
+    );
+    let candidateScript = '';
+    if (typeof mockCodegenCall === 'function') {
+      candidateScript = await mockCodegenCall({ prompt, model, systemInstruction: EXECUTOR_CODEGEN_SYSTEM_PROMPT });
+    } else {
+      const turn = await streamModelTurn({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        systemInstruction: EXECUTOR_CODEGEN_SYSTEM_PROMPT,
+        model,
+        tools: []
+      });
+      candidateScript = turn?.text || '';
+    }
+    const cleaned = String(candidateScript || '')
+      .trim()
+      .replace(/^```(?:javascript|js)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    if (cleaned && verifyCustomBrowserScriptSafety(cleaned).safe) {
+      return {
+        batchItems: fallback.batchItems,
+        scriptSource: cleaned,
+        generatedByModel: true
+      };
+    }
+  } catch {}
+  return fallback;
+}
+
+/**
  * Generate a custom batch DOM script for all non-file READY items in a section.
- * Sets values and dispatches native input, change, and blur events in a single pass.
+ * Handles both standard HTML controls (<input>, <select>, <textarea>) AND modern custom ARIA
+ * widgets ([role="combobox"], [role="listbox"], [role="textbox"], [contenteditable="true"],
+ * [role="checkbox"], [role="switch"]) in a single pass.
  */
 export function buildCustomSectionFillScript(sectionItems = []) {
   const payload = sectionItems
@@ -62,6 +124,7 @@ export function buildCustomSectionFillScript(sectionItems = []) {
       selector: item.selector,
       label: item.label,
       type: item.type,
+      validationHints: item.validationHints || '',
       value: item.value
     }));
 
@@ -70,14 +133,43 @@ export function buildCustomSectionFillScript(sectionItems = []) {
     scriptSource: `(function applySectionBatch(items) {
   const results = [];
   for (const item of items) {
-    const el = document.querySelector(item.selector) || document.getElementById(item.fieldKey) || document.querySelector('[name="' + item.fieldKey + '"]');
+    const el = document.querySelector(item.selector) || document.getElementById(item.fieldKey) || document.querySelector('[name="' + item.fieldKey + '"]') || document.querySelector('[data-testid="' + item.fieldKey + '"]');
     if (!el) {
       results.push({ fieldKey: item.fieldKey, label: item.label, status: 'needs_human_fallback', reason: 'selector_not_found' });
       continue;
     }
     try {
       el.focus();
-      if (item.type === 'checkbox') {
+      const role = (el.getAttribute('role') || '').toLowerCase();
+      const isContentEditable = el.getAttribute('contenteditable') === 'true';
+      const tag = (el.tagName || '').toUpperCase();
+
+      if (role === 'combobox' || role === 'listbox') {
+        el.click();
+        el.dataset.value = String(item.value);
+        el.setAttribute('aria-valuetext', String(item.value));
+        const valNorm = String(item.value).trim().toLowerCase();
+        const optCandidates = Array.from(el.querySelectorAll('[role="option"], li, option')).concat(
+          Array.from(document.querySelectorAll('[role="listbox"] [role="option"], [role="menu"] [role="menuitem"]'))
+        );
+        const matchOpt = optCandidates.find((o) => {
+          const t = (o.textContent || o.getAttribute('data-value') || '').trim().toLowerCase();
+          return t === valNorm || t.includes(valNorm) || valNorm.includes(t);
+        });
+        if (matchOpt) {
+          matchOpt.click();
+          matchOpt.setAttribute('aria-selected', 'true');
+        }
+      } else if (role === 'checkbox' || role === 'switch') {
+        const wantChecked = Boolean(item.value && item.value !== 'false' && item.value !== '0');
+        const curChecked = el.getAttribute('aria-checked') === 'true';
+        if (curChecked !== wantChecked) el.click();
+        el.setAttribute('aria-checked', wantChecked ? 'true' : 'false');
+        el.dataset.value = wantChecked ? 'true' : 'false';
+      } else if (isContentEditable || (role === 'textbox' && tag !== 'INPUT' && tag !== 'TEXTAREA')) {
+        el.textContent = String(item.value);
+        el.dataset.value = String(item.value);
+      } else if (item.type === 'checkbox') {
         el.checked = Boolean(item.value && item.value !== 'false');
       } else if (item.type === 'radio') {
         const radios = document.querySelectorAll('input[type="radio"][name="' + (el.name || item.fieldKey) + '"]');
@@ -91,9 +183,9 @@ export function buildCustomSectionFillScript(sectionItems = []) {
         });
         if (!matched) el.checked = true;
       } else {
-        const proto = el.tagName === 'TEXTAREA'
+        const proto = tag === 'TEXTAREA'
           ? window.HTMLTextAreaElement?.prototype
-          : el.tagName === 'SELECT'
+          : tag === 'SELECT'
             ? window.HTMLSelectElement?.prototype
             : window.HTMLInputElement?.prototype;
         const nativeSetter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -107,6 +199,40 @@ export function buildCustomSectionFillScript(sectionItems = []) {
     } catch (err) {
       results.push({ fieldKey: item.fieldKey, label: item.label, status: 'needs_human_fallback', reason: err.message });
     }
+  }
+  return results;
+})(${JSON.stringify(payload)});`
+  };
+}
+
+/**
+ * Generate a custom DOM script for verified interactive web-task actions (clicks on filters,
+ * tabs, directory cards, or action buttons).
+ */
+export function buildCustomWebTaskScript(webTaskActions = []) {
+  const payload = (webTaskActions || []).map((act) => ({
+    elementKey: act.elementKey,
+    action: act.action || 'click',
+    label: act.label,
+    selector: act.selector
+  }));
+
+  return {
+    actions: payload,
+    scriptSource: `(function applyWebTaskActions(actions) {
+  const results = [];
+  for (const act of actions) {
+    let el = document.querySelector(act.selector) || document.getElementById(act.elementKey);
+    if (!el) {
+      const candidates = Array.from(document.querySelectorAll('button, a, [role="button"], [role="tab"]'));
+      el = candidates.find((c) => (c.textContent || '').trim().toLowerCase() === String(act.label || '').trim().toLowerCase());
+    }
+    if (!el) {
+      results.push({ elementKey: act.elementKey, label: act.label, status: 'not_found' });
+      continue;
+    }
+    el.click();
+    results.push({ elementKey: act.elementKey, label: act.label, status: 'clicked' });
   }
   return results;
 })(${JSON.stringify(payload)});`
@@ -292,6 +418,44 @@ export async function runCustomPlanExecutor({
     }
   }
 
+  // 4. Execute any verified interactive web-task actions (clicks on filters, tabs, directory results, or buttons)
+  const executedWebActions = [];
+  if (Array.isArray(plan.webTaskActions) && plan.webTaskActions.length > 0) {
+    const { scriptSource } = buildCustomWebTaskScript(plan.webTaskActions);
+    const safety = verifyCustomBrowserScriptSafety(scriptSource);
+    if (!safety.safe) {
+      throw new Error(`Blocked unsafe custom web-task script: ${safety.violations.join('; ')}`);
+    }
+    await executeLevelTool({
+      level: 'browser_subagent',
+      toolName: 'browser_action',
+      toolArgs: {
+        action: 'batch_fill_section',
+        section: 'Web Task Actions',
+        script: scriptSource,
+        actions: plan.webTaskActions
+      },
+      context: {},
+      executor: defaultBrowserExec
+    });
+    for (const act of plan.webTaskActions) {
+      executedWebActions.push({
+        elementKey: act.elementKey,
+        action: act.action || 'click',
+        label: act.label,
+        selector: act.selector,
+        status: 'executed'
+      });
+    }
+    if (typeof onProgress === 'function') {
+      onProgress({
+        type: 'WEB_TASK_ACTIONS_PROGRESS',
+        actions: executedWebActions,
+        timestamp: Date.now()
+      });
+    }
+  }
+
   return {
     ok: true,
     dropped: false,
@@ -302,7 +466,9 @@ export async function runCustomPlanExecutor({
     completedFieldKeys: [...completedFieldKeys],
     sectionCheckpoints,
     executionLog,
+    executedWebActions,
     missingItems: plan.items.filter((i) => i.status === 'MISSING'),
     unsupportedItems: plan.items.filter((i) => i.status === 'UNSUPPORTED')
   };
 }
+

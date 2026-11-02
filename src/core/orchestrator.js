@@ -89,6 +89,10 @@ import {
   isUntrustedWebTool
 } from './tools/untrusted.js';
 import { redactPiiAndInternalIds } from './levels/plan-file.js';
+import { runMultiLevelFormPipeline } from './levels/pipeline.js';
+import { extractLiveDomSchemaInPlaywright } from './levels/extractor.js';
+
+export { runMultiLevelFormPipeline, extractLiveDomSchemaInPlaywright };
 
 export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent.
 CRITICAL MANDATE — ACTION FIRST, NEVER MERELY WRITE SUMMARIES OR PROSE:

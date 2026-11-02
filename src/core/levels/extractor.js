@@ -131,7 +131,7 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
     visibleHtml = visibleHtml.replace(snippet, ' ');
   }
 
-  // 3. Index explicit <label for="...">Visible Text</label>
+  // 3. Index explicit <label for="...">Visible Text</label> AND element text by ID for aria-labelledby resolution
   const labelsByFor = new Map();
   const labelRx = /<label\b([^>]*)>([\s\S]*?)<\/label>/gi;
   let lm;
@@ -147,6 +147,42 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
       labelsByFor.set(lAttrs.for, cleanText);
     }
   }
+
+  const textById = new Map();
+  const idElemRx = /<([a-z0-9]+)\b([^>]*\bid\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+)[^>]*)>([\s\S]*?)<\/\1>/gi;
+  let iem;
+  while ((iem = idElemRx.exec(visibleHtml)) !== null) {
+    const iAttrs = parseAttributes(iem[2]);
+    if (!iAttrs.id) continue;
+    if (isStyleHiddenOrDeceptive(iAttrs.style || '').hidden || iAttrs.hidden !== undefined || iAttrs['aria-hidden'] === 'true') {
+      continue;
+    }
+    const strippedInner = iem[3].replace(/<(input|select|textarea|button|ul|ol)\b[^>]*>[\s\S]*?(?:<\/\1>)?/gi, ' ');
+    const txt = sanitizeExtractedString(strippedInner, 140).text;
+    if (txt) {
+      textById.set(iAttrs.id, txt);
+    }
+  }
+
+  const resolveAriaLabelledBy = (attrVal = '') => {
+    if (!attrVal) return '';
+    const ids = String(attrVal).trim().split(/\s+/);
+    const parts = ids.map((id) => textById.get(id) || labelsByFor.get(id) || '').filter(Boolean);
+    return sanitizeExtractedString(parts.join(' '), 140).text;
+  };
+
+  const resolveProximityLabel = (pos) => {
+    const slice = visibleHtml.slice(Math.max(0, pos - 280), pos);
+    const openLabelMatch = slice.match(/<label\b[^>]*>([^<]*)$/i);
+    if (openLabelMatch && openLabelMatch[1].trim()) {
+      return sanitizeExtractedString(openLabelMatch[1], 140).text;
+    }
+    const nearTagMatch = slice.match(/<(?:label|span|div|p|strong|dt)\b[^>]*>([^<>]{2,120})<\/(?:label|span|div|p|strong|dt)>\s*$/i);
+    if (nearTagMatch && nearTagMatch[1].trim()) {
+      return sanitizeExtractedString(nearTagMatch[1], 140).text;
+    }
+    return '';
+  };
 
   // 4. Detect section headings (<legend>, <h2>, <h3>) by offset
   const headings = [];
@@ -170,8 +206,9 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
     return current;
   };
 
-  // 5. Extract form controls (<input>, <select>, <textarea>)
+  // 5. Extract standard form controls (<input>, <select>, <textarea>)
   const fields = [];
+  const seenFieldKeys = new Set();
   const radioGroups = new Map();
   const controlRx = /<(input|select|textarea)\b([^>]*)>([\s\S]*?<\/\1>)?/gi;
   let ctrlMatch;
@@ -205,19 +242,16 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
 
     const fieldId = attrs.id || '';
     const fieldName = attrs.name || '';
-    const explicitLabel = (fieldId && labelsByFor.get(fieldId)) || '';
+    const explicitLabel =
+      (fieldId && labelsByFor.get(fieldId)) ||
+      resolveAriaLabelledBy(attrs['aria-labelledby']) ||
+      '';
 
-    // Check enclosing label if no for= match
-    let enclosingLabel = '';
-    if (!explicitLabel) {
-      const beforeSlice = visibleHtml.slice(Math.max(0, ctrlMatch.index - 260), ctrlMatch.index);
-      const openLabelMatch = beforeSlice.match(/<label\b[^>]*>([^<]*)$/i);
-      if (openLabelMatch && openLabelMatch[1].trim()) {
-        enclosingLabel = sanitizeExtractedString(openLabelMatch[1], 140).text;
-      }
-    }
-
-    const visibleLabel = explicitLabel || enclosingLabel || sanitizeExtractedString(attrs.placeholder || fieldName || fieldId, 140).text;
+    const proximityLabel = !explicitLabel ? resolveProximityLabel(ctrlMatch.index) : '';
+    const visibleLabel =
+      explicitLabel ||
+      proximityLabel ||
+      sanitizeExtractedString(attrs.placeholder || fieldName || fieldId, 140).text;
     if (!visibleLabel) continue;
 
     // Check aria-label / title / data-* mismatch against visible label
@@ -244,7 +278,6 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
       });
     }
 
-    // Check data-* attributes for prompt injection
     for (const [k, v] of Object.entries(attrs)) {
       if (k.startsWith('data-') && isInstructionLikeText(v).instructionLike) {
         scannerNotes.push({
@@ -286,6 +319,7 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
         };
         radioGroups.set(fieldName, groupObj);
         fields.push(groupObj);
+        seenFieldKeys.add(fieldName);
       } else if (optionVal) {
         radioGroups.get(fieldName).options.push(optionVal);
       }
@@ -318,8 +352,10 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
             : 'text';
 
     idxCounter++;
+    const fKey = fieldId || fieldName || `field_${idxCounter}`;
+    seenFieldKeys.add(fKey);
     fields.push({
-      fieldKey: fieldId || fieldName || `field_${idxCounter}`,
+      fieldKey: fKey,
       selector,
       label: visibleLabel.replace(/\*+$/g, '').trim(),
       normalizedLabel: normalizeLabelForComparison(visibleLabel),
@@ -333,32 +369,167 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
     });
   }
 
-  // 6. Extract submit/action buttons
+  // 5B. Extract Custom ARIA & ContentEditable Controls (<div role="combobox">, <div role="textbox">, <button role="checkbox">, <div contenteditable="true">, etc.)
+  const ariaControlRx = /<(div|button|span|ul)\b([^>]*\b(?:role\s*=\s*(?:"(?:combobox|listbox|textbox|checkbox|switch|radio|spinbutton)"|'(?:combobox|listbox|textbox|checkbox|switch|radio|spinbutton)')|contenteditable\s*=\s*(?:"true"|'true'))[^>]*)>([\s\S]*?)<\/\1>/gi;
+  let ariaMatch;
+  while ((ariaMatch = ariaControlRx.exec(visibleHtml)) !== null) {
+    const tag = ariaMatch[1].toLowerCase();
+    const attrs = parseAttributes(ariaMatch[2]);
+    const innerHtml = ariaMatch[3] || '';
+    const styleCheck = isStyleHiddenOrDeceptive(attrs.style || '');
+    if (attrs.hidden !== undefined || attrs['aria-hidden'] === 'true' || styleCheck.hidden) {
+      continue;
+    }
+
+    const role = (attrs.role || (attrs.contenteditable === 'true' ? 'textbox' : '')).toLowerCase();
+    const fieldId = attrs.id || attrs['data-testid'] || attrs.name || '';
+    if (fieldId && seenFieldKeys.has(fieldId)) continue;
+
+    const explicitLabel =
+      (fieldId && labelsByFor.get(fieldId)) ||
+      resolveAriaLabelledBy(attrs['aria-labelledby']) ||
+      '';
+    const proximityLabel = !explicitLabel ? resolveProximityLabel(ariaMatch.index) : '';
+    const ariaLabel = sanitizeExtractedString(attrs['aria-label'] || '', 140).text;
+    const ariaLabelSafe = ariaLabel && !isInstructionLikeText(ariaLabel).instructionLike ? ariaLabel : '';
+
+    const visibleLabel =
+      explicitLabel ||
+      proximityLabel ||
+      ariaLabelSafe ||
+      sanitizeExtractedString(attrs.placeholder || attrs['data-placeholder'] || fieldId, 140).text;
+    if (!visibleLabel) continue;
+
+    const options = [];
+    if (role === 'combobox' || role === 'listbox') {
+      const optAttr = attrs['data-options'] || '';
+      if (optAttr) {
+        for (const part of optAttr.split(/[|,]/)) {
+          const cleanOpt = sanitizeExtractedString(part, 80).text;
+          if (cleanOpt && !isInstructionLikeText(cleanOpt).instructionLike) options.push(cleanOpt);
+        }
+      }
+      const roleOptRx = /<[^>]*\brole\s*=\s*(?:"option"|'option')[^>]*>([\s\S]*?)<\/[^>]+>|<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+      let rom;
+      while ((rom = roleOptRx.exec(innerHtml)) !== null) {
+        const cleanOpt = sanitizeExtractedString(rom[1] || rom[2] || '', 80).text;
+        if (cleanOpt && !isInstructionLikeText(cleanOpt).instructionLike) options.push(cleanOpt);
+      }
+    }
+
+    const mappedType =
+      role === 'combobox' || role === 'listbox'
+        ? 'select'
+        : role === 'checkbox' || role === 'switch'
+          ? 'checkbox'
+          : role === 'radio'
+            ? 'radio'
+            : role === 'spinbutton'
+              ? 'number'
+              : 'textarea';
+
+    const required =
+      attrs.required !== undefined ||
+      attrs['aria-required'] === 'true' ||
+      /\*\s*$/.test(visibleLabel) ||
+      /\(required\)/i.test(visibleLabel);
+
+    idxCounter++;
+    const fKey = fieldId || `aria_field_${idxCounter}`;
+    seenFieldKeys.add(fKey);
+    const selector = attrs.id
+      ? `#${attrs.id}`
+      : attrs['data-testid']
+        ? `[data-testid="${attrs['data-testid']}"]`
+        : `${tag}[role="${role}"]`;
+
+    fields.push({
+      fieldKey: fKey,
+      selector,
+      label: visibleLabel.replace(/\*+$/g, '').trim(),
+      normalizedLabel: normalizeLabelForComparison(visibleLabel),
+      type: mappedType,
+      required: Boolean(required),
+      options,
+      section: sectionForIndex(ariaMatch.index),
+      visibility: 'visible',
+      validationHints: `custom_aria:${role || 'contenteditable'}`,
+      conditionalOn: sanitizeExtractedString(attrs['data-conditional-on'] || '', 80).text
+    });
+  }
+
+  // 6. Extract submit/action buttons & interactive web-task elements (buttons, links, tabs, filters)
   const submitButtons = [];
-  const btnRx = /<button\b([^>]*)>([\s\S]*?)<\/button>|<input\b([^>]*)>/gi;
+  const interactiveElements = [];
+  const btnRx = /<button\b([^>]*)>([\s\S]*?)<\/button>|<input\b([^>]*)>|<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let btnMatch;
   while ((btnMatch = btnRx.exec(visibleHtml)) !== null) {
     const isButtonTag = btnMatch[1] !== undefined;
-    const tag = isButtonTag ? 'button' : 'input';
-    const attrs = parseAttributes(isButtonTag ? btnMatch[1] : btnMatch[3]);
-    if (isStyleHiddenOrDeceptive(attrs.style || '').hidden || attrs.hidden !== undefined) continue;
+    const isInputTag = btnMatch[3] !== undefined;
+    const isAnchorTag = btnMatch[4] !== undefined;
+    const tag = isButtonTag ? 'button' : isInputTag ? 'input' : 'a';
+    const rawAttrStr = isButtonTag ? btnMatch[1] : isInputTag ? btnMatch[3] : btnMatch[4];
+    const attrs = parseAttributes(rawAttrStr);
+    if (isStyleHiddenOrDeceptive(attrs.style || '').hidden || attrs.hidden !== undefined || attrs['aria-hidden'] === 'true') {
+      continue;
+    }
+    if (isButtonTag && (attrs.role === 'checkbox' || attrs.role === 'switch' || attrs.role === 'combobox')) {
+      continue;
+    }
+
+    if (isAnchorTag) {
+      const label = sanitizeExtractedString(btnMatch[5] || attrs.title || '', 80).text;
+      const href = sanitizeExtractedString(attrs.href || '', 200).text;
+      if (label && !isInstructionLikeText(label).instructionLike) {
+        interactiveElements.push({
+          elementKey: attrs.id || attrs['data-testid'] || `link_${interactiveElements.length + 1}`,
+          role: attrs.role || 'link',
+          label,
+          href,
+          selector: attrs.id ? `#${attrs.id}` : attrs['data-testid'] ? `[data-testid="${attrs['data-testid']}"]` : `a[href="${href}"]`
+        });
+      }
+      continue;
+    }
+
     const t = (attrs.type || (isButtonTag ? 'submit' : '')).toLowerCase();
-    if (!isButtonTag && t !== 'submit' && t !== 'button') continue;
+    if (isInputTag && t !== 'submit' && t !== 'button') continue;
     const label = sanitizeExtractedString(
       isButtonTag ? btnMatch[2] || attrs.value || 'Submit' : attrs.value || 'Submit',
       80
     ).text;
-    if (label) {
+    if (!label) continue;
+
+    const selector = attrs.id
+      ? `#${attrs.id}`
+      : attrs['data-testid']
+        ? `[data-testid="${attrs['data-testid']}"]`
+        : `${tag}[type="${t || 'submit'}"]`;
+
+    if (t === 'submit' || /\b(submit|apply|send|finish|complete)\b/i.test(label)) {
       submitButtons.push({
         label,
         type: t || 'submit',
-        selector: attrs.id ? `#${attrs.id}` : `${tag}[type="${t || 'submit'}"]`
+        selector
+      });
+    }
+    if (!isInstructionLikeText(label).instructionLike) {
+      interactiveElements.push({
+        elementKey: attrs.id || attrs['data-testid'] || `btn_${interactiveElements.length + 1}`,
+        role: attrs.role || 'button',
+        label,
+        selector
       });
     }
   }
 
   // 7. Extract visible plain text for Level 2B Reader (never includes Extractor's schema!)
-  const visiblePageText = buildVisiblePageTextFromCleanHtml(visibleHtml, { fields, submitButtons, headings });
+  const visiblePageText = buildVisiblePageTextFromCleanHtml(visibleHtml, {
+    fields,
+    submitButtons,
+    interactiveElements,
+    headings
+  });
 
   const validation = validateFormSchema(
     {
@@ -366,7 +537,8 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
       title: sanitizeExtractedString(title, 120).text,
       sections: [...new Set(fields.map((f) => f.section))],
       fields,
-      submitButtons
+      submitButtons,
+      interactiveElements
     },
     'extractor_2a'
   );
@@ -380,7 +552,7 @@ export function extractFormSchemaFromHtml(html = '', { url = 'about:blank', titl
   };
 }
 
-function buildVisiblePageTextFromCleanHtml(visibleHtml, { fields, submitButtons, headings }) {
+function buildVisiblePageTextFromCleanHtml(visibleHtml, { fields, submitButtons, interactiveElements = [], headings }) {
   const lines = [];
   if (headings.length > 0) {
     for (const h of headings) {
@@ -395,7 +567,85 @@ function buildVisiblePageTextFromCleanHtml(visibleHtml, { fields, submitButtons,
   for (const b of submitButtons) {
     lines.push(`Button: ${b.label}`);
   }
+  for (const el of interactiveElements) {
+    if (!submitButtons.some((b) => b.label === el.label)) {
+      lines.push(`Action [${el.role}]: ${el.label}`);
+    }
+  }
   return lines.join('\n');
+}
+
+/**
+ * Live Playwright DOM + Accessibility Tree + Computed Style Extractor for Level 2A.
+ * Runs directly inside the live browser page (`page.evaluate()`) to inspect real
+ * `window.getComputedStyle()`, `getBoundingClientRect()`, custom ARIA roles, and
+ * visual proximity labels on any unseen site — catching stylesheet-hidden elements too.
+ */
+export async function extractLiveDomSchemaInPlaywright(page) {
+  const liveSnapshot = await page.evaluate(() => {
+    const computedExcluded = [];
+    const allEls = Array.from(document.querySelectorAll('*'));
+    for (const el of allEls) {
+      const cs = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      const fontSize = parseFloat(cs.fontSize || '16');
+      const opacity = parseFloat(cs.opacity || '1');
+      const sameColor =
+        cs.color &&
+        cs.backgroundColor &&
+        cs.color !== 'rgba(0, 0, 0, 0)' &&
+        cs.color === cs.backgroundColor;
+
+      if (
+        cs.display === 'none' ||
+        cs.visibility === 'hidden' ||
+        opacity <= 0.05 ||
+        fontSize < 2 ||
+        sameColor ||
+        rect.right < 0 ||
+        rect.bottom < 0
+      ) {
+        const reason =
+          cs.display === 'none'
+            ? 'computed_display:none'
+            : cs.visibility === 'hidden'
+              ? 'computed_visibility:hidden'
+              : opacity <= 0.05
+                ? 'computed_opacity:0'
+                : fontSize < 2
+                  ? 'computed_font-size:0'
+                  : sameColor
+                    ? 'computed_same_fg_bg_color'
+                    : 'computed_offscreen';
+        el.setAttribute('data-omni-hidden-reason', reason);
+        el.setAttribute('hidden', 'hidden');
+        computedExcluded.push({
+          tag: el.tagName.toLowerCase(),
+          id: el.id || el.getAttribute('name') || '',
+          reason,
+          preview: (el.innerText || el.getAttribute('value') || '').slice(0, 60)
+        });
+      }
+    }
+    return {
+      html: document.documentElement.outerHTML,
+      url: window.location.href,
+      title: document.title || '',
+      computedExcluded
+    };
+  });
+
+  const parsed = extractFormSchemaFromHtml(liveSnapshot.html, {
+    url: liveSnapshot.url,
+    title: liveSnapshot.title
+  });
+  return {
+    ...parsed,
+    excludedElements: [
+      ...(parsed.excludedElements || []),
+      ...(liveSnapshot.computedExcluded || [])
+    ]
+  };
 }
 
 /**
@@ -405,3 +655,4 @@ export async function extractPlainTextInCode(absPath, mime = '', name = '') {
   const raw = await extractFileText(absPath, mime, name);
   return sanitizeExtractedString(raw, 20000).text;
 }
+
