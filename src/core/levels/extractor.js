@@ -622,7 +622,7 @@ export async function extractLiveDomSchemaInPlaywright(page) {
                   : sameColor
                     ? 'computed_same_fg_bg_color'
                     : 'computed_offscreen';
-        el.setAttribute('data-omni-hidden-reason', reason);
+        el.setAttribute('data-dotta-hidden-reason', reason);
         el.setAttribute('hidden', 'hidden');
         computedExcluded.push({
           tag: el.tagName.toLowerCase(),

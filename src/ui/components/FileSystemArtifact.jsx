@@ -36,7 +36,7 @@ export function cleanRelativeDisplayPath(rawPath = '') {
   if (!rawPath || typeof rawPath !== 'string') return '';
   return rawPath
     .replace(/\\/g, '/')
-    .replace(/^.*?[/\\](?:omni-agent|workspace|project|home\/[^\/]+)[/\\]/i, '')
+    .replace(/^.*?[/\\](?:dotta|workspace|project|home\/[^\/]+)[/\\]/i, '')
     .replace(/^[a-zA-Z]:[/\\][^/\\]+[/\\]*/, '')
     .replace(/^([./\\])+/, '')
     .replace(/\/+/g, ' > ');
@@ -44,7 +44,7 @@ export function cleanRelativeDisplayPath(rawPath = '') {
 
 export function openFileInViewer(fileData) {
   if (!fileData) return;
-  window.dispatchEvent(new CustomEvent('omni:open-file', { detail: fileData }));
+  window.dispatchEvent(new CustomEvent('dotta:open-file', { detail: fileData }));
 }
 
 export function getFileMimeType(filename = '') {

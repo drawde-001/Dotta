@@ -1,20 +1,20 @@
 #!/usr/bin/env node
 
 /**
- * Minimal Headless CLI runner for OmniEngine
+ * Minimal Headless CLI runner for DottaEngine
  */
 import path from 'path';
-import { OmniEngine } from '../src/index.js';
+import { DottaEngine } from '../src/index.js';
 
 async function main() {
   const instruction = process.argv.slice(2).join(' ') || 'Explain what tools you have available and how you execute them.';
 
   console.log('='.repeat(60));
-  console.log('Omni Core Headless CLI');
+  console.log('Dotta Core Headless CLI');
   console.log('='.repeat(60));
   console.log(`Task: ${instruction}\n`);
 
-  const engine = new OmniEngine();
+  const engine = new DottaEngine();
 
   engine.on('event', (evt) => {
     switch (evt.type) {

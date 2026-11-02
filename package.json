@@ -1,7 +1,8 @@
 {
-  "name": "omni-agent",
+  "name": "dotta",
   "version": "1.0.0",
   "private": true,
+  "homepage": "https://dotta.duckdns.org",
   "type": "module",
   "scripts": {
     "dev": "vite",

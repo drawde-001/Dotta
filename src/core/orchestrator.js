@@ -99,7 +99,7 @@ import { verifyLiveFormDom, enforceVerifiedMessage } from './levels/verifier.js'
 
 export { runMultiLevelFormPipeline, extractLiveDomSchemaInPlaywright };
 
-export const OMNI_SYSTEM_PROMPT = `You are Omni Agent, a premier autonomous problem-solving AI agent.
+export const DOTTA_SYSTEM_PROMPT = `You are Dotta, a premier autonomous problem-solving AI agent.
 CRITICAL MANDATE — ACTION FIRST, NEVER MERELY WRITE SUMMARIES OR PROSE:
 You are an active autonomous execution agent, NOT a passive conversational advisor or essay writer.
 When the user gives you a task or command (e.g. search, browse, apply, fill, download, create, write code, run script, generate image, analyze data):
@@ -321,10 +321,10 @@ export function evaluateDynamicThinkingEffort({
   return baseEffort || 'medium';
 }
 
-export class OmniEngine extends EventEmitter {
+export class DottaEngine extends EventEmitter {
   constructor(options = {}) {
     super();
-    this.systemInstruction = options.systemInstruction || OMNI_SYSTEM_PROMPT;
+    this.systemInstruction = options.systemInstruction || DOTTA_SYSTEM_PROMPT;
     this.defaultModel = options.defaultModel || process.env.DEFAULT_MODEL || 'meta-muse-spark';
     this.toolCatalog = { ...AGENT_TOOLS_CATALOG, ...(options.customTools || {}) };
     this.customExecutors = options.customExecutors || {};
@@ -544,7 +544,7 @@ export class OmniEngine extends EventEmitter {
       case 'handoff_agent':
         return {
           ok: true,
-          from: toolArgs.from || 'Omni Agent',
+          from: toolArgs.from || 'Dotta',
           to: toolArgs.to || 'Specialist Agent',
           reason: toolArgs.reason || 'Delegating task',
           carried: toolArgs.carried || [],
@@ -1279,7 +1279,7 @@ export class OmniEngine extends EventEmitter {
 
               if (isToolAlreadyApproved) {
                 console.log(
-                  `[Omni Engine] Permission for "${toolName}" (${targetHost || 'action'}) already approved in thread ${threadId}. Proceeding with execution.`
+                  `[Dotta Engine] Permission for "${toolName}" (${targetHost || 'action'}) already approved in thread ${threadId}. Proceeding with execution.`
                 );
                 // Fall through to tool execution step 3 instead of interrupting again
               } else if (toolName === 'ask_user') {
@@ -1295,7 +1295,7 @@ export class OmniEngine extends EventEmitter {
                   }));
                   const answerText = answeredDetails.map((a) => `"${a.question}": "${a.answer}"`).join('; ');
                   console.log(
-                    `[Omni Engine] Question already answered in thread ${threadId}: ${answerText}. Auto-resolving tool call without interrupt.`
+                    `[Dotta Engine] Question already answered in thread ${threadId}: ${answerText}. Auto-resolving tool call without interrupt.`
                   );
                   toolResults.push({
                     name: toolName,
@@ -1592,7 +1592,7 @@ export class OmniEngine extends EventEmitter {
           );
 
           if (hasActionableDirective && hasPriorBioCalls && !hasExecutedBrowserAction && turnCount <= 3) {
-            console.warn('[Omni Engine] Premature completion intercepted: model read BIO but has not navigated to target URL or interacted with page. Injecting steering prompt to continue...');
+            console.warn('[Dotta Engine] Premature completion intercepted: model read BIO but has not navigated to target URL or interacted with page. Injecting steering prompt to continue...');
             contents.push({
               role: 'model',
               parts: streamResult.modelParts
@@ -1825,7 +1825,7 @@ export class OmniEngine extends EventEmitter {
                 // If any missing fields exist in BIO and retries < 3, reject premature completion and steer the agent!
                 if (missingWithBio.some((m) => m.hasBio) && formVerificationRetries < 3) {
                   formVerificationRetries++;
-                  console.warn(`[Omni Engine] Premature form completion blocked (attempt ${formVerificationRetries}/3). Missing/invalid fields detected on page.`);
+                  console.warn(`[Dotta Engine] Premature form completion blocked (attempt ${formVerificationRetries}/3). Missing/invalid fields detected on page.`);
 
                   const breakdown = missingWithBio
                     .map((m) => `• ${m.label} (${m.selector || m.tag}): ${m.reason}${m.hasBio ? ` [Found in your BIO: ${m.bioField}]` : ' [Not in BIO]'}`)
@@ -1867,7 +1867,7 @@ export class OmniEngine extends EventEmitter {
                 turnText = enforceVerifiedMessage(turnText, verificationResult, bioProfile);
               }
             } catch (vErr) {
-              console.warn('[Omni Engine] DOM verification error:', vErr?.message || vErr);
+              console.warn('[Dotta Engine] DOM verification error:', vErr?.message || vErr);
             }
           }
 

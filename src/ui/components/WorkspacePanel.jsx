@@ -137,7 +137,7 @@ export function WorkspacePanel({
       );
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok && data.file) {
-        window.dispatchEvent(new CustomEvent('omni:open-file', { detail: data.file }));
+        window.dispatchEvent(new CustomEvent('dotta:open-file', { detail: data.file }));
       }
     } catch {}
     setTreeLayout('split');

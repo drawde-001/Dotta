@@ -37,12 +37,12 @@ function registerProcessExitCleanup() {
 
 /**
  * Detects if Docker + gVisor (runsc) or standard Docker container runtime is available
- * when OMNI_SANDBOX_CONTAINER=1 is enabled.
+ * when DOTTA_SANDBOX_CONTAINER=1 is enabled.
  */
 let cachedContainerRuntime = null;
 export function detectContainerRuntime() {
   if (cachedContainerRuntime !== null) return cachedContainerRuntime;
-  if (process.env.OMNI_SANDBOX_CONTAINER !== '1') {
+  if (process.env.DOTTA_SANDBOX_CONTAINER !== '1') {
     cachedContainerRuntime = { available: false, runtime: 'process-isolated' };
     return cachedContainerRuntime;
   }
@@ -84,7 +84,7 @@ export function redactSandboxHostPaths(text = '', sandboxRoot = '') {
     PROJECT_ROOT.replace(/\\/g, '/'),
     WORKSPACES_BASE,
     WORKSPACES_BASE.replace(/\\/g, '/'),
-    '/home/ubuntu/omni-agent',
+    '/home/ubuntu/dotta',
     '/home/ubuntu',
     '/app'
   ].filter(Boolean);
@@ -192,7 +192,7 @@ export function assertNoHostPathAccess(input, sandboxRoot = '') {
     /(?:^|[\s"'/\\])\.ssh(?:\b|[/\\]|$)/i.test(raw) ||
     /(?:^|[\s"'/\\])\.agents(?:\b|[/\\]|$)/i.test(raw) ||
     /\.(?:pem|key|pfx|p12)\b/i.test(raw) ||
-    /\b(?:id_rsa|id_ed25519|omni-agent-key)\b/i.test(raw)
+    /\b(?:id_rsa|id_ed25519|dotta-key)\b/i.test(raw)
   ) {
     return {
       allowed: false,
@@ -335,7 +335,7 @@ export class RunSandbox {
 
     // Create isolated temporary directory strictly outside PROJECT_ROOT
     const baseTmp = os.tmpdir();
-    this.sandboxRoot = fs.mkdtempSync(path.join(baseTmp, 'omni-run-sandbox-'));
+    this.sandboxRoot = fs.mkdtempSync(path.join(baseTmp, 'dotta-run-sandbox-'));
     this.workDir = path.join(this.sandboxRoot, 'work');
     this.inputsDir = path.join(this.sandboxRoot, 'inputs');
     this.outputsDir = path.join(this.sandboxRoot, 'outputs');

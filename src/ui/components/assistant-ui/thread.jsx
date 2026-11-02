@@ -170,21 +170,21 @@ function ThreadWelcome() {
 function ThreadSuggestions() {
   return (
     <div className="flex w-full flex-col">
-      <ThreadPrimitive.Suggestion prompt="Check online for engineering jobs" send asChild>
+      <ThreadPrimitive.Suggestion prompt="Automate a job application and attach my verified resume from BIO" send asChild>
         <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none cursor-pointer">
           <span aria-hidden className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none">{">"}</span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="text-foreground">Check online for</span>{" "}
-            <span className="text-muted-foreground">engineering jobs</span>
+            <span className="text-foreground">Automate job application</span>{" "}
+            <span className="text-muted-foreground">with verified resume from BIO</span>
           </span>
         </button>
       </ThreadPrimitive.Suggestion>
-      <ThreadPrimitive.Suggestion prompt="Search for latest tech news" send asChild>
+      <ThreadPrimitive.Suggestion prompt="Navigate to an e-commerce store, add item to cart, and prepare checkout" send asChild>
         <button type="button" className="group hover:bg-foreground/[0.03] focus-visible:ring-ring/50 flex w-full items-baseline gap-2.5 rounded-md px-2 py-2 text-start text-sm transition-colors outline-none focus-visible:ring-1 motion-reduce:transition-none cursor-pointer">
           <span aria-hidden className="text-muted-foreground/60 group-hover:text-foreground font-mono text-xs transition-colors motion-reduce:transition-none">{">"}</span>
           <span className="min-w-0 flex-1 truncate">
-            <span className="text-foreground">Search for</span>{" "}
-            <span className="text-muted-foreground">latest tech news</span>
+            <span className="text-foreground">E-commerce cart checkout</span>{" "}
+            <span className="text-muted-foreground">navigate, add to cart & fill shipping details</span>
           </span>
         </button>
       </ThreadPrimitive.Suggestion>

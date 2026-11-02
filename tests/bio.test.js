@@ -87,8 +87,8 @@ check('user A data unchanged by B write', store.getActiveProfile(A).fields.addre
 
 // profile_get is BIO-backed now — never the old hardcoded person
 store.updateProfile(A, activeA.id, { grants: { read: true, write: false } });
-const { OmniEngine } = await import('../src/core/index.js');
-const engine = new OmniEngine({});
+const { DottaEngine } = await import('../src/core/index.js');
+const engine = new DottaEngine({});
 const profileOut = await engine.executeTool('profile_get', {}, { userId: A });
 check('profile_get has no hardcoded Edward', !profileOut.includes('Edward'));
 check('profile_get returns BIO identity', profileOut.includes('Alex Morgan'));

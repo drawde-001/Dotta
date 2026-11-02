@@ -30,7 +30,7 @@ export function ThreadListSidebar({
                   </div>
                   <div className="aui-sidebar-header-heading me-6 flex flex-col gap-0.5 leading-none">
                     <span className="aui-sidebar-header-title font-semibold text-sm text-white">
-                      Omni Agent
+                      Dotta
                     </span>
                     <span className="text-[11px] text-zinc-400">
                       Threads
@@ -51,7 +51,7 @@ export function ThreadListSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a
-                href="https://github.com/drawde-001/omni-agent"
+                href="https://github.com/drawde-001/Dotta"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 text-zinc-400 hover:text-white transition"

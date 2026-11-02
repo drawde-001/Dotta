@@ -1,13 +1,13 @@
 services:
   caddy:
     image: caddy:2.8-alpine
-    container_name: omni_caddy
+    container_name: dotta_caddy
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     environment:
-      - PUBLIC_DOMAIN=${DOMAIN:-${PUBLIC_DOMAIN:-omni-ai-agent.duckdns.org}}
+      - PUBLIC_DOMAIN=${DOMAIN:-${PUBLIC_DOMAIN:-dotta.duckdns.org}}
     volumes:
       - ./server/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -16,13 +16,13 @@ services:
       app:
         condition: service_healthy
     networks:
-      - omni_network
+      - dotta_network
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: omni_app
+    container_name: dotta_app
     restart: unless-stopped
     env_file:
       - .env
@@ -52,7 +52,7 @@ services:
       - bio_data:/app/src/data
       - workspaces_data:/app/src/workspaces
     networks:
-      - omni_network
+      - dotta_network
 
 volumes:
   caddy_data:
@@ -61,5 +61,5 @@ volumes:
   workspaces_data:
 
 networks:
-  omni_network:
+  dotta_network:
     driver: bridge

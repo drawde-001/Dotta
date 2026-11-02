@@ -1,4 +1,4 @@
-import { OmniEngine } from '../src/core/index.js';
+import { DottaEngine } from '../src/core/index.js';
 import {
   sanitizeUserId,
   getUserWorkspaceRoot
@@ -15,7 +15,7 @@ export function writeAgUiEvent(res, event) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
-export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
+export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
   return async function handleAgUiChat(req, res) {
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -52,7 +52,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
     const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
 
     console.log(
-      `[Omni Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | attachments: ${attachments.length} | prompt: "${instruction.slice(0, 100)}"`
+      `[Dotta Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | attachments: ${attachments.length} | prompt: "${instruction.slice(0, 100)}"`
     );
 
     let interruptEmitted = false;
@@ -61,11 +61,11 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
         interruptEmitted = true;
       }
       if (evt.type === 'TOOL_CALL') {
-        console.log(`[Omni Server] Tool call -> ${evt.name}(${JSON.stringify(evt.args || {})})`);
+        console.log(`[Dotta Server] Tool call -> ${evt.name}(${JSON.stringify(evt.args || {})})`);
       } else if (evt.type === 'TOOL_RESULT') {
-        console.log(`[Omni Server] Tool result -> ${evt.name} (${evt.status})`);
+        console.log(`[Dotta Server] Tool result -> ${evt.name} (${evt.status})`);
       } else if (evt.type === 'RUN_FINISHED') {
-        console.log(`[Omni Server] Run finished -> stopReason: ${evt.stopReason}`);
+        console.log(`[Dotta Server] Run finished -> stopReason: ${evt.stopReason}`);
       }
       writeAgUiEvent(res, evt);
     };
@@ -83,7 +83,7 @@ export function createAgUiHandler({ engine = new OmniEngine() } = {}) {
           discardBioProposal(userId, threadId);
         }
       } catch (err) {
-        console.error('[Omni Server] BIO proposal resolution failed:', err.message);
+        console.error('[Dotta Server] BIO proposal resolution failed:', err.message);
       }
     }
 

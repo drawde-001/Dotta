@@ -1,6 +1,6 @@
-# Omni Agent Production Setup & Deployment Guide
+# Dotta Production Setup & Deployment Guide
 
-This guide provides end-to-end instructions for deploying Omni Agent to a Linux virtual machine (Ubuntu 22.04 / 24.04 LTS or Debian 12), configuring your custom domain with automatic HTTPS via Caddy, isolating tool execution with Docker, integrating Supabase, and wiring PM2 for seamless continuous deployment.
+This guide provides end-to-end instructions for deploying Dotta to a Linux virtual machine (Ubuntu 22.04 / 24.04 LTS or Debian 12), configuring your custom domain with automatic HTTPS via Caddy (e.g. `dotta.duckdns.org`), isolating tool execution with Docker, integrating Supabase, and wiring PM2 for seamless continuous deployment.
 
 ---
 
@@ -22,7 +22,7 @@ This guide provides end-to-end instructions for deploying Omni Agent to a Linux 
 │  │ Node.js Server (PM2)                   │  │
 │  │  - Static Assistant-UI (/dist)         │  │
 │  │  - AG-UI SSE Stream (/api/chat)        │  │
-│  │  - OmniEngine (Meta Muse Core)         │  │
+│  │  - DottaEngine (Meta Muse Core)        │  │
 │  └──────────────────┬─────────────────────┘  │
 │                     │                        │
 │         ┌───────────┴───────────┐            │
@@ -36,21 +36,21 @@ This guide provides end-to-end instructions for deploying Omni Agent to a Linux 
 
 ---
 
-## 🚨 Step 0: Clear Out Old Legacy Containers & Files on the Machine
+## 🚨 Step 0: Clear Out Old Containers & Files on the Machine
 
-Before deploying the fresh Omni Agent, wipe out any old lingering processes, Docker containers, and outdated code from your VM:
+Before deploying fresh Dotta, wipe out any old lingering processes, Docker containers, and outdated code from your VM:
 
 ```bash
 # 1. Stop and remove old Docker containers, networks, and orphaned volumes
-cd /var/www/omni-agent 2>/dev/null || cd ~
+cd /var/www/dotta 2>/dev/null || cd ~
 docker compose down -v --remove-orphans 2>/dev/null || true
 
 # 2. Kill any old PM2 or background Node processes running on port 3001
 pm2 delete all 2>/dev/null || true
 fuser -k 3001/tcp 2>/dev/null || true
 
-# 3. Archive or delete the old legacy project directory on the VM
-sudo mv /var/www/omni-agent /var/www/omniagent_legacy_backup 2>/dev/null || true
+# 3. Archive or delete old project directory on the VM
+sudo mv /var/www/dotta /var/www/dotta_backup 2>/dev/null || true
 ```
 
 ---
@@ -114,13 +114,13 @@ curl -4 ifconfig.me
 1. Log into your DNS management dashboard.
 2. Add an **A Record**:
    - **Type:** `A`
-   - **Name:** `@` (for root domain, e.g. `example.com`) or `omni` (for subdomain `omni.example.com`)
+   - **Name:** `@` (for root domain, e.g. `dotta.duckdns.org`) or `dotta` (for subdomain)
    - **IPv4 Address:** Paste your VM public IP (e.g., `198.51.100.42`)
    - **TTL:** Auto or 300 seconds
    - **Proxy Status (if Cloudflare):** DNS only (gray cloud) during initial SSL provisioning, or enabled (orange cloud) with Full (Strict) SSL.
 3. Wait 1-2 minutes and verify DNS propagation:
    ```bash
-   dig +short yourdomain.com
+   dig +short dotta.duckdns.org
    ```
 
 ---
@@ -130,9 +130,9 @@ curl -4 ifconfig.me
 Clone your clean repository onto the server:
 ```bash
 cd /var/www || sudo mkdir -p /var/www && cd /var/www
-sudo git clone <YOUR_GIT_REPO_URL> omni-agent
-sudo chown -R $USER:$USER /var/www/omni-agent
-cd /var/www/omni-agent
+sudo git clone https://github.com/drawde-001/Dotta.git dotta
+sudo chown -R $USER:$USER /var/www/dotta
+cd /var/www/dotta
 ```
 
 ### Install All Declared Dependencies
@@ -176,7 +176,7 @@ SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
 # Tool Execution
-OMNI_SANDBOX_DISTRO=omni-agent-sandbox
+DOTTA_SANDBOX_DISTRO=dotta-sandbox
 ```
 
 ---
@@ -187,7 +187,7 @@ Caddy automatically obtains, provisions, and renews SSL/TLS certificates from Le
 
 Copy the included Caddyfile to the system configuration:
 ```bash
-sudo cp /var/www/omni-agent/server/caddy/Caddyfile /etc/caddy/Caddyfile
+sudo cp /var/www/dotta/server/caddy/Caddyfile /etc/caddy/Caddyfile
 ```
 
 Edit `/etc/caddy/Caddyfile` and replace `yourdomain.com` with your actual domain name:
@@ -237,12 +237,12 @@ sudo ufw status
 
 ---
 
-## 7. Start the Omni Agent Service with PM2
+## 7. Start the Dotta Service with PM2
 
 Start the application with PM2 to keep it running 24/7 with automatic restart on crashes:
 ```bash
-cd /var/www/omni-agent
-pm2 start server/index.js --name "omni-agent" --time
+cd /var/www/dotta
+pm2 start server/index.js --name "dotta" --time
 ```
 
 Save the process list and configure PM2 to restart on system boot:
@@ -254,10 +254,10 @@ pm2 startup
 
 ### Useful PM2 Commands
 ```bash
-pm2 status               # View application status
-pm2 logs omni-agent      # Stream live backend & agent execution logs
-pm2 restart omni-agent   # Restart backend server
-pm2 reload omni-agent    # Zero-downtime reload
+pm2 status          # View application status
+pm2 logs dotta      # Stream live backend & agent execution logs
+pm2 restart dotta   # Restart backend server
+pm2 reload dotta    # Zero-downtime reload
 ```
 
 ---
@@ -266,19 +266,19 @@ pm2 reload omni-agent    # Zero-downtime reload
 
 Whenever you push updates to your repository, deploy the changes to your VM with this single command:
 ```bash
-cd /var/www/omni-agent && git pull && npm install && npm run build && pm2 reload omni-agent
+cd /var/www/dotta && git pull && npm install && npm run build && pm2 reload dotta
 ```
 
 You can save this as a deployment script (`deploy.sh`):
 ```bash
 #!/bin/bash
 set -e
-echo "Deploying latest Omni Agent..."
+echo "Deploying latest Dotta..."
 git pull origin main
 npm install
 npm run build
-pm2 reload omni-agent
-echo "Deployment successful! Live at https://yourdomain.com"
+pm2 reload dotta
+echo "Deployment successful! Live at https://dotta.duckdns.org"
 ```
 Make it executable:
 ```bash
@@ -295,7 +295,7 @@ chmod +x deploy.sh
    # Returns: {"status":"healthy","defaultModel":"meta-muse-spark", ...}
    ```
 2. **Verify Public HTTPS:**
-   Open `https://yourdomain.com` in your browser.
-   - You will see the Assistant-UI chat shell connected to Omni Agent.
+   Open `https://dotta.duckdns.org` in your browser.
+   - You will see the Assistant-UI chat shell connected to Dotta.
    - Enter a prompt: *"Create a file called notes.txt and list files"*.
    - The streaming tokens and real-time tool execution cards will render smoothly.

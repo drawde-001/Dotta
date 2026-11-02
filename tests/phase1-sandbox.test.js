@@ -23,7 +23,7 @@ import {
   workspaceFileRead,
   workspaceFileWrite,
   AgentBudgetTracker,
-  OmniEngine
+  DottaEngine
 } from '../src/core/index.js';
 import { stageBioFile, resolveStagedFile, setActiveStagingRunId } from '../src/core/bio/staging.js';
 
@@ -58,7 +58,7 @@ async function runPhase1Tests() {
       output: cmdReadPkg.output
     });
     assert.strictEqual(cmdReadPkg.exitCode, 1, 'Reading PROJECT_ROOT/package.json via shell must fail');
-    assert(!cmdReadPkg.stdout.includes('"omni-agent"'), 'package.json content must never leak');
+    assert(!cmdReadPkg.stdout.includes('"dotta"'), 'package.json content must never leak');
 
     // 1c. Shell command attempting relative parent traversal (../../package.json)
     const cmdReadRel = await runSandboxCommand({
@@ -75,7 +75,7 @@ async function runPhase1Tests() {
     // 1d. Shell command attempting to read machine PEM key
     const cmdReadPem = await runSandboxCommand({
       runId: runId1,
-      command: `type "C:\\Users\\USER\\Downloads\\omni-agent-key.pem"`
+      command: `type "C:\\Users\\USER\\Downloads\\dotta-key.pem"`
     });
     console.log('  -> Shell read machine PEM key:', {
       exitCode: cmdReadPem.exitCode,
@@ -194,7 +194,7 @@ async function runPhase1Tests() {
   process.env.GEMINI_API_KEY = 'test-secret-gemini-key-DO-NOT-LEAK';
   process.env.META_MUSE_API_KEY = 'test-secret-muse-key-DO-NOT-LEAK';
   process.env.SESSION_SECRET = 'test-secret-session-key-DO-NOT-LEAK';
-  process.env.OMNI_WORKSPACE_SECRET = 'test-workspace-secret-DO-NOT-LEAK';
+  process.env.DOTTA_WORKSPACE_SECRET = 'test-workspace-secret-DO-NOT-LEAK';
 
   const runId3 = `test-phase1-env-${Date.now()}`;
   const sb3 = createRunSandbox({ runId: runId3 });
@@ -210,7 +210,7 @@ async function runPhase1Tests() {
       'GEMINI_API_KEY',
       'META_MUSE_API_KEY',
       'SESSION_SECRET',
-      'OMNI_WORKSPACE_SECRET',
+      'DOTTA_WORKSPACE_SECRET',
       'MODAL_KEY',
       'MODAL_SECRET',
       'OPENAI_API_KEY',
@@ -227,13 +227,13 @@ async function runPhase1Tests() {
       assert.strictEqual(childEnv.USERPROFILE, '/sandbox', 'Windows USERPROFILE must be /sandbox');
     }
     assert(
-      !String(childEnv.PATH || '').toLowerCase().includes('omni-agent'),
+      !String(childEnv.PATH || '').toLowerCase().includes('dotta'),
       'Sandbox PATH must not contain project workspace paths'
     );
 
     console.log('✓ Proof 3 PASSED: Zero host/workspace environment variables leaked.\n');
   } finally {
-    delete process.env.OMNI_WORKSPACE_SECRET;
+    delete process.env.DOTTA_WORKSPACE_SECRET;
     await sb3.destroy('test_3_done');
   }
 

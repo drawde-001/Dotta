@@ -459,7 +459,7 @@ registerToolComponent(['agent_handoff', 'handoff_agent'], ({ args, result }) => 
   return (
     <div className="my-2">
       <AgentHandoff
-        from={String(p.from || 'Omni Agent')}
+        from={String(p.from || 'Dotta')}
         to={String(p.to || 'Specialist Agent')}
         reason={String(p.reason || 'Delegating task context')}
         carried={rawCarried}
@@ -640,7 +640,7 @@ registerToolComponent(['subagent_list', 'invoke_subagent'], ({ args, result, sta
         completedCount={doneCount}
         progress={agents.map((_, i) => (i < doneCount ? 100 : 60))}
         showSummary={false}
-        summaryAgent={{ name: 'Synthesizing results', model: 'omni' }}
+        summaryAgent={{ name: 'Synthesizing results', model: 'dotta' }}
       />
     </div>
   );

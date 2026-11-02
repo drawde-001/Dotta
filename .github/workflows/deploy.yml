@@ -12,13 +12,13 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy Omni Agent Stack
+    name: Deploy Dotta Stack
     runs-on: self-hosted
 
     steps:
       - name: Pull Latest Code & Rebuild Production Container
         run: |
-          cd /home/ubuntu/omni-agent
+          cd /home/ubuntu/dotta
           git fetch origin main
           git checkout -B main origin/main
           git reset --hard origin/main
@@ -26,8 +26,8 @@ jobs:
 
       - name: Verify Container Health
         run: |
-          cd /home/ubuntu/omni-agent
+          cd /home/ubuntu/dotta
           sleep 10
           docker compose ps
           curl --fail --retry 10 --retry-delay 3 --retry-all-errors http://localhost:3001/api/health || (docker compose logs app && exit 1)
-          echo "Omni Agent production deployment healthy and online."
+          echo "Dotta production deployment healthy and online."

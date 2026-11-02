@@ -120,7 +120,7 @@ export function sanitizeRelativeDisplayPath(rawPath = '', effectiveRoot = '') {
     effectiveRoot ? effectiveRoot.replace(/\\/g, '/') : '',
     PROJECT_ROOT.replace(/\\/g, '/'),
     getWorkspacesBaseDir().replace(/\\/g, '/'),
-    '/home/ubuntu/omni-agent',
+    '/home/ubuntu/dotta',
     '/app'
   ].filter(Boolean);
 
@@ -151,10 +151,8 @@ export function redactRootPaths(text = '', effectiveRoot = '') {
     PROJECT_ROOT.replace(/\\/g, '/'),
     getWorkspacesBaseDir(),
     getWorkspacesBaseDir().replace(/\\/g, '/'),
-    '/home/ubuntu/omni-agent',
+    '/home/ubuntu/dotta',
     '/home/ubuntu',
-    'C:\\Users\\USER\\Downloads\\omni-agent',
-    'c:\\Users\\USER\\Downloads\\omni-agent',
     '/app'
   ].filter(Boolean);
 
@@ -223,7 +221,7 @@ export function validateAndResolvePath(workspaceRoot, relativePath) {
     throw new Error('Path traversal ("..") is strictly prohibited');
   }
 
-  // Strip root folder prefix if the model prefixed it (e.g. "omni-agent/src/...")
+  // Strip root folder prefix if the model prefixed it (e.g. "dotta/src/...")
   const rootPrefixRegex = new RegExp(`^${PROJECT_ROOT_NAME}[\\\\/]+`, 'i');
   if (rootPrefixRegex.test(raw)) {
     raw = raw.replace(rootPrefixRegex, '');

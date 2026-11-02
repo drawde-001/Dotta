@@ -1,7 +1,7 @@
 /**
  * schema.js
  *
- * Strict JSON schemas and validators for inter-level messages in Omni's
+ * Strict JSON schemas and validators for inter-level messages in Dotta's
  * multi-level architecture. Any message that fails validation is dropped
  * and logged, never forwarded to the next level.
  */

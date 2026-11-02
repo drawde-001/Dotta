@@ -87,7 +87,7 @@ const transcriptionResult = await transcribeAudioSequentially(
   segmentsToProcess,
   { buffer: Buffer.from('RIFF_WAV_SIMULATED_DATA'), mimeType: 'audio/wav' },
   {
-    mockText: 'Hello Omni agent test segment.',
+    mockText: 'Hello Dotta test segment.',
     onProgress: (p) => progressReports.push(p)
   }
 );
@@ -97,7 +97,7 @@ assert.strictEqual(transcriptionResult.segmentsProcessed, 3);
 assert.strictEqual(progressReports.length, 3);
 assert.strictEqual(
   transcriptionResult.transcript,
-  'Hello Omni agent test segment. Hello Omni agent test segment. Hello Omni agent test segment.'
+  'Hello Dotta test segment. Hello Dotta test segment. Hello Dotta test segment.'
 );
 console.log('✓ Sequential chunk transcription and gathering verified.');
 

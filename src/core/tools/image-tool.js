@@ -17,7 +17,7 @@ import { getApiKey, getGeminiApiKeys } from '../env.js';
 export const PRIMARY_IMAGE_MODEL = 'muse-image-1.0';
 
 const generatedImageStore = new Map();
-const IMAGE_CACHE_DIR = path.join(os.tmpdir(), 'omni-generated-images');
+const IMAGE_CACHE_DIR = path.join(os.tmpdir(), 'dotta-generated-images');
 
 function ensureCacheDir() {
   try {

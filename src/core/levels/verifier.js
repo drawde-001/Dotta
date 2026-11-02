@@ -2,7 +2,7 @@
  * verifier.js
  *
  * Ground-truth DOM Verification & Enforcement Engine.
- * Enforces proof with evidence before Omni can claim any form or web task is done.
+ * Enforces proof with evidence before Dotta can claim any form or web task is done.
  *
  * Statuses:
  * - SUBMITTED_CONFIRMED: Post-submit signals verified (URL change or confirmation text).

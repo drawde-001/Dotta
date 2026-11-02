@@ -188,7 +188,7 @@ async function main() {
     runId: `p5-multiformat-${Date.now()}`,
     userId: TEST_USER_ID,
     userInstruction: 'Fill out this multi-format application form',
-    url: 'https://jobs.lever.co/omni/apply',
+    url: 'https://jobs.lever.co/dotta/apply',
     html: multiFormatHtml,
     mode: 'default',
     model: 'muse-spark-open'

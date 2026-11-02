@@ -98,7 +98,7 @@ export default function App() {
   // Live browser stream state
   const [streamState, setStreamState] = useState({
     url: 'https://duckduckgo.com',
-    title: 'OmniAgent Browser Viewport — Ready',
+    title: 'Dotta Browser Viewport — Ready',
     isLoading: false,
     isLiveStreaming: true,
     fps: 60,
@@ -234,8 +234,10 @@ export default function App() {
         handleOpenFileTab(event.detail);
       }
     };
-    window.addEventListener('omni:open-file', handleOpenFile);
-    return () => window.removeEventListener('omni:open-file', handleOpenFile);
+    window.addEventListener('dotta:open-file', handleOpenFile);
+    return () => {
+      window.removeEventListener('dotta:open-file', handleOpenFile);
+    };
   }, []);
 
   // Connect WebSocket to backend stream
@@ -1263,7 +1265,7 @@ export default function App() {
       <div className="flex h-screen w-screen items-center justify-center bg-[#070709] text-zinc-400">
         <div className="flex flex-col items-center gap-3">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-          <span className="text-xs">Connecting to OmniAgent...</span>
+          <span className="text-xs">Connecting to Dotta...</span>
         </div>
       </div>
     );
@@ -1339,7 +1341,7 @@ export default function App() {
               /* Centered Hero View */
               <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
                 <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
-                  OmniAgent
+                  Dotta
                 </h1>
                 <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
                   {heroSubtitles[subtitleIndex]}

@@ -1,10 +1,10 @@
 # ==============================================================================
-# Caddy Reverse Proxy Configuration for Omni Agent
+# Caddy Reverse Proxy Configuration for Dotta
 # Automatically provisions and renews SSL/TLS certificates via Let's Encrypt
 # ==============================================================================
 
-{$PUBLIC_DOMAIN:localhost} {
-    # Forward all traffic to the Omni Agent Express backend on port 3001
+{$PUBLIC_DOMAIN:dotta.duckdns.org} {
+    # Forward all traffic to the Dotta Express backend on port 3001
     reverse_proxy {$UPSTREAM:app:3001} {
         flush_interval -1
         header_up X-Real-IP {remote_host}
@@ -25,7 +25,7 @@
 
     # Logging
     log {
-        output file /var/log/caddy/omni-agent.access.log
+        output file /var/log/caddy/dotta.access.log
         format json
     }
 }

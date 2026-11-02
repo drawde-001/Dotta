@@ -110,131 +110,109 @@ export function AuthScreen({ onLoginSuccess }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 h-screen w-screen m-0 p-0 rounded-none border-none select-none font-sans overflow-hidden grid grid-cols-1 md:grid-cols-2 bg-[#0a0a0c]">
-      {/* Left Column: Atmospheric Emerald Visual with Steps positioned in lower section */}
-      <div className="relative flex h-full w-full flex-col justify-end overflow-hidden bg-gradient-to-br from-[#0c3126] via-[#07221b] to-[#03110d] p-8 sm:p-12 lg:p-16 pb-12 sm:pb-16 lg:pb-20 rounded-none border-none">
-        {/* Radial ambient spotlight inside left pane */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_45%_35%,rgba(16,185,129,0.24),transparent_65%)]" />
+    <div className="fixed inset-0 z-50 h-screen w-screen m-0 p-0 rounded-none border-none select-none font-sans overflow-hidden grid grid-cols-1 lg:grid-cols-2 bg-[#0a0a0b]">
+      {/* Left Column: Outer Black Frame containing the Green Card */}
+      <div className="h-full w-full p-3 sm:p-4 lg:p-5 bg-[#0a0a0b] flex flex-col">
+        <div className="relative flex h-full w-full flex-col justify-end overflow-hidden rounded-[20px] sm:rounded-[24px] p-8 sm:p-10 lg:p-12 pb-10 sm:pb-12 text-white bg-[radial-gradient(120%_120%_at_30%_20%,#1f7a6b_0%,#0f2a24_60%,#0b1a16_100%)] shadow-2xl">
+          {/* Subtle Ambient Radial Glow */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_400px_at_70%_30%,rgba(255,255,255,0.08),transparent)]" />
 
-        {/* Text + Steps grouped together in lower section exactly matching reference image */}
-        <div className="relative z-10 w-full max-w-[620px] flex flex-col gap-6 sm:gap-8">
-          {/* Title + Subtitle row */}
-          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-            <h1 className="text-3xl sm:text-4xl lg:text-[42px] font-semibold tracking-tight text-white leading-[1.14]">
+          {/* Content: Title & Subtitle + Step Cards */}
+          <div className="relative z-10 w-full max-w-[560px]">
+            {/* Title & Subtitle Stacked Layout matching sign-up.html */}
+            <h1 className="text-[32px] sm:text-4xl leading-tight font-semibold text-white">
               Get Started<br />with Us
             </h1>
-            <p className="text-xs sm:text-[13px] text-emerald-100/70 sm:max-w-[170px] leading-relaxed pb-1">
-              Complete these easy steps to register your account.
+            <p className="mt-3 text-sm text-white/70 max-w-[320px] leading-relaxed">
+              Complete these easy steps<br />to register your account.
             </p>
-          </div>
 
-          {/* Bottom Step Indicator Cards */}
-          <div className="grid grid-cols-3 gap-2.5 sm:gap-3.5">
-            {/* Step 1: Active Card */}
-            <div className="rounded-2xl bg-white p-3.5 sm:p-4 text-zinc-900 shadow-xl flex flex-col justify-between min-h-[96px] sm:min-h-[105px] transition-all duration-200">
-              <div className="flex h-5 w-5 sm:h-5.5 sm:w-5.5 items-center justify-center rounded-full bg-black text-[11px] font-bold text-white">
-                1
+            {/* Step Indicator Cards */}
+            <div className="mt-8 sm:mt-10 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Step 1: Active Card */}
+              <div className="rounded-xl p-4 bg-white text-[#0b1a16] shadow-lg flex flex-col justify-between min-h-[92px] transition-all">
+                <div className="text-[11px] mb-2 font-bold opacity-90">1</div>
+                <div className="text-sm font-medium leading-snug">Sign up your account</div>
               </div>
-              <p className="text-[11.5px] sm:text-xs font-semibold text-zinc-900 leading-snug">
-                Sign up your account
-              </p>
-            </div>
 
-            {/* Step 2: Set up your bio */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.06] backdrop-blur-md p-3.5 sm:p-4 text-zinc-300 flex flex-col justify-between min-h-[96px] sm:min-h-[105px] transition-all duration-200">
-              <div className="flex h-5 w-5 sm:h-5.5 sm:w-5.5 items-center justify-center rounded-full bg-white/[0.12] text-[11px] font-medium text-zinc-300">
-                2
+              {/* Step 2: Set up your bio */}
+              <div className="rounded-xl p-4 bg-white/[0.08] text-white/70 backdrop-blur-sm flex flex-col justify-between min-h-[92px] transition-all">
+                <div className="text-[11px] mb-2 opacity-70">2</div>
+                <div className="text-sm leading-snug">Set up your bio</div>
               </div>
-              <p className="text-[11.5px] sm:text-xs font-medium text-zinc-300 leading-snug">
-                Set up your bio
-              </p>
-            </div>
 
-            {/* Step 3: Add your API key */}
-            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.06] backdrop-blur-md p-3.5 sm:p-4 text-zinc-300 flex flex-col justify-between min-h-[96px] sm:min-h-[105px] transition-all duration-200">
-              <div className="flex h-5 w-5 sm:h-5.5 sm:w-5.5 items-center justify-center rounded-full bg-white/[0.12] text-[11px] font-medium text-zinc-300">
-                3
+              {/* Step 3: Add your API key */}
+              <div className="rounded-xl p-4 bg-white/[0.08] text-white/70 backdrop-blur-sm flex flex-col justify-between min-h-[92px] transition-all">
+                <div className="text-[11px] mb-2 opacity-70">3</div>
+                <div className="text-sm leading-snug">Add your API key</div>
               </div>
-              <p className="text-[11.5px] sm:text-xs font-medium text-zinc-300 leading-snug">
-                Add your API key
-              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Column: Form */}
-      <div className="relative flex h-full w-full flex-col justify-center items-center overflow-y-auto bg-[#0a0a0c] p-8 sm:p-12 lg:p-16 rounded-none border-none">
-        <div className="w-full max-w-[380px] my-auto">
+      {/* Right Column: Form Side (Center-aligned layout) */}
+      <div className="relative flex h-full w-full flex-col justify-center items-center overflow-y-auto bg-[#0a0a0b] p-6 sm:p-10 lg:p-12">
+        <div className="max-w-[380px] mx-auto w-full">
           {/* Header */}
-          <div className="mb-6 text-center sm:text-left">
-            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-white">
-              {mode === 'signup' ? 'Sign Up Account' : 'Log In Account'}
-            </h2>
-            <p className="mt-1 text-xs text-zinc-400">
-              {mode === 'signup'
-                ? 'Enter your personal data to create your account.'
-                : 'Enter your credentials to access your account.'}
-            </p>
-          </div>
+          <h2 className="text-white text-xl sm:text-2xl font-semibold">
+            {mode === 'signup' ? 'Sign Up Account' : 'Log In Account'}
+          </h2>
+          <p className="text-sm text-white/50 mt-1">
+            {mode === 'signup'
+              ? 'Enter your personal data to create your account.'
+              : 'Enter your credentials to access your account.'}
+          </p>
 
           {/* Error Notification */}
           {error && (
-            <div className="mb-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400 animate-in fade-in duration-150">
+            <div className="mt-4 flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-400 animate-in fade-in duration-150">
               <AlertCircle size={14} className="shrink-0" />
               <span className="flex-1 leading-snug">{error}</span>
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-3.5">
+          {/* Form with input-dark styling from sign-up.html */}
+          <form onSubmit={handleSubmit} className="space-y-4 mt-6">
             {mode === 'signup' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-zinc-400 mb-1">
-                    First Name
-                  </label>
+                  <label className="block text-xs text-white/60 mb-1">First Name</label>
                   <input
                     type="text"
                     value={firstName}
                     onChange={(e) => setFirstName(e.target.value)}
                     placeholder="eg. John"
-                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none transition hover:border-white/20 focus:border-white focus:ring-1 focus:ring-white/30 focus:bg-white/[0.06]"
+                    className="w-full h-9 rounded-md px-3 text-sm text-white bg-white/[0.06] border border-white/[0.08] placeholder:text-white/40 outline-none transition hover:border-white/20 focus:border-white/50 focus:ring-1 focus:ring-white/30"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-medium text-zinc-400 mb-1">
-                    Last Name
-                  </label>
+                  <label className="block text-xs text-white/60 mb-1">Last Name</label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
                     placeholder="eg. Francisco"
-                    className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none transition hover:border-white/20 focus:border-white focus:ring-1 focus:ring-white/30 focus:bg-white/[0.06]"
+                    className="w-full h-9 rounded-md px-3 text-sm text-white bg-white/[0.06] border border-white/[0.08] placeholder:text-white/40 outline-none transition hover:border-white/20 focus:border-white/50 focus:ring-1 focus:ring-white/30"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1">
-                Email
-              </label>
+              <label className="block text-xs text-white/60 mb-1">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={mode === 'signup' ? 'eg. johnfrans@gmail.com' : 'eg. eddy@omniagent.ai'}
+                placeholder={mode === 'signup' ? 'eg. johnfrancis@gmail.com' : 'eg. eddy@dotta.ai'}
                 required
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-xs text-white placeholder:text-zinc-600 outline-none transition hover:border-white/20 focus:border-white focus:ring-1 focus:ring-white/30 focus:bg-white/[0.06]"
+                className="w-full h-9 rounded-md px-3 text-sm text-white bg-white/[0.06] border border-white/[0.08] placeholder:text-white/40 outline-none transition hover:border-white/20 focus:border-white/50 focus:ring-1 focus:ring-white/30"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-medium text-zinc-400 mb-1">
-                Password
-              </label>
+              <label className="block text-xs text-white/60 mb-1">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -242,21 +220,19 @@ export function AuthScreen({ onLoginSuccess }) {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 pr-9 text-xs text-white placeholder:text-zinc-600 outline-none transition hover:border-white/20 focus:border-white focus:ring-1 focus:ring-white/30 focus:bg-white/[0.06]"
+                  className="w-full h-9 rounded-md px-3 pr-9 text-sm text-white bg-white/[0.06] border border-white/[0.08] placeholder:text-white/40 outline-none transition hover:border-white/20 focus:border-white/50 focus:ring-1 focus:ring-white/30"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition cursor-pointer p-0.5"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition cursor-pointer p-0.5"
                   title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
               </div>
               {mode === 'signup' && (
-                <p className="mt-1 text-[11px] text-zinc-500">
-                  Must be at least 8 characters.
-                </p>
+                <p className="text-[11px] text-white/40 mt-1">Must be at least 8 characters.</p>
               )}
             </div>
 
@@ -264,7 +240,7 @@ export function AuthScreen({ onLoginSuccess }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="mt-2 w-full flex items-center justify-center gap-2 rounded-xl bg-white py-2.5 text-xs font-semibold text-black transition hover:bg-zinc-200 active:scale-[0.99] disabled:opacity-50 cursor-pointer shadow-md"
+              className="w-full h-10 rounded-md bg-white text-black font-medium text-sm mt-2 hover:bg-white/90 active:scale-[0.99] disabled:opacity-50 transition cursor-pointer shadow-md flex items-center justify-center gap-2"
             >
               {isLoading ? (
                 <>
@@ -272,45 +248,40 @@ export function AuthScreen({ onLoginSuccess }) {
                   <span>Processing...</span>
                 </>
               ) : (
-                <span>{mode === 'signup' ? 'Sign Up' : 'Log In'}</span>
+                <span>{mode === 'signup' ? 'Sign up' : 'Log in'}</span>
               )}
             </button>
           </form>
 
-          {/* Social Logins placed JUST BELOW the signup button as instructed */}
-          <div className="mt-4">
-            <div className="relative flex items-center justify-center my-3">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/[0.08]" />
-              </div>
-              <div className="relative bg-[#0a0a0c] px-2 text-[11px] text-zinc-500">
-                Or
-              </div>
-            </div>
+          {/* Social Logins placed JUST BELOW the submit button */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-white/10" />
+            <span className="text-xs text-white/40">Or</span>
+            <div className="h-px flex-1 bg-white/10" />
+          </div>
 
-            {/* Non-clickable Social Buttons */}
-            <div className="grid grid-cols-2 gap-2.5 pointer-events-none opacity-60 select-none">
-              <div
-                aria-disabled="true"
-                className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] py-2 px-3 text-xs font-medium text-zinc-300 cursor-not-allowed"
-              >
-                <GoogleIcon />
-                <span>Google</span>
-              </div>
-              <div
-                aria-disabled="true"
-                className="flex items-center justify-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.02] py-2 px-3 text-xs font-medium text-zinc-300 cursor-not-allowed"
-              >
-                <GithubIcon />
-                <span>Github</span>
-              </div>
+          {/* Non-clickable Social Buttons */}
+          <div className="grid grid-cols-2 gap-3 pointer-events-none opacity-60 select-none">
+            <div
+              aria-disabled="true"
+              className="h-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+            >
+              <GoogleIcon />
+              <span>Google</span>
+            </div>
+            <div
+              aria-disabled="true"
+              className="h-10 rounded-lg bg-white/5 border border-white/10 text-white text-sm flex items-center justify-center gap-2 cursor-not-allowed"
+            >
+              <GithubIcon />
+              <span>Github</span>
             </div>
           </div>
 
           {/* Mode Switcher */}
-          <div className="mt-5 text-center text-xs text-zinc-400">
+          <p className="text-[12px] text-white/50 text-center mt-5">
             {mode === 'signup' ? (
-              <span>
+              <>
                 Already have an account?{' '}
                 <button
                   type="button"
@@ -318,13 +289,13 @@ export function AuthScreen({ onLoginSuccess }) {
                     setMode('login');
                     setError(null);
                   }}
-                  className="font-medium text-white hover:underline cursor-pointer ml-1"
+                  className="text-white underline underline-offset-2 hover:text-white/80 transition cursor-pointer ml-1"
                 >
                   Log in
                 </button>
-              </span>
+              </>
             ) : (
-              <span>
+              <>
                 Don't have an account?{' '}
                 <button
                   type="button"
@@ -332,13 +303,13 @@ export function AuthScreen({ onLoginSuccess }) {
                     setMode('signup');
                     setError(null);
                   }}
-                  className="font-medium text-white hover:underline cursor-pointer ml-1"
+                  className="text-white underline underline-offset-2 hover:text-white/80 transition cursor-pointer ml-1"
                 >
                   Sign up
                 </button>
-              </span>
+              </>
             )}
-          </div>
+          </p>
         </div>
       </div>
     </div>

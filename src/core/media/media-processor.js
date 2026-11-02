@@ -640,7 +640,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
  */
 export function isMetaFamilyModel(model = '') {
   const m = String(model || '').trim().toLowerCase();
-  if (!m) return true; // Default model in Omni is muse-spark-open (Meta family)
+  if (!m) return true; // Default model in Dotta is muse-spark-open (Meta family)
   if (/gemini|gpt-|o1|o3|o4|claude-|sonnet-|opus-|haiku-|deepseek|kimi|moonshot/i.test(m)) {
     return false;
   }

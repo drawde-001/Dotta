@@ -1,12 +1,12 @@
 /**
- * Omni Core Headless Smoke Test Suite
+ * Dotta Core Headless Smoke Test Suite
  * Verifies core engine exports, tool policies, budgeting, and workspace operations.
  */
 import assert from 'assert';
 import fs from 'fs';
 import path from 'path';
 import {
-  OmniEngine,
+  DottaEngine,
   AGENT_TOOLS_CATALOG,
   getScopedTools,
   checkPermission,
@@ -24,7 +24,7 @@ import {
   getModelAdapter
 } from '../src/index.js';
 
-console.log('--- Starting Omni Core Smoke Tests ---\n');
+console.log('--- Starting Dotta Core Smoke Tests ---\n');
 
 // 1. Tool Catalog & Scoping
 console.log('[Test 1] Verifying Tool Catalog & Scoping...');
@@ -123,11 +123,11 @@ assert.strictEqual(resolveProviderForModel('gpt-4o'), 'openai');
 assert.strictEqual(resolveProviderForModel('deepseek-chat'), 'deepseek');
 console.log('✓ Model Provider Resolution verified.\n');
 
-// 7. OmniEngine Initialization
-console.log('[Test 7] Verifying OmniEngine...');
-const engine = new OmniEngine();
+// 7. DottaEngine Initialization
+console.log('[Test 7] Verifying DottaEngine...');
+const engine = new DottaEngine();
 assert(typeof engine.run === 'function', 'engine.run should be a function');
-console.log('✓ OmniEngine verified.\n');
+console.log('✓ DottaEngine verified.\n');
 
 // 8. Interrupt History & Auto-Resolution Persistence
 console.log('[Test 8] Verifying Interrupt Persistence & Question History...');
@@ -140,5 +140,5 @@ deleteThread(testThreadId);
 console.log('✓ Interrupt Persistence and Question History verified.\n');
 
 console.log('=========================================');
-console.log('ALL OMNI CORE TESTS PASSED SUCCESSFULLY!');
+console.log('ALL DOTTA CORE TESTS PASSED SUCCESSFULLY!');
 console.log('=========================================');

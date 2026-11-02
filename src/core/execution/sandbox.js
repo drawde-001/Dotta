@@ -11,7 +11,7 @@ import {
   redactSandboxHostPaths
 } from './run-sandbox.js';
 
-export const DEFAULT_DISTRO_NAME = process.env.OMNI_SANDBOX_DISTRO || 'omni-agent-sandbox';
+export const DEFAULT_DISTRO_NAME = process.env.DOTTA_SANDBOX_DISTRO || 'dotta-sandbox';
 export const DEFAULT_COMMAND_TIMEOUT_MS = 30000;
 export const MAX_OUTPUT_CHARS = 10000;
 
@@ -20,7 +20,7 @@ const activeExecutions = new Map();
 const distroCache = new Map();
 
 export function isSandboxDistroAvailable(distroName = DEFAULT_DISTRO_NAME) {
-  if (process.env.OMNI_USE_WSL_SANDBOX !== '1') {
+  if (process.env.DOTTA_USE_WSL_SANDBOX !== '1') {
     return false;
   }
   if (distroCache.has(distroName)) {

@@ -10,7 +10,7 @@ import dotenv from 'dotenv';
 import { WebSocketServer, WebSocket } from 'ws';
 
 import {
-  OmniEngine,
+  DottaEngine,
   calculateMediaSegments,
   transcribeAudioSequentially,
   getGeneratedImage
@@ -83,7 +83,7 @@ app.use(cookieParser());
 // (preserving the user's sandbox/BIO data); after that the signed cookie is
 // authoritative and client-supplied IDs are ignored. Real auth can replace
 // this later without changing any route.
-const SESSION_COOKIE = 'omni_session';
+const SESSION_COOKIE = 'dotta_session';
 function getSessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   const secretPath = path.resolve(__dirname, '../src/data/.session-secret');
@@ -166,11 +166,11 @@ wss.on('connection', async (ws) => {
   });
 });
 
-const engine = new OmniEngine({
+const engine = new DottaEngine({
   defaultModel: process.env.DEFAULT_MODEL || 'muse-spark-open'
 });
 
-// Register live browser executors with OmniEngine
+// Register live browser executors with DottaEngine
 engine.registerTool({ name: 'browser_search' }, async (args) => {
   cancelBrowserTermination();
   try {
@@ -182,7 +182,7 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
     }
 
     const searchUrl = `https://duckduckgo.com/?q=${encodeURIComponent(query)}`;
-    console.log(`[Omni Engine] Navigating live browser to ${searchUrl}...`);
+    console.log(`[Dotta Engine] Navigating live browser to ${searchUrl}...`);
     await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
 
     // Wait a moment for dynamic results to settle
@@ -210,7 +210,7 @@ engine.registerTool({ name: 'browser_search' }, async (args) => {
     const bodyText = await page.evaluate(() => document.body.innerText.slice(0, 3000)).catch(() => '');
     return `### Live Browser Search for "${query}":\n\n${bodyText}`;
   } catch (err) {
-    console.error('[Omni Engine] browser_search failed:', err?.message || err);
+    console.error('[Dotta Engine] browser_search failed:', err?.message || err);
     return `Browser search error: ${err?.message || 'Failed to execute search in live browser'}`;
   }
 });
@@ -333,10 +333,10 @@ engine.registerTool({ name: 'browser_read_page' }, async (args, context = {}) =>
     const isAlreadyOnPage = currentUrl && normalizeUrl(currentUrl) === normalizeUrl(targetUrl);
 
     if (!isAlreadyOnPage) {
-      console.log(`[Omni Engine] Navigating live browser to ${targetUrl}...`);
+      console.log(`[Dotta Engine] Navigating live browser to ${targetUrl}...`);
       await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch(() => {});
     } else {
-      console.log(`[Omni Engine] Live browser already on ${targetUrl}. Extracting live DOM directly without refresh to preserve form inputs.`);
+      console.log(`[Dotta Engine] Live browser already on ${targetUrl}. Extracting live DOM directly without refresh to preserve form inputs.`);
     }
 
     const title = await page.title().catch(() => targetUrl);
@@ -346,7 +346,7 @@ engine.registerTool({ name: 'browser_read_page' }, async (args, context = {}) =>
       try {
         const liveSchema = await extractLiveDomSchemaInPlaywright(page).catch(() => null);
         if (liveSchema && Array.isArray(liveSchema.schema?.fields) && liveSchema.schema.fields.length >= 2) {
-          console.log(`[Omni Engine] Detected form on ${targetUrl} with ${liveSchema.schema.fields.length} field(s). Running Multi-Level Form Pipeline in batches...`);
+          console.log(`[Dotta Engine] Detected form on ${targetUrl} with ${liveSchema.schema.fields.length} field(s). Running Multi-Level Form Pipeline in batches...`);
           const pipeRes = await runMultiLevelFormPipeline({
             runId: context?.runId || `live-pipe-${Date.now()}`,
             userId: context?.userId,
@@ -379,14 +379,14 @@ engine.registerTool({ name: 'browser_read_page' }, async (args, context = {}) =>
           }
         }
       } catch (pipeErr) {
-        console.error('[Omni Engine] Multi-level form pipeline failed in browser_read_page:', pipeErr?.message || pipeErr);
+        console.error('[Dotta Engine] Multi-level form pipeline failed in browser_read_page:', pipeErr?.message || pipeErr);
       }
     }
 
     const text = await page.evaluate(() => document.body.innerText.slice(0, 4000)).catch(() => '');
     return `### Page: ${title}\n**URL**: ${targetUrl}${isAlreadyOnPage ? ' (already active, form inputs preserved)' : ''}\n\n${text}`;
   } catch (err) {
-    console.error('[Omni Engine] browser_read_page failed:', err?.message || err);
+    console.error('[Dotta Engine] browser_read_page failed:', err?.message || err);
     return `Browser read page error: ${err?.message || 'Failed to navigate in live browser'}`;
   }
 });
@@ -869,7 +869,7 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
       .catch((err) => ({ error: err.message }));
     return JSON.stringify(snapshot, null, 2);
   } catch (err) {
-    console.error('[Omni Engine] snapshot_read failed:', err?.message || err);
+    console.error('[Dotta Engine] snapshot_read failed:', err?.message || err);
     return JSON.stringify({ error: `Snapshot error: ${err?.message || 'Failed to read snapshot'}` });
   }
 });
@@ -886,7 +886,7 @@ engine.registerTool({ name: 'browser_screenshot' }, async (args) => {
     if (!buffer) return 'Failed to capture screenshot.';
     return `Captured live screenshot (${buffer.length} bytes). Viewport is streaming live in sidebar.`;
   } catch (err) {
-    console.error('[Omni Engine] browser_screenshot failed:', err?.message || err);
+    console.error('[Dotta Engine] browser_screenshot failed:', err?.message || err);
     return `Browser screenshot error: ${err?.message || 'Failed to take screenshot'}`;
   }
 });
@@ -1242,7 +1242,7 @@ app.post('/api/attachments/process', async (req, res) => {
     for (let i = 0; i < sorted.length; i++) {
       const att = sorted[i];
       const orderNum = att.order || i + 1;
-      console.log(`[Omni Attachments] Sequentially processing attachment ${orderNum} of ${sorted.length}: "${att.name}" (${att.size} bytes)`);
+      console.log(`[Dotta Attachments] Sequentially processing attachment ${orderNum} of ${sorted.length}: "${att.name}" (${att.size} bytes)`);
 
       // Persist the raw file into the user's own sandboxed workspace so the
       // agent's file tools (file_list, file_read, segment_image, ...) can
@@ -1268,7 +1268,7 @@ app.post('/api/attachments/process', async (req, res) => {
             workspacePath = rel;
           }
         } catch (err) {
-          console.warn('[Omni Attachments] Failed to save attachment to workspace:', err.message);
+          console.warn('[Dotta Attachments] Failed to save attachment to workspace:', err.message);
         }
       }
 
@@ -1616,12 +1616,12 @@ app.use(express.static(distPath));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
   res.sendFile(path.join(distPath, 'index.html'), (err) => {
-    if (err) res.status(200).send('Omni Agent Server is running. Frontend build not present.');
+    if (err) res.status(200).send('Dotta Server is running. Frontend build not present.');
   });
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`[Omni Agent Server] Listening on http://0.0.0.0:${PORT}`);
-  console.log(`[Omni Agent Stream] WebSocket active on ws://0.0.0.0:${PORT}/ws`);
-  console.log(`[Omni Agent Engine] Default model configured: ${process.env.DEFAULT_MODEL || 'muse-spark-open'}`);
+  console.log(`[Dotta Server] Listening on http://0.0.0.0:${PORT}`);
+  console.log(`[Dotta Stream] WebSocket active on ws://0.0.0.0:${PORT}/ws`);
+  console.log(`[Dotta Engine] Default model configured: ${process.env.DEFAULT_MODEL || 'muse-spark-open'}`);
 });

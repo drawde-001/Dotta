@@ -1,5 +1,5 @@
-const STORAGE_KEY = 'omni.userId';
-const USER_KEY = 'omni.currentUser';
+const STORAGE_KEY = 'dotta.userId';
+const USER_KEY = 'dotta.currentUser';
 
 export function getCurrentUser() {
   try {

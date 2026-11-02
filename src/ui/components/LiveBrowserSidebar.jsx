@@ -189,7 +189,7 @@ export function LiveBrowserSidebar({
                 </div>
                 <div className="text-xs text-zinc-400 font-medium">Browser Stream Ready</div>
                 <p className="text-[11px] text-zinc-500 max-w-xs mx-auto">
-                  When Omni searches the web or reads a URL, live discoveries and webpage snapshots will appear here.
+                  When Dotta searches the web or reads a URL, live discoveries and webpage snapshots will appear here.
                 </p>
               </div>
             )}

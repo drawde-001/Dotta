@@ -15,7 +15,7 @@ import {
 import { getUserId } from '@/lib/user';
 
 /**
- * Threads panel in the preview design: Omni Agent header, New chat,
+ * Threads panel: Dotta header, New chat,
  * Projects (BIO), Recents (real threads from the thread list runtime).
  */
 export function ThreadsPanel({ onCollapse, onOpenBio }) {
@@ -44,7 +44,7 @@ export function ThreadsPanel({ onCollapse, onOpenBio }) {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between px-3 pb-1 pt-4">
         <div className="flex items-center px-1 py-1 text-[15px] font-semibold tracking-tight text-zinc-100">
-          Omni Agent
+          Dotta
         </div>
         <div className="flex items-center gap-0.5">
           <span

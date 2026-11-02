@@ -22,7 +22,7 @@ import { validateReviewerDecision } from './schema.js';
 import { isApprovedHost } from '../tools/policy.js';
 import { streamModelTurn } from '../models/model-adapter.js';
 
-export const REVIEWER_SYSTEM_PROMPT = `You are the Level 4 Security Reviewer for Omni Agent.
+export const REVIEWER_SYSTEM_PROMPT = `You are the Level 4 Security Reviewer for Dotta.
 You have ZERO tools and never see raw web page text or personal BIO values.
 You receive ONLY:
 1. The user's original request

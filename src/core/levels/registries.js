@@ -1,7 +1,7 @@
 /**
  * registries.js
  *
- * Code-enforced per-level tool registries and permission gates for Omni's
+ * Code-enforced per-level tool registries and permission gates for Dotta's
  * multi-level form-filling and web-task architecture.
  *
  * Levels:

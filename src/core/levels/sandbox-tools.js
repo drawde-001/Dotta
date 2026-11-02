@@ -1,7 +1,7 @@
 /**
  * sandbox-tools.js
  *
- * Autonomous & Adaptive Toolkit for Omni's Browser Subagent.
+ * Autonomous & Adaptive Toolkit for Dotta's Browser Subagent.
  * All tools run strictly inside the isolated RunSandbox.
  *
  * Capabilities:
