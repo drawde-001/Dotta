@@ -119,12 +119,12 @@ export function AuthScreen({ onLoginSuccess }) {
 
           {/* Content: Title & Subtitle + Step Cards */}
           <div className="relative z-10 w-full max-w-[560px]">
-            {/* Title & Subtitle Stacked Layout matching sign-up.html */}
-            <h1 className="text-[32px] sm:text-4xl leading-tight font-semibold text-white">
-              Get Started<br />with Us
+            {/* Title & Subtitle without artificial line breaks, properly scaled on large screens */}
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white tracking-tight leading-tight">
+              Get Started with Us
             </h1>
-            <p className="mt-3 text-sm text-white/70 max-w-[320px] leading-relaxed">
-              Complete these easy steps<br />to register your account.
+            <p className="mt-3 text-sm sm:text-base text-white/75 leading-relaxed max-w-md">
+              Complete these easy steps to register your account.
             </p>
 
             {/* Step Indicator Cards */}
