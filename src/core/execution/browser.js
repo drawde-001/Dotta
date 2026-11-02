@@ -216,10 +216,44 @@ export async function executeReadPage({ url }) {
   }
 }
 
+let activeBrowserPage = null;
+
+export function setActiveBrowserPage(p) {
+  activeBrowserPage = p || null;
+}
+
+export function getActiveBrowserPage() {
+  return activeBrowserPage;
+}
+
 /**
  * Interacts with the currently loaded webpage in Chromium
  */
 export async function executeBrowserAction({ action, selectorOrText, value, direction = 'down', amount = 500, pressEnter }) {
+  if (activeBrowserPage) {
+    try {
+      const target = String(selectorOrText || '').trim();
+      if (action === 'click') {
+        await activeBrowserPage.click(target, { timeout: 4000 });
+        return `Clicked "${target}".`;
+      } else if (action === 'type') {
+        await activeBrowserPage.fill(target, String(value || ''), { timeout: 4000 });
+        if (pressEnter) await activeBrowserPage.keyboard.press('Enter');
+        return `Typed "${value}" into "${target}".`;
+      } else if (action === 'select') {
+        await activeBrowserPage.selectOption(target, { value: String(value) }).catch(() =>
+          activeBrowserPage.selectOption(target, { label: String(value) })
+        );
+        return `Selected option "${value}" in "${target}".`;
+      } else if (action === 'scroll') {
+        const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
+        await activeBrowserPage.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);
+        return `Scrolled page by ${px}px.`;
+      }
+    } catch (err) {
+      return `Browser action error: ${err.message}`;
+    }
+  }
   return `Error: browser_action ("${action}") is unavailable in this runtime because no live browser is attached. The action was NOT executed. Do not retry it here; use browser_search or browser_read_page, or run through the server runtime where the live browser is wired.`;
 }
 
@@ -227,6 +261,31 @@ export async function executeBrowserAction({ action, selectorOrText, value, dire
  * Inspects the current live browser DOM snapshot
  */
 export async function executeSnapshotRead({ scope = 'all' } = {}) {
+  if (activeBrowserPage) {
+    try {
+      const snap = await activeBrowserPage.evaluate(() => ({
+        title: document.title,
+        url: window.location.href,
+        interactives: Array.from(document.querySelectorAll('input, select, textarea, button, a[href]'))
+          .filter((el) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0 && el.type !== 'hidden';
+          })
+          .slice(0, 50)
+          .map((el) => ({
+            tag: el.tagName.toLowerCase(),
+            type: el.getAttribute('type') || undefined,
+            id: el.id || undefined,
+            name: el.getAttribute('name') || undefined,
+            value: el.value || undefined,
+            options: el.tagName === 'SELECT' ? Array.from(el.querySelectorAll('option')).slice(0, 20).map(o => o.text || o.value) : undefined
+          }))
+      }));
+      return JSON.stringify(snap, null, 2);
+    } catch (err) {
+      return JSON.stringify({ error: err.message });
+    }
+  }
   return JSON.stringify(
     {
       error:
@@ -241,5 +300,13 @@ export async function executeSnapshotRead({ scope = 'all' } = {}) {
  * Captures a live screenshot of the webpage
  */
 export async function executeBrowserScreenshot({ selector, fullPage = false } = {}) {
+  if (activeBrowserPage) {
+    try {
+      const buf = await activeBrowserPage.screenshot({ fullPage: Boolean(fullPage) });
+      return `Captured live screenshot (${buf.length} bytes).`;
+    } catch (err) {
+      return `Screenshot error: ${err.message}`;
+    }
+  }
   return 'Error: browser_screenshot is unavailable in this runtime (no live browser attached). No screenshot was captured.';
 }

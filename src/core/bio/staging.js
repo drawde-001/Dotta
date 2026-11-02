@@ -64,7 +64,25 @@ export function stageBioFile({ userId, absPath, name, mime, runId = null, fieldI
 export function resolveStagedFile(token, runId = null) {
   prune();
   if (!token || typeof token !== 'string') return null;
-  const item = staged.get(token.trim());
+  const cleanToken = token.trim();
+  let item = staged.get(cleanToken);
+
+  if (!item) {
+    const baseName = path.basename(cleanToken).toLowerCase();
+    for (const cand of staged.values()) {
+      if (
+        cand.token === cleanToken ||
+        cand.fieldId === cleanToken ||
+        cand.name === cleanToken ||
+        path.basename(cand.name).toLowerCase() === baseName ||
+        (cand.fieldId && cleanToken.toLowerCase().includes(cand.fieldId.toLowerCase()))
+      ) {
+        item = cand;
+        break;
+      }
+    }
+  }
+
   if (!item) return null;
 
   const effectiveRunId = runId || currentActiveRunId || item.runId;

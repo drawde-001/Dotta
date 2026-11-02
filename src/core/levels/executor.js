@@ -191,42 +191,97 @@ export function buildCustomSectionFillScript(sectionItems = []) {
       } else if (tag === 'SELECT') {
         const valStr = String(item.value || '').trim().toLowerCase();
         let matched = false;
-        // Pass 1: Exact match on value or text
+
+        // Candidate match values (e.g. Month numbers vs Month names, State codes vs State names)
+        const candidates = new Set([valStr]);
+        const numVal = parseInt(valStr, 10);
+        const MONTH_MAP = {
+          1: ['january', 'jan', '01', '1'],
+          2: ['february', 'feb', '02', '2'],
+          3: ['march', 'mar', '03', '3'],
+          4: ['april', 'apr', '04', '4'],
+          5: ['may', '05', '5'],
+          6: ['june', 'jun', '06', '6'],
+          7: ['july', 'jul', '07', '7'],
+          8: ['august', 'aug', '08', '8'],
+          9: ['september', 'sep', '09', '9'],
+          10: ['october', 'oct', '10'],
+          11: ['november', 'nov', '11'],
+          12: ['december', 'dec', '12']
+        };
+        for (const [mNum, names] of Object.entries(MONTH_MAP)) {
+          if (names.includes(valStr) || parseInt(mNum, 10) === numVal) {
+            names.forEach((n) => candidates.add(n));
+          }
+        }
+
+        const STATE_MAP = {
+          al: 'alabama', ak: 'alaska', az: 'arizona', ar: 'arkansas', ca: 'california',
+          co: 'colorado', ct: 'connecticut', de: 'delaware', fl: 'florida', ga: 'georgia',
+          hi: 'hawaii', id: 'idaho', il: 'illinois', in: 'indiana', ia: 'iowa',
+          ks: 'kansas', ky: 'kentucky', la: 'louisiana', me: 'maine', md: 'maryland',
+          ma: 'massachusetts', mi: 'michigan', mn: 'minnesota', ms: 'mississippi', mo: 'missouri',
+          mt: 'montana', ne: 'nebraska', nv: 'nevada', nh: 'new hampshire', nj: 'new jersey',
+          nm: 'new mexico', ny: 'new york', nc: 'north carolina', nd: 'north dakota', oh: 'ohio',
+          ok: 'oklahoma', or: 'oregon', pa: 'pennsylvania', ri: 'rhode island', sc: 'south carolina',
+          sd: 'south dakota', tn: 'tennessee', tx: 'texas', ut: 'utah', vt: 'vermont',
+          va: 'virginia', wa: 'washington', wv: 'west virginia', wi: 'wisconsin', wy: 'wyoming',
+          dc: 'district of columbia'
+        };
+        if (STATE_MAP[valStr]) candidates.add(STATE_MAP[valStr]);
+        for (const [code, fullName] of Object.entries(STATE_MAP)) {
+          if (fullName === valStr) {
+            candidates.add(code);
+            candidates.add(fullName);
+          }
+        }
+
+        // Pass 1: Match against candidates on value or text
         for (let i = 0; i < el.options.length; i++) {
           const opt = el.options[i];
           const oVal = (opt.value || '').trim().toLowerCase();
           const oText = (opt.text || '').trim().toLowerCase();
-          if (valStr && (oVal === valStr || oText === valStr)) {
-            el.selectedIndex = i;
-            matched = true;
-            break;
+          for (const c of candidates) {
+            if (c && (oVal === c || oText === c)) {
+              el.selectedIndex = i;
+              matched = true;
+              break;
+            }
           }
+          if (matched) break;
         }
-        // Pass 2: Prefix match on text or value only if no exact match
-        if (!matched && valStr) {
+
+        // Pass 2: Substring or prefix match (skipping empty placeholder options like "Select...")
+        if (!matched) {
           for (let i = 0; i < el.options.length; i++) {
             const opt = el.options[i];
             const oVal = (opt.value || '').trim().toLowerCase();
             const oText = (opt.text || '').trim().toLowerCase();
-            if (oVal && (oVal.startsWith(valStr) || valStr.startsWith(oVal))) {
-              el.selectedIndex = i;
-              matched = true;
-              break;
+            if (!oVal && !oText) continue;
+            if (/^(select|choose|--|\s*)$/i.test(oText) || /^(select|choose|--|\s*)$/i.test(oVal)) continue;
+
+            for (const c of candidates) {
+              if (c && c.length >= 2 && (oVal.includes(c) || oText.includes(c) || c.includes(oVal) || c.includes(oText))) {
+                el.selectedIndex = i;
+                matched = true;
+                break;
+              }
             }
-            if (oText && (oText.startsWith(valStr) || valStr.startsWith(oText))) {
-              el.selectedIndex = i;
-              matched = true;
-              break;
-            }
+            if (matched) break;
           }
         }
-        if (!matched && el.options.length > 1 && item.value) {
-          const num = parseInt(item.value, 10);
-          if (!isNaN(num) && num >= 0 && num < el.options.length) {
-            el.selectedIndex = num;
+
+        // Pass 3: If select is required/location and still on placeholder, pick closest or first valid option
+        if (!matched && el.options.length > 1) {
+          const firstNonPlaceholder = Array.from(el.options).findIndex(
+            (o) => o.value && !/^(select|choose|--|\s*)$/i.test(o.text)
+          );
+          if (firstNonPlaceholder !== -1 && (item.label.toLowerCase().includes('office') || item.label.toLowerCase().includes('location') || item.label.toLowerCase().includes('branch'))) {
+            el.selectedIndex = firstNonPlaceholder;
             matched = true;
           }
         }
+
         if (!matched) {
           const proto = window.HTMLSelectElement?.prototype;
           const nativeSetter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
@@ -238,8 +293,39 @@ export function buildCustomSectionFillScript(sectionItems = []) {
           ? window.HTMLTextAreaElement?.prototype
           : window.HTMLInputElement?.prototype;
         const nativeSetter = proto && Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-        if (nativeSetter) nativeSetter.call(el, String(item.value));
-        else el.value = String(item.value);
+
+        // Auto-distribute split phone inputs (e.g. 3 inputs: area [3], prefix [3], line [4])
+        const isPhoneField = item.fieldKey.toLowerCase().includes('phone') || item.label.toLowerCase().includes('phone');
+        const digits = String(item.value).replace(/\D+/g, '');
+        const tenDigits = digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits;
+
+        if (tag === 'INPUT' && isPhoneField && tenDigits.length === 10) {
+          const container = el.closest('.form-group, .form-row, .field, div, tr') || el.parentElement;
+          const phoneSiblings = container
+            ? Array.from(container.querySelectorAll('input[type="text"], input[type="tel"], input:not([type])')).filter((i) => {
+                const r = i.getBoundingClientRect();
+                return r.width > 0 && i.type !== 'hidden';
+              })
+            : [];
+          if (phoneSiblings.length === 3) {
+            const parts = [tenDigits.slice(0, 3), tenDigits.slice(3, 6), tenDigits.slice(6, 10)];
+            phoneSiblings.forEach((inp, pIdx) => {
+              if (nativeSetter) nativeSetter.call(inp, parts[pIdx]);
+              else inp.value = parts[pIdx];
+              try {
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                inp.dispatchEvent(new Event('blur', { bubbles: true }));
+              } catch {}
+            });
+          } else {
+            if (nativeSetter) nativeSetter.call(el, String(item.value));
+            else el.value = String(item.value);
+          }
+        } else {
+          if (nativeSetter) nativeSetter.call(el, String(item.value));
+          else el.value = String(item.value);
+        }
       }
       try {
         el.dispatchEvent(new Event('input', { bubbles: true }));

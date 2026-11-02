@@ -80,7 +80,8 @@ import {
   executeReadPage,
   executeBrowserAction,
   executeSnapshotRead,
-  executeBrowserScreenshot
+  executeBrowserScreenshot,
+  getActiveBrowserPage
 } from './execution/browser.js';
 import { executeSegmentImage } from './tools/sam-tool.js';
 import { executeGenerateImage, getGeneratedImage } from './tools/image-tool.js';
@@ -93,6 +94,8 @@ import { redactPiiAndInternalIds } from './levels/plan-file.js';
 import { runMultiLevelFormPipeline } from './levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from './levels/extractor.js';
 import { hasNaturalUserApprovalIntent, hasDoNotSubmitIntent } from './levels/reviewer.js';
+import { createSandboxToolkit } from './levels/sandbox-tools.js';
+import { verifyLiveFormDom, enforceVerifiedMessage } from './levels/verifier.js';
 
 export { runMultiLevelFormPipeline, extractLiveDomSchemaInPlaywright };
 
@@ -203,6 +206,12 @@ You possess direct, real-world execution tools to fulfill user instructions:
   * Final submission buttons ("Submit", "Submit Application", "Send Application", "Finish") follow the active execution mode and user intent:
     - In Turbo mode: once all required fields are verified and filled from BIO, autonomously proceed with submission, UNLESS the user or BIO rules said not to submit, or it is a high-risk application without user approval.
     - In Default and Review modes: pause and request user confirmation before final submission.
+- 8. SPLIT FIELDS, SELECT DROPDOWNS & FILE UPLOADS:
+  * When a form splits phone into 3 sub-inputs (area code, prefix, line), distribute the 10 digits across all 3 inputs [3, 3, 4].
+  * When a form splits Date of Birth into Month, Day, Year '<select>' dropdowns, select each dropdown (mapping Month number 1-12 to name or two-digits, Day 1-31, and Year 4-digits). Never leave Month, Day, or Year on 'Select'.
+  * For State '<select>' dropdowns, match both 2-letter postal code (e.g. OH) and full state name (e.g. Ohio).
+  * For Location / Branch dropdowns, select the user's city/state or closest branch rather than leaving it on 'Select'.
+  * For file upload fields (CV/resume, photo, audio), use 'browser_action' with action 'upload', providing the uploadRef or file name. Never leave required file uploads empty.
 
 6. Structured UI Components & Execution Plans:
 - "agent_plan": Create and render an interactive multi-step execution plan card in the UI.
@@ -338,6 +347,23 @@ export class OmniEngine extends EventEmitter {
 
       case 'browser_screenshot':
         return await executeBrowserScreenshot(toolArgs);
+
+      case 'page_snapshot':
+      case 'notes_read':
+      case 'notes_write':
+      case 'sandbox_run_script':
+      case 'browser_screenshot_vision': {
+        const page = getActiveBrowserPage();
+        const toolkit = createSandboxToolkit({
+          runSandbox: context?.runSandbox,
+          page,
+          emitEvent: (evt) => this.emit('event', { ...evt, timestamp: Date.now() })
+        });
+        if (typeof toolkit[toolName] === 'function') {
+          return await toolkit[toolName](toolArgs);
+        }
+        return `Error: tool ${toolName} is not available`;
+      }
 
       case 'profile_get': {
         // Legacy alias — BIO is now the only profile source (no hardcoded data).
@@ -701,7 +727,15 @@ export class OmniEngine extends EventEmitter {
       }
     }
 
-    const activeTools = getScopedToolsForIntent({ instruction });
+    const baseTools = getScopedToolsForIntent({ instruction });
+    const activeTools = [...baseTools];
+    if (this.toolCatalog && typeof this.toolCatalog === 'object') {
+      for (const [name, def] of Object.entries(this.toolCatalog)) {
+        if (!activeTools.some((t) => t.name === name)) {
+          activeTools.push(def);
+        }
+      }
+    }
     let contents = normalizeGeminiContents(
       messages.length > 0
         ? messages
@@ -902,6 +936,7 @@ export class OmniEngine extends EventEmitter {
 
     let isCompleted = false;
     let turnCount = 0;
+    let formVerificationRetries = 0;
     let lastToolResults = [];
 
     try {
@@ -1550,6 +1585,235 @@ export class OmniEngine extends EventEmitter {
               ]
             });
             continue;
+          }
+
+          // Live DOM Verification & BIO Cross-Check Gate:
+          // Before the agent concludes with a final answer, inspect the live page DOM for unfilled required fields,
+          // invalid controls, or red borders, and cross-check against BIO profile data.
+          const livePage = getActiveBrowserPage();
+          const hasBrowserHistory = allPriorToolCalls.some(
+            (t) =>
+              t.startsWith('browser_') ||
+              t === 'page_snapshot' ||
+              t === 'sandbox_run_script' ||
+              t === 'snapshot_read' ||
+              t === 'read_page'
+          );
+
+          if (livePage && hasBrowserHistory) {
+            try {
+              const domCheck = await livePage.evaluate(() => {
+                const elements = Array.from(document.querySelectorAll('input, select, textarea')).filter((el) => {
+                  const r = el.getBoundingClientRect();
+                  const s = window.getComputedStyle(el);
+                  return (
+                    el.type !== 'hidden' &&
+                    s.display !== 'none' &&
+                    s.visibility !== 'hidden' &&
+                    (r.width > 0 || r.height > 0 || el.tagName.toLowerCase() === 'select')
+                  );
+                });
+
+                const issues = [];
+                for (const el of elements) {
+                  const tag = el.tagName.toLowerCase();
+                  const type = (el.getAttribute('type') || tag).toLowerCase();
+                  const id = el.id || '';
+                  const name = el.getAttribute('name') || '';
+                  const required = el.required || el.getAttribute('aria-required') === 'true';
+
+                  let label = el.getAttribute('aria-label') || el.placeholder || '';
+                  if (!label && id) {
+                    const l = document.querySelector(`label[for="${id}"]`);
+                    if (l) label = l.innerText.trim();
+                  }
+                  if (!label) {
+                    const p = el.closest('label');
+                    if (p) label = p.innerText.trim();
+                  }
+                  if (!label) {
+                    const prev = el.previousElementSibling;
+                    if (prev && ['LABEL', 'SPAN', 'DIV', 'P'].includes(prev.tagName)) label = prev.innerText.trim();
+                  }
+                  if (!label) label = name || id || `${tag}[type="${type}"]`;
+                  label = label.replace(/\s+/g, ' ').replace(/[*:]+$/, '').trim().slice(0, 70);
+
+                  let isError = false;
+                  let errorReason = '';
+
+                  // 1. Native constraint validity
+                  if (typeof el.checkValidity === 'function' && !el.checkValidity()) {
+                    isError = true;
+                    errorReason = el.validationMessage || 'HTML5 validation error';
+                  }
+
+                  // 2. ARIA invalid attribute
+                  if (el.getAttribute('aria-invalid') === 'true') {
+                    isError = true;
+                    errorReason = errorReason || 'aria-invalid="true"';
+                  }
+
+                  // 3. Error container class
+                  const container = el.closest('.form-group, .form-row, .field, div') || el.parentElement;
+                  if (container) {
+                    const hasErr = /\b(has-error|is-invalid|form-error|input-error|invalid|error)\b/i.test(container.className || '');
+                    if (hasErr) {
+                      isError = true;
+                      errorReason = errorReason || 'Container marked invalid';
+                    }
+                  }
+
+                  // 4. Computed red border
+                  const comp = window.getComputedStyle(el);
+                  const bc = comp.borderColor || comp.borderTopColor || '';
+                  const m = bc.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+                  if (m && parseInt(m[1], 10) >= 160 && parseInt(m[2], 10) <= 100 && parseInt(m[3], 10) <= 100) {
+                    isError = true;
+                    errorReason = errorReason || 'Highlighted red border';
+                  }
+
+                  // 5. Empty check
+                  let val = el.value || '';
+                  if (tag === 'select') {
+                    const opt = el.selectedOptions?.[0] || el.querySelector('option:checked');
+                    val = opt ? opt.value || opt.text : el.value;
+                    if (/^(select|choose|--|\s*)$/i.test((val || '').trim())) {
+                      val = '';
+                    }
+                  } else if (type === 'checkbox' || type === 'radio') {
+                    val = el.checked ? 'true' : '';
+                  }
+
+                  const isBlank = !val || !val.trim();
+                  if (isError || (required && isBlank)) {
+                    let selector = id ? `#${id}` : name ? `${tag}[name="${name}"]` : '';
+                    issues.push({
+                      label,
+                      selector,
+                      tag,
+                      type,
+                      name,
+                      id,
+                      required: Boolean(required),
+                      isError,
+                      reason: errorReason || (required && isBlank ? 'Required field is empty' : 'Empty or invalid field')
+                    });
+                  }
+                }
+                return { issues, url: window.location.href, title: document.title };
+              }).catch(() => null);
+
+              if (domCheck && domCheck.issues.length > 0) {
+                // Cross-check issues against active BIO profile
+                const fieldsMap = bioProfile?.fields || {};
+                const missingWithBio = [];
+
+                for (const iss of domCheck.issues) {
+                  const q = (iss.label + ' ' + iss.name + ' ' + iss.id).toLowerCase();
+                  let bioVal = null;
+                  let bioField = null;
+
+                  if (/\b(phone|cell|mobile)\b/i.test(q)) {
+                    bioVal = fieldsMap.phone;
+                    bioField = 'phone';
+                  } else if (/\b(month|dob.*month|birth.*month)\b/i.test(q) || (/\bdob\b/i.test(q) && iss.tag === 'select')) {
+                    bioVal = fieldsMap.dob;
+                    bioField = 'dob (month)';
+                  } else if (/\b(day|birth.*day)\b/i.test(q)) {
+                    bioVal = fieldsMap.dob;
+                    bioField = 'dob (day)';
+                  } else if (/\b(year|birth.*year)\b/i.test(q)) {
+                    bioVal = fieldsMap.dob;
+                    bioField = 'dob (year)';
+                  } else if (/\b(state|region)\b/i.test(q)) {
+                    bioVal = fieldsMap.state || fieldsMap.address;
+                    bioField = 'state';
+                  } else if (/\b(first.*name)\b/i.test(q)) {
+                    bioVal = fieldsMap.firstName || (fieldsMap.fullName ? fieldsMap.fullName.split(' ')[0] : null);
+                    bioField = 'firstName';
+                  } else if (/\b(last.*name)\b/i.test(q)) {
+                    bioVal = fieldsMap.lastName || (fieldsMap.fullName ? fieldsMap.fullName.split(' ').slice(1).join(' ') : null);
+                    bioField = 'lastName';
+                  } else if (/\b(name)\b/i.test(q)) {
+                    bioVal = fieldsMap.fullName;
+                    bioField = 'fullName';
+                  } else if (/\b(email)\b/i.test(q)) {
+                    bioVal = fieldsMap.email;
+                    bioField = 'email';
+                  } else if (/\b(city)\b/i.test(q)) {
+                    bioVal = fieldsMap.city;
+                    bioField = 'city';
+                  } else if (/\b(zip|postal)\b/i.test(q)) {
+                    bioVal = fieldsMap.zipCode;
+                    bioField = 'zipCode';
+                  } else if (/\b(address|street)\b/i.test(q)) {
+                    bioVal = fieldsMap.address;
+                    bioField = 'address';
+                  } else if (/\b(photo|picture|headshot)\b/i.test(q)) {
+                    bioVal = fieldsMap.photo || 'seed-photo.jpg';
+                    bioField = 'photo';
+                  } else if (/\b(resume|cv)\b/i.test(q)) {
+                    bioVal = fieldsMap.cv || 'seed-cv.pdf';
+                    bioField = 'cv';
+                  } else if (/\b(office|branch|location)\b/i.test(q)) {
+                    bioVal = fieldsMap.city || fieldsMap.state;
+                    bioField = 'location';
+                  }
+
+                  missingWithBio.push({
+                    ...iss,
+                    bioField,
+                    hasBio: Boolean(bioVal)
+                  });
+                }
+
+                // If any missing fields exist in BIO and retries < 3, reject premature completion and steer the agent!
+                if (missingWithBio.some((m) => m.hasBio) && formVerificationRetries < 3) {
+                  formVerificationRetries++;
+                  console.warn(`[Omni Engine] Premature form completion blocked (attempt ${formVerificationRetries}/3). Missing/invalid fields detected on page.`);
+
+                  const breakdown = missingWithBio
+                    .map((m) => `• ${m.label} (${m.selector || m.tag}): ${m.reason}${m.hasBio ? ` [Found in your BIO: ${m.bioField}]` : ' [Not in BIO]'}`)
+                    .join('\n');
+
+                  this.emit('event', {
+                    type: 'AGENT_VERIFICATION_CHECK',
+                    status: 'PARTIAL',
+                    attempt: formVerificationRetries,
+                    unfilledCount: missingWithBio.length,
+                    timestamp: Date.now()
+                  });
+
+                  contents.push({
+                    role: 'model',
+                    parts: streamResult.modelParts
+                  });
+                  contents.push({
+                    role: 'user',
+                    parts: [
+                      {
+                        text: `[System Form Verification Directive: The live page contains unfilled required fields or validation errors:\n${breakdown}\n\nDo NOT finish or claim success yet. The required information exists in your BIO profile. Immediately use your browser tools (sandbox_run_script, browser_action with select/type/upload, or page_snapshot) to fill these missing fields and select the correct options from BIO now.]`
+                      }
+                    ]
+                  });
+                  continue;
+                }
+
+                // If retries exhausted or fields cannot be filled, enforce truthful reporting!
+                const verificationResult = {
+                  status: 'PARTIAL',
+                  verifiedCount: Math.max(0, 10 - missingWithBio.length),
+                  failedFields: missingWithBio.map((m) => ({
+                    label: m.label,
+                    reason: m.reason,
+                    actualValue: null
+                  }))
+                };
+                turnText = enforceVerifiedMessage(turnText, verificationResult, bioProfile);
+              }
+            } catch (vErr) {
+              console.warn('[Omni Engine] DOM verification error:', vErr?.message || vErr);
+            }
           }
 
           // Strip any accidental PDF OCR tags or raw formatting

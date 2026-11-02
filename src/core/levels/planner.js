@@ -127,13 +127,22 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
         const rawDigits = String(f.phone).replace(/\D+/g, '');
         const tenDigits = rawDigits.length === 11 && rawDigits.startsWith('1') ? rawDigits.slice(1) : rawDigits;
         const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
-        if (fk.includes('p1') || fk.includes('area')) {
+        if (
+          /\b(p1|phone[_\-\s]?1|phone[_\-\s]?a|phone\[0\]|area|area[_\-\s]?code)\b/i.test(fk) ||
+          /phone.*1/i.test(fk)
+        ) {
           const p1Val = tenDigits.slice(0, 3);
           if (p1Val) return { value: p1Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
-        } else if (fk.includes('p2') || fk.includes('prefix')) {
+        } else if (
+          /\b(p2|phone[_\-\s]?2|phone[_\-\s]?b|phone\[1\]|prefix|exchange)\b/i.test(fk) ||
+          /phone.*2/i.test(fk)
+        ) {
           const p2Val = tenDigits.slice(3, 6);
           if (p2Val) return { value: p2Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
-        } else if (fk.includes('p3') || fk.includes('line')) {
+        } else if (
+          /\b(p3|phone[_\-\s]?3|phone[_\-\s]?c|phone\[2\]|line|number)\b/i.test(fk) ||
+          /phone.*3/i.test(fk)
+        ) {
           const p3Val = tenDigits.slice(6, 10);
           if (p3Val) return { value: p3Val, bioSource: { profileId: pid, fieldId: 'phone' }, confidence: 1.0 };
         }
@@ -149,15 +158,42 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
         const dayNum = dMatch ? parseInt(dMatch[3], 10) : NaN;
         const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
 
-        if (fk.includes('month') || fk === 'dob') {
+        const MONTH_NAMES = [
+          '', 'January', 'February', 'March', 'April', 'May', 'June',
+          'July', 'August', 'September', 'October', 'November', 'December'
+        ];
+
+        if (
+          /\b(month|dob[_\-\s]?m|dob[_\-\s]?1|dob\[0\]|birth[_\-\s]?month)\b/i.test(fk) ||
+          /month/i.test(fk) ||
+          fk === 'dob'
+        ) {
           if (!isNaN(monthNum)) {
-            return { value: String(monthNum), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+            const twoDigit = String(monthNum).padStart(2, '0');
+            const name = MONTH_NAMES[monthNum] || '';
+            return {
+              value: twoDigit,
+              monthNumber: String(monthNum),
+              monthName: name,
+              bioSource: { profileId: pid, fieldId: 'dob' },
+              confidence: 1.0
+            };
           }
-        } else if (fk.includes('day')) {
+        } else if (
+          /\b(day|dob[_\-\s]?d|dob[_\-\s]?2|dob\[1\]|birth[_\-\s]?day)\b/i.test(fk) ||
+          /day/i.test(fk)
+        ) {
           if (!isNaN(dayNum)) {
-            return { value: String(dayNum), bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
+            return {
+              value: String(dayNum),
+              bioSource: { profileId: pid, fieldId: 'dob' },
+              confidence: 1.0
+            };
           }
-        } else if (fk.includes('year')) {
+        } else if (
+          /\b(year|dob[_\-\s]?y|dob[_\-\s]?3|dob\[2\]|birth[_\-\s]?year)\b/i.test(fk) ||
+          /year/i.test(fk)
+        ) {
           if (yearVal) {
             return { value: yearVal, bioSource: { profileId: pid, fieldId: 'dob' }, confidence: 1.0 };
           }
@@ -189,20 +225,27 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
       const rawState = String(f.state || f.address?.region || '').trim();
       const fk = String(field.fieldKey || field.selector || field.label || '').toLowerCase();
       if (rawState) {
-        if (fk.includes('code') || field.type === 'select') {
-          const normKey = rawState.toLowerCase().replace(/[^a-z]/g, '');
-          const stateMap = {
-            california: 'CA', newyork: 'NY', texas: 'TX', florida: 'FL', ohio: 'OH', washington: 'WA',
-            illinois: 'IL', pennsylvania: 'PA', georgia: 'GA', northcarolina: 'NC', michigan: 'MI',
-            newjersey: 'NJ', virginia: 'VA', massachusetts: 'MA', arizona: 'AZ', indiana: 'IN',
-            tennessee: 'TN', missouri: 'MO', maryland: 'MD', wisconsin: 'WI', colorado: 'CO',
-            minnesota: 'MN', southcarolina: 'SC', alabama: 'AL', louisiana: 'LA', kentucky: 'KY',
-            oregon: 'OR', oklahoma: 'OK', connecticut: 'CT', utah: 'UT', iowa: 'IA', nevada: 'NV'
-          };
-          const code = stateMap[normKey] || (rawState.length === 2 ? rawState.toUpperCase() : rawState);
-          return { value: code, bioSource: { profileId: pid, fieldId: 'state' }, confidence: 1.0 };
-        }
-        return { value: rawState, bioSource: { profileId: pid, fieldId: 'state' }, confidence: 1.0 };
+        const normKey = rawState.toLowerCase().replace(/[^a-z]/g, '');
+        const stateMap = {
+          alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA',
+          colorado: 'CO', connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA',
+          hawaii: 'HI', idaho: 'ID', illinois: 'IL', indiana: 'IN', iowa: 'IA',
+          kansas: 'KS', kentucky: 'KY', louisiana: 'LA', maine: 'ME', maryland: 'MD',
+          massachusetts: 'MA', michigan: 'MI', minnesota: 'MN', mississippi: 'MS', missouri: 'MO',
+          montana: 'MT', nebraska: 'NE', nevada: 'NV', newhampshire: 'NH', newjersey: 'NJ',
+          newmexico: 'NM', newyork: 'NY', northcarolina: 'NC', northdakota: 'ND', ohio: 'OH',
+          oklahoma: 'OK', oregon: 'OR', pennsylvania: 'PA', rhodeisland: 'RI', southcarolina: 'SC',
+          southdakota: 'SD', tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT',
+          virginia: 'VA', washington: 'WA', westvirginia: 'WV', wisconsin: 'WI', wyoming: 'WY',
+          districtofcolumbia: 'DC', puertorico: 'PR'
+        };
+        const code = stateMap[normKey] || (rawState.length === 2 ? rawState.toUpperCase() : rawState);
+        return {
+          value: code,
+          fullStateName: Object.keys(stateMap).find((k) => stateMap[k] === code) || rawState,
+          bioSource: { profileId: pid, fieldId: 'state' },
+          confidence: 1.0
+        };
       }
       break;
     }

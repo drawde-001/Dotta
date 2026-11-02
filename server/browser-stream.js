@@ -7,6 +7,7 @@
 import fs from 'fs';
 import { chromium } from 'playwright-core';
 import { buildScrubbedSandboxEnv } from '../src/core/execution/run-sandbox.js';
+import { setActiveBrowserPage } from '../src/core/execution/browser.js';
 
 let browser = null;
 let browserContext = null;
@@ -85,6 +86,7 @@ export async function closeLiveBrowser(broadcast) {
       await page.close().catch(() => {});
     } catch {}
     page = null;
+    setActiveBrowserPage(null);
   }
   if (browserContext) {
     try {
@@ -222,6 +224,7 @@ export async function initLiveBrowser(broadcast, initialUrl = null) {
     });
 
     page = await browserContext.newPage();
+    setActiveBrowserPage(page);
 
     cdp = await browserContext.newCDPSession(page);
 

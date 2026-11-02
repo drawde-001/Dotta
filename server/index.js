@@ -452,6 +452,45 @@ engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
       const target = String(selectorOrText || '').trim();
       const text = value || '';
       const looksLikeCss = /^[.#\[]/.test(target) || target.includes('>') || target.includes('=');
+      const isPhone = /phone|tel/i.test(target);
+      const rawDigits = String(text).replace(/\D+/g, '');
+      const tenDigits = rawDigits.length === 11 && rawDigits.startsWith('1') ? rawDigits.slice(1) : rawDigits;
+
+      // Split-phone auto-distribution (for forms with 3 sub-inputs: area, prefix, line)
+      if (isPhone && tenDigits.length === 10) {
+        const distributed = await page.evaluate(({ selector, digits }) => {
+          let el = null;
+          try { el = document.querySelector(selector); } catch {}
+          if (!el) {
+            const inputs = Array.from(document.querySelectorAll('input[type="text"], input[type="tel"], input:not([type])'));
+            el = inputs.find(i => (i.id || '').includes('phone') || (i.name || '').includes('phone'));
+          }
+          if (el) {
+            const container = el.closest('.form-group, .form-row, .field, div, tr') || el.parentElement;
+            const sibs = container ? Array.from(container.querySelectorAll('input[type="text"], input[type="tel"], input:not([type])')).filter(i => {
+              const r = i.getBoundingClientRect();
+              return r.width > 0 && i.type !== 'hidden';
+            }) : [];
+            if (sibs.length === 3) {
+              const parts = [digits.slice(0, 3), digits.slice(3, 6), digits.slice(6, 10)];
+              sibs.forEach((inp, idx) => {
+                inp.focus();
+                inp.value = parts[idx];
+                inp.dispatchEvent(new Event('input', { bubbles: true }));
+                inp.dispatchEvent(new Event('change', { bubbles: true }));
+                inp.dispatchEvent(new Event('blur', { bubbles: true }));
+              });
+              return true;
+            }
+          }
+          return false;
+        }, { selector: target, digits: tenDigits }).catch(() => false);
+
+        if (distributed) {
+          return `Distributed 10-digit phone across 3 sub-inputs [${tenDigits.slice(0, 3)}] [${tenDigits.slice(3, 6)}] - [${tenDigits.slice(6, 10)}]. Take a snapshot_read to confirm.`;
+        }
+      }
+
       const strategies = [];
       if (target) {
         if (looksLikeCss) {
@@ -481,7 +520,139 @@ engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
         }
       }
       if (pressEnter) await page.keyboard.press('Enter');
+
+      // Dispatch blur and change events to clear error highlighting
+      await page.evaluate((sel) => {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            el.dispatchEvent(new Event('blur', { bubbles: true }));
+          }
+        } catch {}
+      }, target).catch(() => {});
+
       return `Typed "${text}" into "${target || 'focused element'}".${pressEnter ? ' Pressed Enter.' : ''} Take a snapshot_read to confirm before continuing.`;
+    } else if (action === 'select') {
+      const target = String(selectorOrText || '').trim();
+      const val = String(value || '').trim();
+      if (!target) {
+        return 'Browser action error: select requires a target selector or label.';
+      }
+      const selectResult = await page.evaluate(({ selectorOrLabel, targetVal }) => {
+        const valLower = String(targetVal || '').trim().toLowerCase();
+        let el = null;
+        try {
+          el = document.querySelector(selectorOrLabel);
+        } catch {}
+        if (!el) {
+          const selects = Array.from(document.querySelectorAll('select'));
+          el = selects.find((s) => {
+            const id = (s.id || '').toLowerCase();
+            const name = (s.name || '').toLowerCase();
+            const labelEl = s.id ? document.querySelector(`label[for="${s.id}"]`) : null;
+            const labelText = (labelEl?.innerText || s.closest('label')?.innerText || s.getAttribute('aria-label') || '').toLowerCase();
+            const q = selectorOrLabel.toLowerCase();
+            return id.includes(q) || name.includes(q) || labelText.includes(q);
+          });
+        }
+        if (!el) return { success: false, error: `Select element "${selectorOrLabel}" not found in DOM.` };
+
+        const candidates = new Set([valLower]);
+        const numVal = parseInt(valLower, 10);
+        const MONTH_MAP = {
+          1: ['january', 'jan', '01', '1'],
+          2: ['february', 'feb', '02', '2'],
+          3: ['march', 'mar', '03', '3'],
+          4: ['april', 'apr', '04', '4'],
+          5: ['may', '05', '5'],
+          6: ['june', 'jun', '06', '6'],
+          7: ['july', 'jul', '07', '7'],
+          8: ['august', 'aug', '08', '8'],
+          9: ['september', 'sep', '09', '9'],
+          10: ['october', 'oct', '10'],
+          11: ['november', 'nov', '11'],
+          12: ['december', 'dec', '12']
+        };
+        for (const [mNum, names] of Object.entries(MONTH_MAP)) {
+          if (names.includes(valLower) || parseInt(mNum, 10) === numVal) {
+            names.forEach((n) => candidates.add(n));
+          }
+        }
+        const STATE_MAP = {
+          al: 'alabama', ak: 'alaska', az: 'arizona', ar: 'arkansas', ca: 'california',
+          co: 'colorado', ct: 'connecticut', de: 'delaware', fl: 'florida', ga: 'georgia',
+          hi: 'hawaii', id: 'idaho', il: 'illinois', in: 'indiana', ia: 'iowa',
+          ks: 'kansas', ky: 'kentucky', la: 'louisiana', me: 'maine', md: 'maryland',
+          ma: 'massachusetts', mi: 'michigan', mn: 'minnesota', ms: 'mississippi', mo: 'missouri',
+          mt: 'montana', ne: 'nebraska', nv: 'nevada', nh: 'new hampshire', nj: 'new jersey',
+          nm: 'new mexico', ny: 'new york', nc: 'north carolina', nd: 'north dakota', oh: 'ohio',
+          ok: 'oklahoma', or: 'oregon', pa: 'pennsylvania', ri: 'rhode island', sc: 'south carolina',
+          sd: 'south dakota', tn: 'tennessee', tx: 'texas', ut: 'utah', vt: 'vermont',
+          va: 'virginia', wa: 'washington', wv: 'west virginia', wi: 'wisconsin', wy: 'wyoming',
+          dc: 'district of columbia'
+        };
+        if (STATE_MAP[valLower]) candidates.add(STATE_MAP[valLower]);
+        for (const [code, fullName] of Object.entries(STATE_MAP)) {
+          if (fullName === valLower) {
+            candidates.add(code);
+            candidates.add(fullName);
+          }
+        }
+
+        let selectedIdx = -1;
+        for (let i = 0; i < el.options.length; i++) {
+          const opt = el.options[i];
+          const oVal = (opt.value || '').trim().toLowerCase();
+          const oText = (opt.text || '').trim().toLowerCase();
+          for (const c of candidates) {
+            if (c && (oVal === c || oText === c)) {
+              selectedIdx = i;
+              break;
+            }
+          }
+          if (selectedIdx !== -1) break;
+        }
+
+        if (selectedIdx === -1) {
+          for (let i = 0; i < el.options.length; i++) {
+            const opt = el.options[i];
+            const oVal = (opt.value || '').trim().toLowerCase();
+            const oText = (opt.text || '').trim().toLowerCase();
+            if (!oVal && !oText) continue;
+            if (/^(select|choose|--|\s*)$/i.test(oText) || /^(select|choose|--|\s*)$/i.test(oVal)) continue;
+            for (const c of candidates) {
+              if (c && c.length >= 2 && (oVal.includes(c) || oText.includes(c) || c.includes(oVal) || c.includes(oText))) {
+                selectedIdx = i;
+                break;
+              }
+            }
+            if (selectedIdx !== -1) break;
+          }
+        }
+
+        if (selectedIdx === -1 && el.options.length > 1) {
+          const nonPl = Array.from(el.options).findIndex((o) => o.value && !/^(select|choose|--|\s*)$/i.test(o.text));
+          if (nonPl !== -1) selectedIdx = nonPl;
+        }
+
+        if (selectedIdx !== -1) {
+          el.selectedIndex = selectedIdx;
+          const chosen = el.options[selectedIdx];
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          el.dispatchEvent(new Event('blur', { bubbles: true }));
+          return { success: true, selectedValue: chosen.value, selectedText: chosen.text };
+        }
+
+        return { success: false, error: `No matching option found for "${targetVal}". Options: ${Array.from(el.options).slice(0, 8).map(o => o.text).join(', ')}` };
+      }, { selectorOrLabel: target, targetVal: val });
+
+      if (selectResult.success) {
+        return `Selected option "${selectResult.selectedText}" (value: "${selectResult.selectedValue}") in "${target}". Take a snapshot_read to confirm.`;
+      }
+      return `Browser action error: ${selectResult.error}`;
     } else if (action === 'upload') {
       const stagedFile = resolveStagedFile(String(value || '').trim(), context?.runId);
       if (!stagedFile) {
@@ -492,8 +663,17 @@ engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
       let uploaded = false;
       if (selector) {
         try {
-          await page.locator(selector).first().setInputFiles(uploadPath, { timeout: 6000 });
-          uploaded = true;
+          const targetLoc = page.locator(selector).first();
+          const tagName = await targetLoc.evaluate(node => node.tagName.toLowerCase()).catch(() => '');
+          if (tagName === 'input') {
+            await targetLoc.setInputFiles(uploadPath, { timeout: 6000 });
+            uploaded = true;
+          } else {
+            // Find input[type="file"] nearby or associated with label
+            const inputLoc = page.locator(`${selector} input[type="file"], input[type="file"]`).first();
+            await inputLoc.setInputFiles(uploadPath, { timeout: 6000 });
+            uploaded = true;
+          }
         } catch {}
       }
       if (!uploaded) {
@@ -521,6 +701,12 @@ engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
             await candidate.setInputFiles(uploadPath, { timeout: 6000 });
             uploaded = true;
             break;
+          } catch {}
+        }
+        if (!uploaded && count > 0) {
+          try {
+            await inputs.first().setInputFiles(uploadPath, { timeout: 6000 });
+            uploaded = true;
           } catch {}
         }
         if (!uploaded) {
@@ -607,7 +793,13 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
             disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
             id: el.id || undefined,
             name: el.getAttribute('name') || undefined,
-            ariaLabel: el.getAttribute('aria-label') || undefined
+            ariaLabel: el.getAttribute('aria-label') || undefined,
+            options: el.tagName === 'SELECT'
+              ? Array.from(el.querySelectorAll('option'))
+                  .slice(0, 25)
+                  .map((o) => (o.text || o.value || '').trim())
+                  .filter(Boolean)
+              : undefined
           }))
       }))
       .catch((err) => ({ error: err.message }));

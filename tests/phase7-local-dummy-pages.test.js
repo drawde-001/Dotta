@@ -23,12 +23,78 @@ import { createRunSandbox, destroyRunSandbox } from '../src/core/execution/run-s
 import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
 import { verifyLiveFormDom, enforceVerifiedMessage } from '../src/core/levels/verifier.js';
 import { isInstructionLikeText } from '../src/core/levels/sanitizer.js';
+import { buildCustomSectionFillScript } from '../src/core/levels/executor.js';
 
 const PORT = 4099;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
-// 8 Local Dummy HTML Pages (Zero real site names or URLs)
+// 9 Local Dummy HTML Pages (Zero real site names or URLs)
 const PAGES = {
+  '/split-complex-form': `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Complex Application - Split Fields</title>
+        <style>
+          .has-error select, .has-error input { border: 2px solid rgb(220, 53, 69) !important; }
+        </style>
+      </head>
+      <body>
+        <h1>Talent Application</h1>
+        <form id="app_form">
+          <div class="form-group" id="phone_group">
+            <label>Phone *</label>
+            <div class="phone-inputs">
+              (<input type="text" id="phone_1" name="phone_1" maxlength="3" size="3" required />)
+              <input type="text" id="phone_2" name="phone_2" maxlength="3" size="3" required /> -
+              <input type="text" id="phone_3" name="phone_3" maxlength="4" size="4" required />
+            </div>
+          </div>
+          <div class="form-group" id="dob_group">
+            <label>Date of Birth *</label>
+            <select id="dob_month" name="dob_month" required>
+              <option value="">Month</option>
+              <option value="01">January</option>
+              <option value="02">February</option>
+              <option value="03">March</option>
+              <option value="04">April</option>
+            </select>
+            <select id="dob_day" name="dob_day" required>
+              <option value="">Day</option>
+              <option value="01">1</option>
+              <option value="15">15</option>
+            </select>
+            <select id="dob_year" name="dob_year" required>
+              <option value="">Year</option>
+              <option value="1990">1990</option>
+              <option value="1995">1995</option>
+            </select>
+          </div>
+          <div class="form-group" id="state_group">
+            <label>State *</label>
+            <select id="state" name="state" required>
+              <option value="">Select State</option>
+              <option value="OH">Ohio</option>
+              <option value="CA">California</option>
+            </select>
+          </div>
+          <div class="form-group" id="location_group">
+            <label>Office / Branch Location *</label>
+            <select id="location" name="location" required>
+              <option value="">Select</option>
+              <option value="cleveland">Cleveland, OH</option>
+              <option value="columbus">Columbus, OH</option>
+            </select>
+          </div>
+          <div class="form-group" id="upload_group">
+            <label for="resume">Upload Resume / Headshot *</label>
+            <input type="file" id="resume" name="resume" accept=".pdf,.jpg" required />
+          </div>
+          <button type="submit" id="submit_btn">Submit Application</button>
+        </form>
+      </body>
+    </html>
+  `,
   '/simple-form': `
     <!DOCTYPE html>
     <html>
@@ -341,6 +407,40 @@ async function runPhase7Tests() {
     console.log('✓ Scenario 8 PASSED.\n');
 
     // ---------------------------------------------------------------------------
+    // SCENARIO 9: Split Fields (Phone, DOB), Dropdown Selects, and Verifier Interception
+    // ---------------------------------------------------------------------------
+    console.log('[Scenario 9] Split Fields (Phone 3-3-4, Split DOB, State, Location) & Truthful Verifier Interception');
+    const { scriptSource } = buildCustomSectionFillScript([
+      { fieldKey: 'phone_1', selector: '#phone_1', label: 'Phone', type: 'text', status: 'READY', value: '5551234567' },
+      { fieldKey: 'dob_month', selector: '#dob_month', label: 'Month', type: 'select', status: 'READY', value: '04' },
+      { fieldKey: 'dob_day', selector: '#dob_day', label: 'Day', type: 'select', status: 'READY', value: '15' },
+      { fieldKey: 'dob_year', selector: '#dob_year', label: 'Year', type: 'select', status: 'READY', value: '1995' },
+      { fieldKey: 'state', selector: '#state', label: 'State', type: 'select', status: 'READY', value: 'Ohio' },
+      { fieldKey: 'location', selector: '#location', label: 'Office / Branch Location', type: 'select', status: 'READY', value: 'Cleveland' }
+    ]);
+
+    assert(scriptSource.includes('applySectionBatch'), 'Must generate batch execution script');
+    assert(scriptSource.includes('tenDigits.slice(0, 3)'), 'Must contain 3-3-4 split phone distribution');
+    assert(scriptSource.includes('MONTH_MAP'), 'Must contain Month name/number synonyms map');
+    assert(scriptSource.includes('STATE_MAP'), 'Must contain 50-state abbreviation/name mapping');
+
+    // Test verifier blocking false completion when fields are invalid
+    const mockFailedResult = {
+      status: 'PARTIAL',
+      verifiedCount: 2,
+      failedFields: [
+        { label: 'Date of Birth (Month)', reason: 'Please select an item in the list', actualValue: '' },
+        { label: 'Phone', reason: 'Phone sub-inputs are blank', actualValue: '' }
+      ]
+    };
+    const enforcedMessage = enforceVerifiedMessage('I have successfully filled out the application form.', mockFailedResult);
+    assert(enforcedMessage.includes('### Form Status: PARTIAL'), 'Must block false success claim and replace with PARTIAL');
+    assert(enforcedMessage.includes('The form was NOT submitted'), 'Must inform user form was not submitted');
+    assert(enforcedMessage.includes('Date of Birth (Month)'), 'Must list exact failing fields');
+    console.log('  -> Enforced Message successfully prevented false "done" claim:\n' + enforcedMessage.split('\n').slice(0, 5).join('\n'));
+    console.log('✓ Scenario 9 PASSED.\n');
+
+    // ---------------------------------------------------------------------------
     // SIDE-BY-SIDE METRICS REPORT
     // ---------------------------------------------------------------------------
     console.log('===================================================================');
@@ -357,7 +457,7 @@ async function runPhase7Tests() {
     console.log(`| Host Workspace Reachable   | ${metricsOld.workspaceFileReachable ? 'YES (Leaked host files)' : 'NO'} | ${metricsNew.workspaceFileReachable ? 'YES' : 'NO (Strictly Sandboxed)'}  |`);
     console.log('===================================================================\n');
 
-    console.log('ALL PHASE 7 LOCAL DUMMY PAGE PROOFS PASSED (8/8)!');
+    console.log('ALL PHASE 7 LOCAL DUMMY PAGE PROOFS PASSED (9/9)!');
   } finally {
     await stopDummyServer();
   }

@@ -1062,9 +1062,14 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.web_search,
       AGENT_TOOLS_CATALOG.browser_search,
       AGENT_TOOLS_CATALOG.browser_read_page,
+      AGENT_TOOLS_CATALOG.page_snapshot,
+      AGENT_TOOLS_CATALOG.notes_read,
+      AGENT_TOOLS_CATALOG.notes_write,
+      AGENT_TOOLS_CATALOG.sandbox_run_script,
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
-      AGENT_TOOLS_CATALOG.browser_screenshot
+      AGENT_TOOLS_CATALOG.browser_screenshot,
+      AGENT_TOOLS_CATALOG.browser_screenshot_vision
     ];
   } else {
     tools = [
@@ -1081,9 +1086,14 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
       AGENT_TOOLS_CATALOG.web_search,
       AGENT_TOOLS_CATALOG.browser_search,
       AGENT_TOOLS_CATALOG.browser_read_page,
+      AGENT_TOOLS_CATALOG.page_snapshot,
+      AGENT_TOOLS_CATALOG.notes_read,
+      AGENT_TOOLS_CATALOG.notes_write,
+      AGENT_TOOLS_CATALOG.sandbox_run_script,
       AGENT_TOOLS_CATALOG.browser_action,
       AGENT_TOOLS_CATALOG.snapshot_read,
       AGENT_TOOLS_CATALOG.browser_screenshot,
+      AGENT_TOOLS_CATALOG.browser_screenshot_vision,
       AGENT_TOOLS_CATALOG.segment_image,
       AGENT_TOOLS_CATALOG.generate_image
     ];
@@ -1137,7 +1147,7 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
     active = active.filter((t) => t.name !== 'ask_user');
   }
 
-  const maxLimit = includeStructuredUI ? 44 : 20;
+  const maxLimit = includeStructuredUI ? 55 : 20;
   if (active.length > maxLimit) {
     active = active.slice(0, maxLimit);
   }
@@ -1152,11 +1162,14 @@ const READ_ONLY_RUN_TOOLS = new Set([
   'browser_search',
   'browser_read_page',
   'read_page',
+  'page_snapshot',
+  'notes_read',
   'file_read',
   'file_list',
   'file_search',
   'snapshot_read',
   'browser_screenshot',
+  'browser_screenshot_vision',
   'profile_get',
   'shell_output',
   'generate_image',
