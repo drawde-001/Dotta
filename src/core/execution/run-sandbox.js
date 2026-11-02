@@ -993,7 +993,11 @@ export class RunSandbox {
   }
 }
 
-export function createRunSandbox(options = {}) {
+export function createRunSandbox(runIdOrOptions = {}, extraOptions = {}) {
+  const options =
+    typeof runIdOrOptions === 'string'
+      ? { ...extraOptions, runId: runIdOrOptions }
+      : { ...(runIdOrOptions || {}) };
   const runId = options.runId || `run-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   if (activeRunSandboxes.has(runId)) {
     const existing = activeRunSandboxes.get(runId);

@@ -142,6 +142,7 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
   // any approval cache so BIO writes can never bypass the approval card)
   const BIO_READ_TOOLS = [
     'bio_index',
+    'bio_search',
     'bio_get',
     'process_document',
     'process_image',
@@ -210,12 +211,38 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
   }
 
   if (normTool === 'browser_action') {
-    const target = String(args.selectorOrText || '').toLowerCase();
+    const target = String(args.selectorOrText || '').toLowerCase().trim();
+    const actionType = String(args.action || '').toLowerCase().trim();
     if (target.includes('password') || target.includes('credit') || target.includes('cvv')) {
       return {
         decision: 'ask',
         reason: `Interacting with sensitive field "${args.selectorOrText}" requires human confirmation`
       };
+    }
+    if (actionType === 'click' && target) {
+      const isIntermediateStep =
+        /\b(next|continue|proceed|step\s*\d+|back|previous|save\s+draft)\b/i.test(target) &&
+        !/\bsubmit\b/i.test(target);
+      const isFinalSubmit =
+        !isIntermediateStep &&
+        (/\b(submit|send\s+application|complete\s+application|finish\s+application|apply\s+now)\b/i.test(target) ||
+          /\[type=["']?submit["']?\]/i.test(target));
+      if (isFinalSubmit) {
+        const normMode = String(mode || 'turbo').toLowerCase();
+        const fillOnlyIntent = Boolean(context?.navigation?.fillOnlyIntent);
+        if (
+          normMode === 'default' ||
+          normMode === 'review' ||
+          normMode === 'request_review' ||
+          normMode === 'confirm' ||
+          fillOnlyIntent
+        ) {
+          return {
+            decision: 'ask',
+            reason: `Final submission ("${args.selectorOrText}") requires user confirmation before submitting the form.`
+          };
+        }
+      }
     }
   }
 

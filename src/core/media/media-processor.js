@@ -559,6 +559,28 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
         return modalFallback;
       }
     }
+
+    // D. Final Meta family fallback across all Meta provider endpoints (never switch to non-Meta when Meta is selected)
+    const finalMetaRes = await callMetaMuseVoiceTranscribe({
+      blob,
+      base64,
+      rawMime,
+      defaultExt,
+      filename,
+      options,
+      timeoutMs: 30000,
+      isFinalFallback: true
+    });
+    if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text) {
+      return finalMetaRes;
+    }
+
+    return {
+      ok: true,
+      text: options.mockText || '',
+      source: 'muse-voice-transcribe-1.0:offline_fallback',
+      modelFamily: 'meta'
+    };
   }
 
   // 3. If OpenAI is selected: Route directly to OpenAI Whisper FIRST
@@ -607,8 +629,8 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 5. Intermediate Fallback: OpenAI Whisper (if not already tried)
-  if (!isOpenAiCategory) {
+  // 5. Intermediate Fallback: OpenAI Whisper (if not already tried and not Meta category)
+  if (!isOpenAiCategory && !isMetaCategory) {
     const openaiKey = getApiKey('OPENAI_API_KEY');
     if (openaiKey) {
       try {
@@ -636,8 +658,8 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 6. Intermediate Fallback: Gemini Multimodal Audio (if not already tried)
-  if (!isGeminiCategory && base64) {
+  // 6. Intermediate Fallback: Gemini Multimodal Audio (if not already tried and not Meta category)
+  if (!isGeminiCategory && !isMetaCategory && base64) {
     const geminiFallback = await callGeminiAudioTranscribe({
       base64,
       rawMime,
@@ -649,7 +671,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // 6. Final Handover Fallback: Meta Muse Voice Transcribe
+  // 7. Final Handover Fallback: Meta Muse Voice Transcribe
   const finalMuseResult = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -670,6 +692,159 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     ok: true,
     text: options.mockText || '',
     source: 'muse-voice-transcribe-1.0:offline_fallback'
+  };
+}
+
+/**
+ * Determine whether a model ID belongs to the Meta model family.
+ */
+export function isMetaFamilyModel(model = '') {
+  const m = String(model || '').trim().toLowerCase();
+  if (!m) return true; // Default model in Omni is muse-spark-open (Meta family)
+  if (/gemini|gpt-|o1|o3|o4|claude-|sonnet-|opus-|haiku-|deepseek|kimi|moonshot/i.test(m)) {
+    return false;
+  }
+  return /muse|meta|spark|llama|sam-|modal|fable|sol|terra/i.test(m);
+}
+
+/**
+ * Return ordered candidate models & provider endpoints within the SAME model family.
+ * When a Meta model is selected, every candidate belongs to the Meta model family
+ * across its serving endpoints (Modal vLLM, Meta AI, Llama API, Fireworks, Together).
+ */
+export function getSameFamilyModelCandidates(selectedModel = 'muse-spark-open') {
+  const req = String(selectedModel || 'muse-spark-open').trim();
+  if (isMetaFamilyModel(req)) {
+    const models = Array.from(
+      new Set([
+        req,
+        req.toLowerCase() === 'muse-spark-open' ? 'meta-models/Muse-Spark-Open-816B-A42B' : req,
+        'muse-spark-open',
+        'meta-models/Muse-Spark-Open-816B-A42B',
+        'muse-wonder-1.0',
+        'muse-spark-1.3',
+        'muse-spark-1.2',
+        'muse-spark-1.1'
+      ])
+    );
+    const endpoints = Array.from(
+      new Set(
+        [
+          process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+          process.env.MODEL_API_BASE_URL,
+          process.env.META_MUSE_BASE_URL,
+          'https://api.meta.ai/v1',
+          'https://api.llama.com/v1',
+          'https://api.fireworks.ai/inference/v1',
+          'https://api.together.xyz/v1'
+        ].filter(Boolean)
+      )
+    );
+    return { family: 'meta', selectedModel: req, models, endpoints };
+  }
+  if (/gemini/i.test(req)) {
+    return {
+      family: 'gemini',
+      selectedModel: req,
+      models: Array.from(new Set([req, 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'])),
+      endpoints: [process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta']
+    };
+  }
+  if (/claude|sonnet|opus|haiku/i.test(req)) {
+    return {
+      family: 'anthropic',
+      selectedModel: req,
+      models: Array.from(new Set([req, 'claude-3-5-sonnet-20241022'])),
+      endpoints: [process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1']
+    };
+  }
+  return {
+    family: 'openai',
+    selectedModel: req,
+    models: Array.from(new Set([req, 'gpt-4o'])),
+    endpoints: [process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1']
+  };
+}
+
+/**
+ * Convert a media buffer into the wire payload format expected by the selected model's provider.
+ */
+export function formatMediaForSelectedModel({ buffer, mimeType, filename, selectedModel = 'muse-spark-open' } = {}) {
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer || '');
+  const base64 = buf.toString('base64');
+  const cleanMime = String(mimeType || 'application/octet-stream').split(';')[0].trim().toLowerCase();
+  const { family, models, endpoints } = getSameFamilyModelCandidates(selectedModel);
+
+  if (family === 'gemini') {
+    return {
+      family,
+      selectedModel,
+      candidateModels: models,
+      candidateEndpoints: endpoints,
+      providerFormat: 'gemini_inline_data',
+      part: { inlineData: { mimeType: cleanMime, data: base64 } }
+    };
+  }
+
+  if (family === 'anthropic') {
+    return {
+      family,
+      selectedModel,
+      candidateModels: models,
+      candidateEndpoints: endpoints,
+      providerFormat: 'anthropic_base64_source',
+      part: {
+        type: cleanMime.startsWith('image/') ? 'image' : 'document',
+        source: { type: 'base64', media_type: cleanMime, data: base64 }
+      }
+    };
+  }
+
+  // Meta / OpenAI compatible multimodal format
+  if (cleanMime.startsWith('image/')) {
+    const validation = validateImageMetadata({ size: buf.length, mimeType: cleanMime, name: filename });
+    const targetMime = validation.targetMime || cleanMime || 'image/png';
+    return {
+      family,
+      selectedModel,
+      candidateModels: models,
+      candidateEndpoints: endpoints,
+      providerFormat: 'openai_image_url',
+      part: {
+        type: 'image_url',
+        image_url: { url: `data:${targetMime};base64,${base64}` }
+      },
+      inlinePart: { inlineData: { mimeType: targetMime, data: base64 } }
+    };
+  }
+
+  if (cleanMime.startsWith('audio/')) {
+    const format = cleanMime.includes('wav') ? 'wav' : cleanMime.includes('mp3') ? 'mp3' : 'wav';
+    return {
+      family,
+      selectedModel,
+      candidateModels: models,
+      candidateEndpoints: endpoints,
+      providerFormat: 'openai_input_audio',
+      part: {
+        type: 'input_audio',
+        input_audio: { data: base64, format }
+      },
+      inlinePart: { inlineData: { mimeType: cleanMime, data: base64 } }
+    };
+  }
+
+  return {
+    family,
+    selectedModel,
+    candidateModels: models,
+    candidateEndpoints: endpoints,
+    providerFormat: 'openai_input_file',
+    part: {
+      type: 'file',
+      file: { filename: filename || 'document.pdf', file_data: `data:${cleanMime};base64,${base64}` }
+    },
+    inlinePart: { inlineData: { mimeType: cleanMime, data: base64 } }
   };
 }
 

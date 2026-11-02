@@ -2,7 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { getActiveProfile } from './store.js';
 import { getUserWorkspaceRoot, validateAndResolvePath } from '../execution/workspace.js';
-import { transcribeSingleAudioChunk } from '../media/media-processor.js';
+import {
+  transcribeSingleAudioChunk,
+  formatMediaForSelectedModel,
+  getSameFamilyModelCandidates
+} from '../media/media-processor.js';
 import { stageBioFile } from './staging.js';
 import { extractFileText, isNativeMediaModel } from './executors.js';
 import { wrapUntrustedContent } from '../tools/untrusted.js';
@@ -121,8 +125,9 @@ export async function processDocument({ userId, ref, model = '' } = {}) {
   }
 
   if (!abs) return `Error: The document "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
+  const familyInfo = getSameFamilyModelCandidates(model || 'muse-spark-open');
   if (isNativeMediaModel(model) && /\.pdf$/i.test(resolved.name || '')) {
-    return `[Document "${resolved.name}" will be processed natively by you — the full file is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
+    return `[Document "${resolved.name}" will be processed natively by you (${familyInfo.selectedModel}, family: ${familyInfo.family}) — the full file is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
   let text = resolved.entry?.textContent || '';
   if (!text) {
@@ -133,10 +138,10 @@ export async function processDocument({ userId, ref, model = '' } = {}) {
   if (!text) {
     return `Could not extract text from "${resolved.name}". Politely tell the user the document could not be processed and recommend uploading a text-based PDF/DOCX/TXT or pasting the content. (uploadRef: ${uploadRef || 'unavailable'})`;
   }
-  return `[Processed document "${resolved.name}" — confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('bio-document', text)}`;
+  return `[Processed document "${resolved.name}" via selected model ${familyInfo.selectedModel} (family: ${familyInfo.family}, same-family fallback: ${familyInfo.models.slice(0, 4).join(' -> ')}) — confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('bio-document', text)}`;
 }
 
-export async function processImage({ userId, ref } = {}) {
+export async function processImage({ userId, ref, model = '' } = {}) {
   if (!userId) return 'Error: BIO requires an identified user.';
   let resolved = resolveBioFileRef(userId, ref);
   let abs = null;
@@ -169,8 +174,15 @@ export async function processImage({ userId, ref } = {}) {
   }
 
   if (!abs) return `Error: The image "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another image.`;
-  const size = fs.statSync(abs).size;
-  return `[Processed image "${resolved.name}" (${size} bytes) — the image itself is attached to this result for viewing. Confirm it is the right image for the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
+  const buf = fs.readFileSync(abs);
+  const size = buf.length;
+  const formatted = formatMediaForSelectedModel({
+    buffer: buf,
+    mimeType: resolved.mime || 'image/png',
+    filename: resolved.name,
+    selectedModel: model || 'muse-spark-open'
+  });
+  return `[Processed image "${resolved.name}" (${size} bytes, formatted as ${formatted.providerFormat} for ${formatted.selectedModel}, family: ${formatted.family}, same-family fallback: ${formatted.candidateModels.slice(0, 4).join(' -> ')}) — the image itself is attached to this result for viewing. Confirm it is the right image for the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
 }
 
 export async function processAudio({ userId, ref, model = '' } = {}) {
@@ -210,8 +222,9 @@ export async function processAudio({ userId, ref, model = '' } = {}) {
 
   if (!abs) return `Error: The audio "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
 
+  const familyInfo = getSameFamilyModelCandidates(model || 'muse-spark-open');
   if (isNativeMediaModel(model)) {
-    return `[Audio "${resolved.name}" will be processed natively by you — the full audio is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
+    return `[Audio "${resolved.name}" will be processed natively by you (${familyInfo.selectedModel}, family: ${familyInfo.family}) — the full audio is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
 
   try {
@@ -221,10 +234,10 @@ export async function processAudio({ userId, ref, model = '' } = {}) {
         mimeType: resolved.mime || 'audio/mpeg',
         filename: resolved.name
       },
-      { preferredModel: model }
+      { preferredModel: model || 'muse-spark-open' }
     );
     if (result?.ok && result.text) {
-      return `[Transcribed audio "${resolved.name}" — confirm the content matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('audio-transcript', String(result.text).slice(0, 8000))}`;
+      return `[Transcribed audio "${resolved.name}" via ${result.source || familyInfo.selectedModel} (family: ${familyInfo.family}) — confirm the content matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]\n\n${wrapUntrustedContent('audio-transcript', String(result.text).slice(0, 8000))}`;
     }
     return `Could not transcribe audio "${resolved.name}"${result?.error ? `: ${result.error}` : ''}. Politely tell the user transcription failed and recommend re-uploading the audio or providing the content as text. (uploadRef: ${uploadRef || 'unavailable'})`;
   } catch (err) {
@@ -267,8 +280,9 @@ export async function processVideo({ userId, ref, model = '' } = {}) {
 
   if (!abs) return `Error: The video "${resolved.name}" has no readable file attached in BIO or workspace. Politely tell the user and recommend re-uploading it or providing another file.`;
   const size = fs.statSync(abs).size;
+  const familyInfo = getSameFamilyModelCandidates(model || 'muse-spark-open');
   if (isNativeMediaModel(model)) {
-    return `[Video "${resolved.name}" (${size} bytes) will be processed natively by you — the full video is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
+    return `[Video "${resolved.name}" (${size} bytes) will be processed natively by you (${familyInfo.selectedModel}, family: ${familyInfo.family}) — the full video is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
-  return `[Processed video "${resolved.name}" (${size} bytes, ${resolved.mime || 'video'}). Video frames are not viewed as text in this runtime, so confirm from the file name/description whether it matches the current task; if you cannot confirm, politely tell the user and recommend the next step. The file is staged for upload. uploadRef: ${uploadRef || 'unavailable'}]`;
+  return `[Processed video "${resolved.name}" (${size} bytes, ${resolved.mime || 'video'}, model: ${familyInfo.selectedModel}, family: ${familyInfo.family}, same-family fallback: ${familyInfo.models.slice(0, 4).join(' -> ')}). Video frames are not viewed as text in this runtime, so confirm from the file name/description whether it matches the current task; if you cannot confirm, politely tell the user and recommend the next step. The file is staged for upload. uploadRef: ${uploadRef || 'unavailable'}]`;
 }
