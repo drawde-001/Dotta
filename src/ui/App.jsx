@@ -11,7 +11,8 @@ import { WorkspacePanel } from '@/components/WorkspacePanel';
 import { AppRail } from '@/components/AppRail';
 import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
-import { getUserId } from '@/lib/user';
+import { AuthScreen } from '@/components/AuthScreen';
+import { getUserId, getCurrentUser, setCurrentUser, clearCurrentUser } from '@/lib/user';
 import { sanitizeChatText } from '../core/levels/redact-text.js';
 import {
   Globe,
@@ -38,6 +39,52 @@ export default function App() {
   const [view, setView] = useState('home');
   const [openFiles, setOpenFiles] = useState([]);
   const [activeTabId, setActiveTabId] = useState('plus');
+  const [currentUser, setLocalCurrentUser] = useState(() => getCurrentUser());
+  const [authChecking, setAuthChecking] = useState(true);
+
+  // Check authenticated session on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data?.ok && data.user) {
+            setCurrentUser(data.user);
+            setLocalCurrentUser(data.user);
+          }
+        } else {
+          if (!cancelled) {
+            clearCurrentUser();
+            setLocalCurrentUser(null);
+          }
+        }
+      } catch {
+        const local = getCurrentUser();
+        if (!cancelled && local) {
+          setLocalCurrentUser(local);
+        }
+      } finally {
+        if (!cancelled) setAuthChecking(false);
+      }
+    }
+    checkAuth();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(user);
+    setLocalCurrentUser(user);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch {}
+    clearCurrentUser();
+    setLocalCurrentUser(null);
+  };
 
   // Dynamic rotating subtitles for Hero screen
   const heroSubtitles = [
@@ -1211,10 +1258,25 @@ export default function App() {
     fetch('/api/browser/close', { method: 'POST' }).catch(() => {});
   };
 
+  if (authChecking) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-[#070709] text-zinc-400">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+          <span className="text-xs">Connecting to OmniAgent...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="flex h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Left icon rail: Home / BIO are the only clickable tabs */}
-      <AppRail view={view} onSelectView={setView} />
+      <AppRail view={view} onSelectView={setView} currentUser={currentUser} onLogout={handleLogout} />
 
       {/* Main Split Body wrapped with AssistantRuntimeProvider */}
       <AssistantRuntimeProvider runtime={runtime}>

@@ -6,7 +6,8 @@ import {
   Library,
   AtSign,
   MoreHorizontal,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
 
 function LeafMark() {
@@ -40,7 +41,7 @@ const DECORATIVE = [
   { label: 'More options', Icon: MoreHorizontal }
 ];
 
-export function AppRail({ view, onSelectView }) {
+export function AppRail({ view, onSelectView, currentUser, onLogout }) {
   const tabBase =
     'flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-colors cursor-pointer';
   return (
@@ -91,6 +92,17 @@ export function AppRail({ view, onSelectView }) {
       >
         <Settings size={18} />
       </span>
+      {onLogout && (
+        <button
+          type="button"
+          onClick={onLogout}
+          title={`Log out (${currentUser?.name || currentUser?.email || 'User'})`}
+          aria-label="Log out"
+          className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl text-zinc-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
+        >
+          <LogOut size={17} />
+        </button>
+      )}
     </div>
   );
 }

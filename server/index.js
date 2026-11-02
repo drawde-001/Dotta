@@ -61,6 +61,13 @@ import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from '../src/core/levels/extractor.js';
 import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
 import { verifyLiveFormDom } from '../src/core/levels/verifier.js';
+import {
+  verifyUserCredentials,
+  createUser,
+  findUserById,
+  sanitizeUserOutput,
+  DEFAULT_CREDENTIALS
+} from '../src/core/auth/user-store.js';
 
 dotenv.config();
 
@@ -107,13 +114,10 @@ app.use((req, res, next) => {
     }
   }
   if (!userId) {
-    userId = sanitizeUserId(req.get('x-user-id')) || `user-${crypto.randomUUID()}`;
-    res.cookie(SESSION_COOKIE, `${userId}.${signUserId(userId)}`, {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 1000 * 60 * 60 * 24 * 365
-    });
+    const headerId = sanitizeUserId(req.get('x-user-id'));
+    if (headerId) {
+      userId = headerId;
+    }
   }
   req.userId = userId;
   next();
@@ -1014,6 +1018,59 @@ app.get('/api/status', (req, res) => {
     museConfigured: providers.muse.configured,
     geminiConfigured: providers.google.configured
   });
+});
+
+// --- Authentication Endpoints ---
+app.post('/api/auth/login', (req, res) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) {
+    return res.status(400).json({ ok: false, error: 'Email and password are required.' });
+  }
+
+  const user = verifyUserCredentials(email, password);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: 'Invalid email or password.' });
+  }
+
+  const sessionVal = `${user.id}.${signUserId(user.id)}`;
+  res.cookie(SESSION_COOKIE, sessionVal, {
+    httpOnly: true,
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 1000 * 60 * 60 * 24 * 365
+  });
+
+  return res.json({ ok: true, user });
+});
+
+app.post('/api/auth/signup', (req, res) => {
+  const { email, password, firstName, lastName } = req.body || {};
+  try {
+    const user = createUser({ email, password, firstName, lastName });
+    const sessionVal = `${user.id}.${signUserId(user.id)}`;
+    res.cookie(SESSION_COOKIE, sessionVal, {
+      httpOnly: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 1000 * 60 * 60 * 24 * 365
+    });
+    return res.json({ ok: true, user });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const user = req.userId ? findUserById(req.userId) : null;
+  if (user) {
+    return res.json({ ok: true, user: sanitizeUserOutput(user) });
+  }
+  return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(SESSION_COOKIE, { path: '/' });
+  return res.json({ ok: true });
 });
 
 // AG-UI 1.0 Chat endpoint
