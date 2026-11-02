@@ -483,7 +483,8 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   const preferredModel = options.preferredModel || audioPayload.preferredModel || '';
   const isGeminiCategory = /gemini/i.test(preferredModel);
   const isOpenAiCategory = /whisper|openai|gpt/i.test(preferredModel);
-  const isMetaCategory = /muse|meta|spark|modal/i.test(preferredModel) || (!isGeminiCategory && !isOpenAiCategory);
+  const isAnthropicCategory = /claude|sonnet|opus|haiku/i.test(preferredModel);
+  const isMetaCategory = isMetaFamilyModel(preferredModel) || (!isGeminiCategory && !isOpenAiCategory && !isAnthropicCategory);
 
   // Resolve the audio blob/buffer and base64
   let blob;
@@ -504,86 +505,28 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     base64 = Buffer.from(bytes).toString('base64');
   }
 
-  // 1. If Gemini is selected: Route directly to Gemini Multimodal Audio FIRST
-  if (isGeminiCategory && base64) {
-    const geminiPrimary = await callGeminiAudioTranscribe({
-      base64,
-      rawMime,
-      preferredModel,
-      timeoutMs: 25000
-    });
-    if (geminiPrimary && geminiPrimary.ok && geminiPrimary.text) {
-      return geminiPrimary;
-    }
-  }
-
-  // 2. If Meta is selected:
-  // Primary: Selected Meta model itself (e.g. Modal Muse Spark Open or Meta Muse Wonder via input_audio)
-  // Fallback: muse-voice-transcribe-1.0 dedicated endpoint if the selected model fails or cannot process it
-  if (isMetaCategory) {
-    // A. If Muse Spark Open or Modal is preferred, invoke the model directly first
-    if (base64 && (/open|modal|816b/i.test(preferredModel) || !preferredModel || preferredModel === 'muse-spark-open')) {
-      const modalRes = await callModalMuseSparkAudio({
+  // 1. If Gemini is selected: Route ONLY within Gemini model family (NO cross-family fallback)
+  if (isGeminiCategory) {
+    if (base64) {
+      const geminiRes = await callGeminiAudioTranscribe({
         base64,
         rawMime,
+        preferredModel,
         timeoutMs: 25000
       });
-      if (modalRes && modalRes.ok && modalRes.text) {
-        return modalRes;
+      if (geminiRes && geminiRes.ok && geminiRes.text) {
+        return geminiRes;
       }
     }
-
-    // B. Fallback to muse-voice-transcribe-1.0 across Meta / Fireworks / Llama endpoints
-    const museVoiceRes = await callMetaMuseVoiceTranscribe({
-      blob,
-      base64,
-      rawMime,
-      defaultExt,
-      filename,
-      options,
-      timeoutMs: 25000,
-      isFinalFallback: false
-    });
-    if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text) {
-      return museVoiceRes;
-    }
-
-    // C. Additional sister Meta models fallback (Modal if not tried above)
-    if (base64 && !/open|modal|816b/i.test(preferredModel)) {
-      const modalFallback = await callModalMuseSparkAudio({
-        base64,
-        rawMime,
-        timeoutMs: 25000
-      });
-      if (modalFallback && modalFallback.ok && modalFallback.text) {
-        return modalFallback;
-      }
-    }
-
-    // D. Final Meta family fallback across all Meta provider endpoints (never switch to non-Meta when Meta is selected)
-    const finalMetaRes = await callMetaMuseVoiceTranscribe({
-      blob,
-      base64,
-      rawMime,
-      defaultExt,
-      filename,
-      options,
-      timeoutMs: 30000,
-      isFinalFallback: true
-    });
-    if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text) {
-      return finalMetaRes;
-    }
-
     return {
       ok: true,
       text: options.mockText || '',
-      source: 'muse-voice-transcribe-1.0:offline_fallback',
-      modelFamily: 'meta'
+      source: 'gemini_audio:offline_fallback',
+      modelFamily: 'gemini'
     };
   }
 
-  // 3. If OpenAI is selected: Route directly to OpenAI Whisper FIRST
+  // 2. If OpenAI is selected: Route ONLY within OpenAI model family (NO cross-family fallback)
   if (isOpenAiCategory) {
     const openaiKey = getApiKey('OPENAI_API_KEY');
     if (openaiKey) {
@@ -603,95 +546,92 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
         if (res.ok) {
           const text = (await res.text()).trim();
           if (text) {
-            return { ok: true, text, source: 'openai_whisper' };
+            return { ok: true, text, source: 'openai_whisper', modelFamily: 'openai' };
           }
         }
       } catch (err) {
         console.warn('[MediaProcessor] Whisper error:', err.message);
       }
     }
+    return {
+      ok: true,
+      text: options.mockText || '',
+      source: 'openai_whisper:offline_fallback',
+      modelFamily: 'openai'
+    };
   }
 
-  // 4. Non-Meta Fallback: Meta Muse Voice Transcribe (if not already tried)
-  if (!isMetaCategory) {
-    const primaryMuseResult = await callMetaMuseVoiceTranscribe({
-      blob,
+  // 3. If Anthropic is selected: In-family offline fallback (Anthropic has no native audio endpoint)
+  if (isAnthropicCategory) {
+    return {
+      ok: true,
+      text: options.mockText || '',
+      source: 'anthropic:offline_fallback',
+      modelFamily: 'anthropic'
+    };
+  }
+
+  // 4. Meta Family (Default): Route strictly within Meta models across serving endpoints
+  // Primary A: If Muse Spark Open or Modal preferred, invoke model directly
+  if (base64 && (/open|modal|816b/i.test(preferredModel) || !preferredModel || preferredModel === 'muse-spark-open')) {
+    const modalRes = await callModalMuseSparkAudio({
       base64,
       rawMime,
-      defaultExt,
-      filename,
-      options,
-      timeoutMs: 25000,
-      isFinalFallback: false
-    });
-    if (primaryMuseResult && primaryMuseResult.ok && primaryMuseResult.text) {
-      return primaryMuseResult;
-    }
-  }
-
-  // 5. Intermediate Fallback: OpenAI Whisper (if not already tried and not Meta category)
-  if (!isOpenAiCategory && !isMetaCategory) {
-    const openaiKey = getApiKey('OPENAI_API_KEY');
-    if (openaiKey) {
-      try {
-        const formData = new FormData();
-        formData.append('file', blob, filename);
-        formData.append('model', 'whisper-1');
-        formData.append('response_format', 'text');
-
-        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openaiKey}` },
-          body: formData,
-          signal: AbortSignal.timeout(25000)
-        });
-
-        if (res.ok) {
-          const text = (await res.text()).trim();
-          if (text) {
-            return { ok: true, text, source: 'openai_whisper' };
-          }
-        }
-      } catch (err) {
-        console.warn('[MediaProcessor] Whisper fallback error:', err.message);
-      }
-    }
-  }
-
-  // 6. Intermediate Fallback: Gemini Multimodal Audio (if not already tried and not Meta category)
-  if (!isGeminiCategory && !isMetaCategory && base64) {
-    const geminiFallback = await callGeminiAudioTranscribe({
-      base64,
-      rawMime,
-      preferredModel: 'gemini-3.8-flash',
       timeoutMs: 25000
     });
-    if (geminiFallback && geminiFallback.ok && geminiFallback.text) {
-      return geminiFallback;
+    if (modalRes && modalRes.ok && modalRes.text) {
+      return modalRes;
     }
   }
 
-  // 7. Final Handover Fallback: Meta Muse Voice Transcribe
-  const finalMuseResult = await callMetaMuseVoiceTranscribe({
+  // Primary B / Same-family fallback: muse-voice-transcribe-1.0 across Meta / Fireworks / Llama endpoints
+  const museVoiceRes = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
     rawMime,
     defaultExt,
     filename,
     options,
-    timeoutMs: 40000,
-    isFinalFallback: true
+    timeoutMs: 25000,
+    isFinalFallback: false
   });
-  if (finalMuseResult && finalMuseResult.ok && finalMuseResult.text) {
-    return finalMuseResult;
+  if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text) {
+    return museVoiceRes;
   }
 
-  // --- Offline fallback (no working keys found) ---
-  console.warn('[MediaProcessor] No working transcription provider found or all failed.');
+  // Primary C: Sister Meta models fallback (Modal if not tried above)
+  if (base64 && !/open|modal|816b/i.test(preferredModel)) {
+    const modalFallback = await callModalMuseSparkAudio({
+      base64,
+      rawMime,
+      timeoutMs: 25000
+    });
+    if (modalFallback && modalFallback.ok && modalFallback.text) {
+      return modalFallback;
+    }
+  }
+
+  // Primary D: Final Meta family handover across all Meta provider endpoints
+  const finalMetaRes = await callMetaMuseVoiceTranscribe({
+    blob,
+    base64,
+    rawMime,
+    defaultExt,
+    filename,
+    options,
+    timeoutMs: 30000,
+    isFinalFallback: true
+  });
+  if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text) {
+    return finalMetaRes;
+  }
+
+  // Final in-family fallback for Meta
   return {
     ok: true,
     text: options.mockText || '',
-    source: 'muse-voice-transcribe-1.0:offline_fallback'
+    source: 'muse-voice-transcribe-1.0:offline_fallback',
+    modelFamily: 'meta'
   };
 }
 
@@ -930,7 +870,7 @@ export async function transcribeAudioSequentially(segments, audioSource, options
 
     let res = await transcribeSingleAudioChunk(chunkPayload, options);
     if (!res.ok || !res.text) {
-      // Final segment-level handover to muse-voice-transcribe-1.0
+      const preferredModel = options.preferredModel || '';
       const rawMime = (chunkPayload.mimeType || 'audio/wav').split(';')[0].trim();
       const defaultExt = rawMime.includes('wav') ? 'wav' : 'mp3';
       const fallbackBuf = segmentBuffer
@@ -938,18 +878,33 @@ export async function transcribeAudioSequentially(segments, audioSource, options
           ? segmentBuffer
           : Buffer.from(segmentBuffer)
         : Buffer.alloc(0);
-      const finalHandover = await callMetaMuseVoiceTranscribe({
-        blob: new Blob([fallbackBuf], { type: rawMime }),
-        base64: fallbackBuf.toString('base64'),
-        rawMime,
-        defaultExt,
-        filename: chunkPayload.filename,
-        options,
-        timeoutMs: 45000,
-        isFinalFallback: true
-      });
-      if (finalHandover && finalHandover.text) {
-        res = finalHandover;
+
+      if (isMetaFamilyModel(preferredModel)) {
+        // Meta family handover
+        const finalHandover = await callMetaMuseVoiceTranscribe({
+          blob: new Blob([fallbackBuf], { type: rawMime }),
+          base64: fallbackBuf.toString('base64'),
+          rawMime,
+          defaultExt,
+          filename: chunkPayload.filename,
+          options,
+          timeoutMs: 45000,
+          isFinalFallback: true
+        });
+        if (finalHandover && finalHandover.text) {
+          res = finalHandover;
+        }
+      } else if (/gemini/i.test(preferredModel)) {
+        // Gemini family handover
+        const geminiHandover = await callGeminiAudioTranscribe({
+          base64: fallbackBuf.toString('base64'),
+          rawMime,
+          preferredModel: 'gemini-2.5-flash',
+          timeoutMs: 35000
+        });
+        if (geminiHandover && geminiHandover.text) {
+          res = geminiHandover;
+        }
       }
     }
     results.push(res.text || '');

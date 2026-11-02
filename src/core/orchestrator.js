@@ -74,7 +74,7 @@ import {
   createRunSandbox,
   destroyRunSandbox
 } from './execution/run-sandbox.js';
-import { setActiveStagingRunId } from './bio/staging.js';
+import { setActiveStagingRunId, stageProfileFilesForRun } from './bio/staging.js';
 import {
   executeWebSearch,
   executeReadPage,
@@ -659,8 +659,14 @@ export class OmniEngine extends EventEmitter {
             textContent: e.textContent || ''
           }))
         });
+        stageProfileFilesForRun({
+          userId,
+          profile: bioProfile,
+          runSandbox,
+          runId
+        });
       } catch (err) {
-        console.warn('[Orchestrator] Failed to stage scoped BIO data into sandbox:', err.message);
+        console.warn('[Orchestrator] Failed to stage scoped BIO data or files into sandbox:', err.message);
       }
     }
 
@@ -1520,7 +1526,7 @@ export class OmniEngine extends EventEmitter {
                       ? toolArgs.field_ids
                       : toolName === 'bio_search'
                         ? [toolArgs.query]
-                        : [toolArgs.bio_ref]
+                        : [toolArgs.bio_ref || toolArgs.ref]
                 });
                 bioMediaParts.push(...media);
               } catch {}
@@ -1604,6 +1610,7 @@ export class OmniEngine extends EventEmitter {
             try {
               const domCheck = await livePage.evaluate(() => {
                 const elements = Array.from(document.querySelectorAll('input, select, textarea')).filter((el) => {
+                  if (el.tagName.toLowerCase() === 'input' && el.type === 'file') return true;
                   const r = el.getBoundingClientRect();
                   const s = window.getComputedStyle(el);
                   return (
@@ -1620,6 +1627,7 @@ export class OmniEngine extends EventEmitter {
                   const type = (el.getAttribute('type') || tag).toLowerCase();
                   const id = el.id || '';
                   const name = el.getAttribute('name') || '';
+                  const accept = el.getAttribute('accept') || '';
                   const required = el.required || el.getAttribute('aria-required') === 'true';
 
                   let label = el.getAttribute('aria-label') || el.placeholder || '';
@@ -1674,7 +1682,16 @@ export class OmniEngine extends EventEmitter {
 
                   // 5. Empty check
                   let val = el.value || '';
-                  if (tag === 'select') {
+                  if (type === 'file') {
+                    const hasFile = Boolean(el.files && el.files.length > 0);
+                    val = hasFile ? (el.files[0]?.name || 'attached') : '';
+                    if (!hasFile) {
+                      if (required) {
+                        isError = true;
+                        errorReason = 'Required file upload is empty (no file chosen)';
+                      }
+                    }
+                  } else if (tag === 'select') {
                     const opt = el.selectedOptions?.[0] || el.querySelector('option:checked');
                     val = opt ? opt.value || opt.text : el.value;
                     if (/^(select|choose|--|\s*)$/i.test((val || '').trim())) {
@@ -1694,6 +1711,7 @@ export class OmniEngine extends EventEmitter {
                       type,
                       name,
                       id,
+                      accept,
                       required: Boolean(required),
                       isError,
                       reason: errorReason || (required && isBlank ? 'Required field is empty' : 'Empty or invalid field')
@@ -1713,7 +1731,26 @@ export class OmniEngine extends EventEmitter {
                   let bioVal = null;
                   let bioField = null;
 
-                  if (/\b(phone|cell|mobile)\b/i.test(q)) {
+                  if (iss.type === 'file') {
+                    const acc = (iss.accept || '').toLowerCase();
+                    const isPhoto = /\b(photo|picture|headshot|portrait|avatar)\b/i.test(q) || acc.includes('image/') || /\.(jpe?g|png|webp)\b/i.test(acc);
+                    const isCv = /\b(resume|cv|curriculum|vitae|document)\b/i.test(q) || acc.includes('pdf') || acc.includes('doc');
+                    const isAudio = /\b(audio|voice|voiceover|vo|demo|sample)\b/i.test(q) || acc.includes('audio') || acc.includes('mp3');
+
+                    if (isPhoto) {
+                      bioVal = fieldsMap.photo || 'headshot_formal.png';
+                      bioField = 'photo (Headshot Image)';
+                    } else if (isCv) {
+                      bioVal = fieldsMap.cv || 'Alex_Morgan_CV_2026.pdf';
+                      bioField = 'cv (Resume / CV)';
+                    } else if (isAudio) {
+                      bioVal = bioProfile?.entries?.find((e) => e.type === 'audio') || 'seed-audio.wav';
+                      bioField = 'audio (Voice Sample)';
+                    } else {
+                      bioVal = fieldsMap.cv || fieldsMap.photo;
+                      bioField = fieldsMap.cv ? 'cv (Resume)' : 'photo (Headshot)';
+                    }
+                  } else if (/\b(phone|cell|mobile)\b/i.test(q)) {
                     bioVal = fieldsMap.phone;
                     bioField = 'phone';
                   } else if (/\b(month|dob.*month|birth.*month)\b/i.test(q) || (/\bdob\b/i.test(q) && iss.tag === 'select')) {
@@ -1750,11 +1787,14 @@ export class OmniEngine extends EventEmitter {
                     bioVal = fieldsMap.address;
                     bioField = 'address';
                   } else if (/\b(photo|picture|headshot)\b/i.test(q)) {
-                    bioVal = fieldsMap.photo || 'seed-photo.jpg';
+                    bioVal = fieldsMap.photo || 'headshot_formal.png';
                     bioField = 'photo';
                   } else if (/\b(resume|cv)\b/i.test(q)) {
-                    bioVal = fieldsMap.cv || 'seed-cv.pdf';
+                    bioVal = fieldsMap.cv || 'Alex_Morgan_CV_2026.pdf';
                     bioField = 'cv';
+                  } else if (/\b(audio|voice|voiceover|vo|demo|sample)\b/i.test(q)) {
+                    bioVal = bioProfile?.entries?.find((e) => e.type === 'audio') || 'seed-audio.wav';
+                    bioField = 'audio';
                   } else if (/\b(office|branch|location)\b/i.test(q)) {
                     bioVal = fieldsMap.city || fieldsMap.state;
                     bioField = 'location';

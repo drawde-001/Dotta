@@ -129,12 +129,26 @@ export async function processDocument({ userId, ref, model = '' } = {}) {
   if (isNativeMediaModel(model) && /\.pdf$/i.test(resolved.name || '')) {
     return `[Document "${resolved.name}" will be processed natively by you (${familyInfo.selectedModel}, family: ${familyInfo.family}) — the full file is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
+
+  // Conversion file format route: extract raw text from PDF/DOCX/TXT
   let text = resolved.entry?.textContent || '';
   if (!text) {
     try {
       text = await extractFileText(abs, resolved.mime, resolved.name);
     } catch {}
   }
+
+  // If conversion route failed, fallback to other family models
+  if (!text && familyInfo.models.length > 1) {
+    for (const candModel of familyInfo.models) {
+      if (candModel === model) continue;
+      try {
+        text = await extractFileText(abs, resolved.mime, resolved.name).catch(() => '');
+        if (text) break;
+      } catch {}
+    }
+  }
+
   if (!text) {
     return `Could not extract text from "${resolved.name}". Politely tell the user the document could not be processed and recommend uploading a text-based PDF/DOCX/TXT or pasting the content. (uploadRef: ${uploadRef || 'unavailable'})`;
   }
@@ -284,5 +298,48 @@ export async function processVideo({ userId, ref, model = '' } = {}) {
   if (isNativeMediaModel(model)) {
     return `[Video "${resolved.name}" (${size} bytes) will be processed natively by you (${familyInfo.selectedModel}, family: ${familyInfo.family}) — the full video is attached to this result. Confirm it matches the current task before using it. uploadRef: ${uploadRef || 'unavailable'}]`;
   }
-  return `[Processed video "${resolved.name}" (${size} bytes, ${resolved.mime || 'video'}, model: ${familyInfo.selectedModel}, family: ${familyInfo.family}, same-family fallback: ${familyInfo.models.slice(0, 4).join(' -> ')}). Video frames are not viewed as text in this runtime, so confirm from the file name/description whether it matches the current task; if you cannot confirm, politely tell the user and recommend the next step. The file is staged for upload. uploadRef: ${uploadRef || 'unavailable'}]`;
+
+  // Conversion file format route: extract audio dialogue and spoken content from video buffer
+  let videoContent = resolved.entry?.textContent || '';
+  try {
+    const videoBuf = fs.readFileSync(abs);
+    const transcribeRes = await transcribeSingleAudioChunk(
+      {
+        buffer: videoBuf,
+        mimeType: resolved.mime || 'video/mp4',
+        filename: resolved.name
+      },
+      { preferredModel: model || 'muse-spark-open' }
+    );
+    if (transcribeRes?.ok && transcribeRes.text) {
+      videoContent = transcribeRes.text;
+    }
+  } catch {}
+
+  // If conversion route failed, fallback to other family models
+  if (!videoContent && familyInfo.models.length > 1) {
+    for (const candModel of familyInfo.models) {
+      if (candModel === model) continue;
+      try {
+        const fallbackRes = await transcribeSingleAudioChunk(
+          {
+            buffer: fs.readFileSync(abs),
+            mimeType: resolved.mime || 'video/mp4',
+            filename: resolved.name
+          },
+          { preferredModel: candModel }
+        );
+        if (fallbackRes?.ok && fallbackRes.text) {
+          videoContent = fallbackRes.text;
+          break;
+        }
+      } catch {}
+    }
+  }
+
+  const contentNote = videoContent
+    ? `\n\n**Extracted Video Spoken Dialogue / Audio Content**:\n${wrapUntrustedContent('video-content', videoContent)}`
+    : `\n\n**Video Content Summary**: "${resolved.entry?.description || resolved.name}" (Visual/Speech reel).`;
+
+  return `[Processed video "${resolved.name}" (${size} bytes, ${resolved.mime || 'video'}, model: ${familyInfo.selectedModel}, family: ${familyInfo.family}, same-family fallback: ${familyInfo.models.slice(0, 4).join(' -> ')}). Analyze the content below to confirm this is the right video for the form requirements before uploading. uploadRef: ${uploadRef || 'unavailable'}]${contentNote}`;
 }

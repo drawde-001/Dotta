@@ -40,7 +40,7 @@ import {
   updateEntry as bioUpdateEntry,
   deleteEntry as bioDeleteEntry
 } from '../src/core/bio/store.js';
-import { resolveStagedFile } from '../src/core/bio/staging.js';
+import { resolveStagedFile, findMatchingStagedFile } from '../src/core/bio/staging.js';
 import {
   listUserThreads,
   getUserThread,
@@ -654,67 +654,125 @@ engine.registerTool({ name: 'browser_action' }, async (args, context = {}) => {
       }
       return `Browser action error: ${selectResult.error}`;
     } else if (action === 'upload') {
-      const stagedFile = resolveStagedFile(String(value || '').trim(), context?.runId);
-      if (!stagedFile) {
-        return 'Browser action error: Unknown upload reference. Call bio_get first to stage the BIO file, then upload with its uploadRef. Nothing was uploaded.';
-      }
-      const uploadPath = stagedFile.sandboxPath || stagedFile.absPath;
       const selector = String(selectorOrText || '').trim();
-      let uploaded = false;
-      if (selector) {
-        try {
-          const targetLoc = page.locator(selector).first();
-          const tagName = await targetLoc.evaluate(node => node.tagName.toLowerCase()).catch(() => '');
-          if (tagName === 'input') {
-            await targetLoc.setInputFiles(uploadPath, { timeout: 6000 });
-            uploaded = true;
-          } else {
-            // Find input[type="file"] nearby or associated with label
-            const inputLoc = page.locator(`${selector} input[type="file"], input[type="file"]`).first();
-            await inputLoc.setInputFiles(uploadPath, { timeout: 6000 });
-            uploaded = true;
-          }
-        } catch {}
-      }
-      if (!uploaded) {
-        // Real forms hide the actual file input behind a styled button.
-        // Find the real input, preferring one whose accept matches the file.
-        const ext = (stagedFile.name.split('.').pop() || '').toLowerCase();
-        const mime = String(stagedFile.mime || '').toLowerCase();
-        const inputs = page.locator('input[type="file"]');
-        const count = await inputs.count().catch(() => 0);
-        for (let i = 0; i < count; i++) {
-          const candidate = inputs.nth(i);
-          const accept = String((await candidate.getAttribute('accept').catch(() => '')) || '').toLowerCase();
-          const matches =
-            !accept ||
-            accept.split(',').some((tok) => {
-              const t = tok.trim();
+      const rawVal = String(value || '').trim();
+
+      // Inspect target input element on the live page
+      const targetInputInfo = await page.evaluate((targetSel) => {
+        let el = null;
+        if (targetSel) {
+          try { el = document.querySelector(targetSel); } catch {}
+          if (!el) {
+            const all = Array.from(document.querySelectorAll('input[type="file"], button, label, div, a'));
+            el = all.find((e) => {
+              const q = targetSel.toLowerCase();
               return (
-                t === `.${ext}` ||
-                t === mime ||
-                (t.endsWith('/*') && mime.startsWith(t.slice(0, -1)))
+                (e.id || '').toLowerCase().includes(q) ||
+                (e.getAttribute('name') || '').toLowerCase().includes(q) ||
+                (e.innerText || '').toLowerCase().includes(q)
               );
             });
-          if (!matches) continue;
+          }
+        }
+        if (el && el.tagName.toLowerCase() !== 'input') {
+          el = el.querySelector('input[type="file"]') || el.closest('form, div, .form-group')?.querySelector('input[type="file"]') || el;
+        }
+        if (!el || el.tagName.toLowerCase() !== 'input' || el.type !== 'file') {
+          // If no specific element found, find the most relevant file input on page
+          const inputs = Array.from(document.querySelectorAll('input[type="file"]'));
+          if (targetSel) {
+            const q = targetSel.toLowerCase();
+            el = inputs.find((inp) => {
+              const linked = inp.id ? document.querySelector(`label[for="${inp.id}"]`) : null;
+              const lbl = (linked?.innerText || inp.closest('label')?.innerText || inp.name || inp.id || '').toLowerCase();
+              return lbl.includes(q);
+            }) || inputs[0];
+          } else {
+            el = inputs[0];
+          }
+        }
+        if (!el) return null;
+
+        const linked = el.id ? document.querySelector(`label[for="${el.id}"]`) : null;
+        const wrapping = el.closest('label');
+        const parentContainer = el.closest('.form-group, .field, div');
+        const prevLabel = el.previousElementSibling && ['LABEL', 'SPAN', 'DIV'].includes(el.previousElementSibling.tagName) ? el.previousElementSibling.innerText : '';
+        const labelText = (
+          linked?.innerText ||
+          wrapping?.innerText ||
+          prevLabel ||
+          parentContainer?.querySelector('label')?.innerText ||
+          el.getAttribute('aria-label') ||
+          el.name ||
+          el.id ||
+          'File upload'
+        )
+          .replace(/\s+/g, ' ')
+          .replace(/[*:]+$/, '')
+          .trim();
+
+        const finalSel = el.id ? `#${el.id}` : el.name ? `input[name="${el.name}"]` : 'input[type="file"]';
+        return {
+          selector: finalSel,
+          id: el.id || '',
+          name: el.name || '',
+          accept: el.getAttribute('accept') || '',
+          label: labelText,
+          required: !!el.required || el.getAttribute('aria-required') === 'true'
+        };
+      }, selector).catch(() => null);
+
+      // Perform cross-check to match what the input is asking for against available files
+      const matchRes = findMatchingStagedFile({
+        inputLabel: targetInputInfo?.label || selector,
+        inputName: targetInputInfo?.name || '',
+        inputId: targetInputInfo?.id || '',
+        inputSelector: targetInputInfo?.selector || selector,
+        accept: targetInputInfo?.accept || '',
+        requestedValue: rawVal,
+        runId: context?.runId
+      });
+
+      if (!matchRes.matchedFile) {
+        return `Browser action error: Could not find matching file in sandbox for file input "${targetInputInfo?.label || selector}". Expected category: ${matchRes.expectedCategory}. Please ensure your BIO contains this file and read access is granted.`;
+      }
+
+      const uploadPath = matchRes.matchedFile.sandboxPath || matchRes.matchedFile.absPath;
+      if (!uploadPath || !fs.existsSync(uploadPath)) {
+        return `Browser action error: Staged file "${matchRes.matchedFile.name}" not found on disk at "${uploadPath}".`;
+      }
+
+      const inputSelectorToUse = targetInputInfo?.selector || selector || 'input[type="file"]';
+      let uploaded = false;
+
+      try {
+        const fileLoc = page.locator(inputSelectorToUse).first();
+        await fileLoc.setInputFiles(uploadPath, { timeout: 8000 });
+        await fileLoc.evaluate((inp) => {
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+          inp.dispatchEvent(new Event('blur', { bubbles: true }));
+        }).catch(() => {});
+        uploaded = true;
+      } catch (err) {
+        // Fallback: search all input[type="file"] on page
+        const count = await page.locator('input[type="file"]').count().catch(() => 0);
+        for (let i = 0; i < count; i++) {
           try {
-            await candidate.setInputFiles(uploadPath, { timeout: 6000 });
+            await page.locator('input[type="file"]').nth(i).setInputFiles(uploadPath, { timeout: 6000 });
             uploaded = true;
             break;
           } catch {}
         }
-        if (!uploaded && count > 0) {
-          try {
-            await inputs.first().setInputFiles(uploadPath, { timeout: 6000 });
-            uploaded = true;
-          } catch {}
-        }
-        if (!uploaded) {
-          return `Browser action error: Found ${count} file input(s) on this page but could not attach "${stagedFile.name}". Take a snapshot_read, check its fileInputs list, and target the file input directly.`;
-        }
       }
+
+      if (!uploaded) {
+        return `Browser action error: Failed to attach "${matchRes.matchedFile.name}" to file field "${targetInputInfo?.label || inputSelectorToUse}".`;
+      }
+
       await page.waitForTimeout(350);
-      return `Uploaded "${stagedFile.name}" into the form file field. Take a snapshot_read to confirm the form state before submitting.`;
+      const crossCheckNote = matchRes.warning ? ` [${matchRes.warning}]` : ` [Cross-checked: matches ${matchRes.expectedCategory} format]`;
+      return `Uploaded "${matchRes.matchedFile.name}" into "${targetInputInfo?.label || inputSelectorToUse}".${crossCheckNote} Take a snapshot_read to confirm.`;
     } else if (action === 'scroll') {
       const px = direction === 'up' ? -Math.abs(amount) : Math.abs(amount);
       await page.evaluate((y) => window.scrollBy({ top: y, behavior: 'smooth' }), px);
@@ -764,7 +822,9 @@ engine.registerTool({ name: 'snapshot_read' }, async () => {
             name: el.getAttribute('name') || undefined,
             id: el.id || undefined,
             accept: el.getAttribute('accept') || undefined,
-            required: !!el.required || el.getAttribute('aria-required') === 'true'
+            required: !!el.required || el.getAttribute('aria-required') === 'true',
+            hasFile: Boolean(el.files && el.files.length > 0),
+            attachedFile: el.files && el.files.length > 0 ? el.files[0].name : undefined
           };
         }),
         interactives: Array.from(

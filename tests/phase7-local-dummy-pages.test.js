@@ -24,6 +24,7 @@ import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
 import { verifyLiveFormDom, enforceVerifiedMessage } from '../src/core/levels/verifier.js';
 import { isInstructionLikeText } from '../src/core/levels/sanitizer.js';
 import { buildCustomSectionFillScript } from '../src/core/levels/executor.js';
+import { findMatchingStagedFile, stageBioFile } from '../src/core/bio/staging.js';
 
 const PORT = 4099;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
@@ -441,6 +442,75 @@ async function runPhase7Tests() {
     console.log('✓ Scenario 9 PASSED.\n');
 
     // ---------------------------------------------------------------------------
+    // SCENARIO 10: Intelligent File Cross-Checking & Content-Based Upload
+    // ---------------------------------------------------------------------------
+    console.log('[Scenario 10] Intelligent File Cross-Checking & Content-Based Upload');
+    const sb10 = createRunSandbox({ runId: 's10' });
+    const dummyCvPath = path.join(sb10.workDir, 'Alex_Morgan_CV_2026.pdf');
+    const dummyPhotoPath = path.join(sb10.workDir, 'headshot_formal.png');
+    const dummyAudioPath = path.join(sb10.workDir, 'voice_demo.mp3');
+    fs.writeFileSync(dummyCvPath, '%PDF-1.4 dummy cv content');
+    fs.writeFileSync(dummyPhotoPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00]));
+    fs.writeFileSync(dummyAudioPath, 'dummy mp3 audio content');
+
+    stageBioFile({ userId: 'u10', absPath: dummyCvPath, name: 'Alex_Morgan_CV_2026.pdf', mime: 'application/pdf', runId: 's10', fieldId: 'cv' });
+    stageBioFile({ userId: 'u10', absPath: dummyPhotoPath, name: 'headshot_formal.png', mime: 'image/png', runId: 's10', fieldId: 'photo' });
+    stageBioFile({ userId: 'u10', absPath: dummyAudioPath, name: 'voice_demo.mp3', mime: 'audio/mpeg', runId: 's10', fieldId: 'entry:audio-1' });
+
+    // 1. Cross-check: Target is a Headshot input, but user/agent mistakenly requested CV
+    const photoInputCheck = findMatchingStagedFile({
+      inputLabel: 'Headshot Photo *',
+      inputSelector: '#headshot_photo',
+      accept: 'image/*,.jpg,.png',
+      requestedValue: 'Alex_Morgan_CV_2026.pdf',
+      runId: 's10'
+    });
+    assert.strictEqual(photoInputCheck.expectedCategory, 'photo', 'Must identify photo input');
+    assert.strictEqual(photoInputCheck.matchedFile.name, 'headshot_formal.png', 'Must redirect to matching headshot file');
+    assert(photoInputCheck.warning && photoInputCheck.warning.includes('Cross-check'), 'Must report cross-check redirect warning');
+    console.log('  -> Smart cross-check redirected CV request on photo input:\n     ' + photoInputCheck.warning);
+
+    // 2. Cross-check: Target is a Resume input, but user/agent mistakenly requested photo
+    const resumeInputCheck = findMatchingStagedFile({
+      inputLabel: 'Resume / CV *',
+      inputSelector: '#resume_file',
+      accept: '.pdf,.doc,.docx',
+      requestedValue: 'headshot_formal.png',
+      runId: 's10'
+    });
+    assert.strictEqual(resumeInputCheck.expectedCategory, 'cv', 'Must identify cv input');
+    assert.strictEqual(resumeInputCheck.matchedFile.name, 'Alex_Morgan_CV_2026.pdf', 'Must redirect to matching resume file');
+    assert(resumeInputCheck.warning && resumeInputCheck.warning.includes('Cross-check'), 'Must report cross-check redirect warning');
+    console.log('  -> Smart cross-check redirected Photo request on resume input:\n     ' + resumeInputCheck.warning);
+
+    // 3. Auto-match without specific filename: Target is Voiceover Demo
+    const audioInputCheck = findMatchingStagedFile({
+      inputLabel: 'Voiceover Demo *',
+      inputSelector: '#vo_demo',
+      accept: 'audio/*,.mp3,.wav',
+      requestedValue: '',
+      runId: 's10'
+    });
+    assert.strictEqual(audioInputCheck.expectedCategory, 'audio', 'Must identify audio input');
+    assert.strictEqual(audioInputCheck.matchedFile.name, 'voice_demo.mp3', 'Must auto-match voice demo file');
+    console.log('  -> Smart cross-check auto-matched audio input to voice_demo.mp3');
+
+    // 4. Verifier intercepts unfilled file inputs when BIO has matching files
+    const mockFileFailResult = {
+      status: 'PARTIAL',
+      verifiedCount: 1,
+      failedFields: [
+        { label: 'Headshot Photo', reason: 'Required file upload is empty (no file chosen)', actualValue: '' }
+      ]
+    };
+    const enforcedFileMessage = enforceVerifiedMessage('Done with form upload', mockFileFailResult);
+    assert(enforcedFileMessage.includes('PARTIAL (Validation Errors Detected)'), 'Must block "Done" and enforce PARTIAL on empty file input');
+    assert(enforcedFileMessage.includes('Headshot Photo'), 'Must report empty file input in failing fields');
+
+    await sb10.destroy('completed');
+    console.log('✓ Scenario 10 PASSED.\n');
+
+    // ---------------------------------------------------------------------------
     // SIDE-BY-SIDE METRICS REPORT
     // ---------------------------------------------------------------------------
     console.log('===================================================================');
@@ -457,7 +527,7 @@ async function runPhase7Tests() {
     console.log(`| Host Workspace Reachable   | ${metricsOld.workspaceFileReachable ? 'YES (Leaked host files)' : 'NO'} | ${metricsNew.workspaceFileReachable ? 'YES' : 'NO (Strictly Sandboxed)'}  |`);
     console.log('===================================================================\n');
 
-    console.log('ALL PHASE 7 LOCAL DUMMY PAGE PROOFS PASSED (9/9)!');
+    console.log('ALL PHASE 7 LOCAL DUMMY PAGE PROOFS PASSED (10/10)!');
   } finally {
     await stopDummyServer();
   }

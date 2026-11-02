@@ -212,11 +212,14 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
           continue;
         }
         try {
-          const result = await transcribeSingleAudioChunk({
-            buffer: fs.readFileSync(abs),
-            mimeType: entry.file?.mime || 'audio/mpeg',
-            filename: entry.file?.name || 'audio.mp3'
-          });
+          const result = await transcribeSingleAudioChunk(
+            {
+              buffer: fs.readFileSync(abs),
+              mimeType: entry.file?.mime || 'audio/mpeg',
+              filename: entry.file?.name || 'audio.mp3'
+            },
+            { preferredModel: model }
+          );
           values[id] =
             result?.ok && result.text
               ? wrapUntrustedContent('audio-transcript', result.text.slice(0, 8000))
@@ -225,9 +228,32 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
           values[id] = `[Audio entry "${entry.name}" — transcription failed: ${err.message}. The file itself is staged for upload.]`;
         }
       } else if (entry.type === 'video') {
-        values[id] = nativeMedia
-          ? `[Video entry "${entry.name}" — the full video is attached to this result and will be processed natively by you.]`
-          : `[Video entry "${entry.name}" — the user granted agent access. Video frames are not viewed as text in this runtime; the stored file is staged for upload via its uploadRef.]`;
+        if (nativeMedia) {
+          values[id] = `[Video entry "${entry.name}" — the full video is attached to this result and will be processed natively by you.]`;
+        } else {
+          let videoDialogue = entry.textContent || '';
+          if (!videoDialogue && abs) {
+            try {
+              const res = await transcribeSingleAudioChunk(
+                {
+                  buffer: fs.readFileSync(abs),
+                  mimeType: entry.file?.mime || 'video/mp4',
+                  filename: entry.file?.name || 'video.mp4'
+                },
+                { preferredModel: model }
+              );
+              if (res?.ok && res.text) {
+                videoDialogue = res.text;
+                try {
+                  updateEntry(userId, profile.id, entry.id, { textContent: videoDialogue });
+                } catch {}
+              }
+            } catch {}
+          }
+          values[id] = videoDialogue
+            ? `[Video entry "${entry.name}" spoken content: ${wrapUntrustedContent('video-content', videoDialogue.slice(0, 8000))}. File is staged for upload.]`
+            : `[Video entry "${entry.name}" — "${entry.description || entry.name}". File is staged for upload via its uploadRef.]`;
+        }
       }
       continue;
     }
