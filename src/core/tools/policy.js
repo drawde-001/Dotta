@@ -210,6 +210,28 @@ export function checkPermission(toolName, input = {}, mode = 'turbo', approvals 
     };
   }
 
+  if (normTool === 'browser_read_page' || normTool === 'read_page') {
+    const rawUrl = String(args.url || '').trim();
+    if (/^https?:\/\//i.test(rawUrl)) {
+      const targetHost = hostOf(rawUrl);
+      const isLocal = targetHost === 'localhost' || targetHost === '127.0.0.1' || targetHost.includes('local');
+      const approvalSet = approvals instanceof Set ? approvals : new Set(Array.isArray(approvals) ? approvals : Object.keys(approvals || {}));
+      const alreadyApproved =
+        isLocal ||
+        approvalSet.has(targetHost) ||
+        approvalSet.has(`host:${targetHost}`) ||
+        Boolean(context?.navigation?.userApproved);
+
+      if (!alreadyApproved) {
+        return {
+          decision: 'ask',
+          reason: `May I visit and inspect the site on ${targetHost}?`,
+          options: ['(Recommended) Allow and proceed', 'Deny']
+        };
+      }
+    }
+  }
+
   if (normTool === 'browser_action') {
     const target = String(args.selectorOrText || '').toLowerCase().trim();
     const actionType = String(args.action || '').toLowerCase().trim();
