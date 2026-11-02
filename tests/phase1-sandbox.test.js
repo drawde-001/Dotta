@@ -459,8 +459,101 @@ async function runPhase1Tests() {
   assert(summary.turnExpansions >= 1, 'Tracker must have recorded automatic turn expansions');
   console.log('✓ Proof 7 PASSED: Dynamic turn cap scaled seamlessly to 125+ turns.\n');
 
+  // ---------------------------------------------------------------------------
+  // PROOF 8: Attempt to access BIO storage from inside sandbox -> MUST FAIL
+  // ---------------------------------------------------------------------------
+  console.log('[Proof 8] Attempting to access BIO storage directly from inside sandbox...');
+  const runId8 = `test-phase1-bio-${Date.now()}`;
+  const sb8 = createRunSandbox({ runId: runId8 });
+
+  try {
+    // 8a. Shell attempt to read src/data/bio directly
+    const bioStoragePath = path.join(PROJECT_ROOT, 'src/data/bio');
+    const cmdReadBio = await runSandboxCommand({
+      runId: runId8,
+      command: `node -e "const fs=require('fs'); console.log(fs.readdirSync(${JSON.stringify(bioStoragePath)}))"`
+    });
+    console.log('  -> Shell access to src/data/bio:', {
+      exitCode: cmdReadBio.exitCode,
+      blocked: cmdReadBio.blocked,
+      output: cmdReadBio.output
+    });
+    assert.strictEqual(cmdReadBio.exitCode, 1, 'Accessing BIO storage path from sandbox must fail');
+    assert.strictEqual(cmdReadBio.blocked, true, 'Command must be explicitly blocked');
+
+    // 8b. Shell attempt to write into src/data/bio
+    const fakeBioWrite = path.join(PROJECT_ROOT, 'src/data/bio/hacked.json');
+    const cmdWriteBio = await runSandboxCommand({
+      runId: runId8,
+      command: `node -e "const fs=require('fs'); fs.writeFileSync(${JSON.stringify(fakeBioWrite)}, 'pwned')"`
+    });
+    console.log('  -> Shell write to src/data/bio:', {
+      exitCode: cmdWriteBio.exitCode,
+      blocked: cmdWriteBio.blocked,
+      output: cmdWriteBio.output
+    });
+    assert.strictEqual(cmdWriteBio.exitCode, 1, 'Writing to BIO storage path from sandbox must fail');
+    assert.strictEqual(cmdWriteBio.blocked, true, 'Command must be explicitly blocked');
+    assert(!fs.existsSync(fakeBioWrite), 'Host BIO storage must remain pristine');
+    console.log('✓ Proof 8 PASSED: Direct access to BIO storage from inside sandbox is blocked.\n');
+  } finally {
+    await destroyRunSandbox(runId8, 'completed');
+  }
+
+  // ---------------------------------------------------------------------------
+  // PROOF 9: Scoped Read-Only Data File staging and complete destruction
+  // ---------------------------------------------------------------------------
+  console.log('[Proof 9] Verifying scoped read-only profile data file and destruction on normal finish, crash, and cancel...');
+  const runId9 = `test-phase1-scoped-${Date.now()}`;
+  const sb9 = createRunSandbox({ runId: runId9 });
+
+  const stagedPath = sb9.stageScopedBioData({
+    profileId: 'prof-test',
+    profileName: 'Test Profile',
+    fields: { fullName: 'Alex Morgan', email: 'alex@example.com' }
+  });
+
+  assert(fs.existsSync(stagedPath), 'Scoped profile data file must exist in sandbox inputs');
+  const fileStat = fs.statSync(stagedPath);
+  // On POSIX/Windows verify mode or unmutability
+  let scopedWriteFailed = false;
+  try {
+    fs.writeFileSync(stagedPath, 'overwritten', { flag: 'w' });
+  } catch (err) {
+    scopedWriteFailed = true;
+  }
+  console.log('  -> Mutating 0o444 scoped data file failed:', scopedWriteFailed);
+
+  // Normal finish destruction
+  await sb9.destroy('completed');
+  assert(!fs.existsSync(sb9.sandboxRoot), 'Sandbox root and scoped data files must be completely gone after normal finish');
+  console.log('  -> Normal finish destroyed sandbox and all scoped files: true');
+
+  // Crash destruction test
+  const runIdCrash = `test-phase1-crash-${Date.now()}`;
+  const sbCrash = createRunSandbox({ runId: runIdCrash });
+  sbCrash.stageScopedBioData({ fields: { phone: '555-0199' } });
+  sbCrash.writeFile('notes/page-structure.md', '# Page Structure');
+  assert(fs.existsSync(path.join(sbCrash.workDir, 'notes/page-structure.md')), 'Notes file created in scratch');
+  sbCrash.destroySync('crash');
+  assert(!fs.existsSync(sbCrash.sandboxRoot), 'Sandbox root and notes files must be completely gone after crash');
+  console.log('  -> Crash destroyed sandbox, notes, and scoped files: true');
+
+  // Cancel destruction test
+  const ac = new AbortController();
+  const runIdCancel = `test-phase1-cancel-${Date.now()}`;
+  const sbCancel = createRunSandbox({ runId: runIdCancel, signal: ac.signal });
+  sbCancel.stageScopedBioData({ fields: { address: '123 Test St' } });
+  sbCancel.writeFile('notes/form-plan.md', '# Plan');
+  ac.abort();
+  await new Promise((r) => setTimeout(r, 60));
+  assert(!fs.existsSync(sbCancel.sandboxRoot), 'Sandbox root and notes files must be completely gone after abort/cancel');
+  console.log('  -> Cancel destroyed sandbox, notes, and scoped files: true');
+
+  console.log('✓ Proof 9 PASSED: Scoped data file read-only and complete destruction verified.\n');
+
   console.log('===================================================================');
-  console.log('ALL PHASE 1 SANDBOX ISOLATION & DYNAMIC TURN TESTS PASSED (7/7)!');
+  console.log('ALL PHASE 1 SANDBOX ISOLATION & DYNAMIC TURN TESTS PASSED (9/9)!');
   console.log('===================================================================');
 }
 

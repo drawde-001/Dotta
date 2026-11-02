@@ -656,6 +656,33 @@ export class RunSandbox {
   }
 
   /**
+   * Copies task-scoped profile data from the active BIO profile into the
+   * sandbox's /inputs directory as READ-ONLY JSON (mode 0o444).
+   * Host paths or ungranted fields are never exposed.
+   */
+  stageScopedBioData(profileData = {}) {
+    if (this.destroyed) {
+      throw new Error('Cannot stage scoped BIO data into a destroyed RunSandbox');
+    }
+    const destPath = path.join(this.inputsDir, 'scoped-profile-data.json');
+    if (fs.existsSync(destPath)) {
+      try {
+        fs.chmodSync(destPath, 0o600);
+      } catch {}
+    }
+    const cleanJson = JSON.stringify(profileData, null, 2);
+    fs.writeFileSync(destPath, cleanJson, { encoding: 'utf8' });
+    fs.chmodSync(destPath, 0o444);
+
+    this.emitOutput('SCOPED_BIO_DATA_STAGED_READONLY', {
+      virtualPath: '/sandbox/inputs/scoped-profile-data.json',
+      fieldCount: Object.keys(profileData?.fields || profileData || {}).length,
+      readOnly: true
+    });
+    return destPath;
+  }
+
+  /**
    * Resolves a relative path strictly inside this sandbox's work directory
    * (or inputs/outputs subdirectories). Rejects any escape or host path.
    */

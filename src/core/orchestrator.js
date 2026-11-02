@@ -605,6 +605,26 @@ export class OmniEngine extends EventEmitter {
     });
     setActiveStagingRunId(runId);
 
+    // Orchestrator reads BIO under the Read switch and hands the sandbox a scoped, read-only data file
+    if (bioAccess.read && bioProfile) {
+      try {
+        runSandbox.stageScopedBioData({
+          profileId: bioProfile.id,
+          profileName: bioProfile.name,
+          fields: bioProfile.fields || {},
+          entries: (bioProfile.entries || []).map((e) => ({
+            id: e.id,
+            name: e.name,
+            type: e.type,
+            description: e.description,
+            textContent: e.textContent || ''
+          }))
+        });
+      } catch (err) {
+        console.warn('[Orchestrator] Failed to stage scoped BIO data into sandbox:', err.message);
+      }
+    }
+
     this.emit('event', {
       type: 'RUN_STARTED',
       threadId,
