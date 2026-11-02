@@ -33,6 +33,7 @@ import {
   destroyTemporaryFillPlan,
   redactPiiAndInternalIds
 } from './plan-file.js';
+import { verifyLiveFormDom, enforceVerifiedMessage } from './verifier.js';
 
 export async function runMultiLevelFormPipeline({
   runId = `form-run-${Date.now()}`,
@@ -103,6 +104,37 @@ export async function runMultiLevelFormPipeline({
       fieldsExtracted: extractorResult.schema?.fields?.length || 0,
       excludedHiddenCount: extractorResult.excludedElements?.length || 0,
       scannerNotesCount: extractorResult.scannerNotes?.length || 0,
+      timestamp: Date.now()
+    });
+
+    // Generate ephemeral read-only page structure markdown in the temporal sandbox
+    let pageStructureMarkdown = '';
+    try {
+      const pLines = [];
+      pLines.push(`# Page Structure & Interactive Elements\n`);
+      pLines.push(`**URL**: ${url || 'unknown'}`);
+      pLines.push(`**Title**: ${extractorResult.schema?.title || 'Untitled'}`);
+      pLines.push(`**Interactive Elements**: ${extractorResult.schema?.fields?.length || 0} fields, ${extractorResult.schema?.submitButtons?.length || 0} submit buttons\n`);
+      pLines.push(`## Form Fields`);
+      for (const f of extractorResult.schema?.fields || []) {
+        const reqStr = f.required ? ' (required)' : ' (optional)';
+        const optStr = f.options?.length ? ` [options: ${f.options.join(', ')}]` : '';
+        pLines.push(`- **[${f.type}]** ${f.label}${reqStr} -> \`${f.selector || f.fieldKey}\`${optStr}`);
+      }
+      if (extractorResult.schema?.submitButtons?.length) {
+        pLines.push(`\n## Action & Submit Buttons`);
+        for (const b of extractorResult.schema.submitButtons) {
+          pLines.push(`- **[${b.type || 'button'}]** ${b.label} -> \`${b.selector}\``);
+        }
+      }
+      pageStructureMarkdown = pLines.join('\n');
+    } catch {}
+
+    emit({
+      type: 'PAGE_STRUCTURE_GENERATED',
+      fieldsCount: extractorResult.schema?.fields?.length || 0,
+      buttonsCount: extractorResult.schema?.submitButtons?.length || 0,
+      summary: `${extractorResult.schema?.fields?.length || 0} interactive fields identified in page structure`,
       timestamp: Date.now()
     });
 
@@ -363,7 +395,46 @@ export async function runMultiLevelFormPipeline({
       );
     }
 
-    const safeUserMessage = redactPiiAndInternalIds(rawSummaryLines.join(' '), profile);
+    // PHASE 3: Perform live DOM verification with evidence before outputting final message
+    let verification = null;
+    try {
+      const intendedMap = {};
+      for (const item of executorResult.executionLog || []) {
+        intendedMap[item.fieldKey] = {
+          selector: item.selector || `#${item.fieldKey}`,
+          value: item.maskedValue,
+          label: item.label
+        };
+      }
+      const verifyRes = await defaultBrowserExec('browser_action', {
+        action: 'verify_dom_state',
+        intendedFields: intendedMap,
+        initialUrl: url,
+        isSubmitAction: submittedAutomatically
+      });
+      if (verifyRes && verifyRes.status) {
+        verification = verifyRes;
+      }
+    } catch {}
+
+    const finalStatus =
+      verification?.status ||
+      (submittedAutomatically ? 'SUBMITTED_CONFIRMED' : 'FILLED_NOT_SUBMITTED');
+
+    emit({
+      type: 'AGENT_VERIFICATION_RESULT',
+      status: finalStatus,
+      verifiedCount: verification?.verifiedCount ?? filledLabels.length,
+      failedCount: verification?.failedCount ?? 0,
+      failedFields: verification?.failedFields || [],
+      evidence: verification?.evidence || {}
+    });
+
+    const safeUserMessage = enforceVerifiedMessage(
+      rawSummaryLines.join(' '),
+      verification,
+      profile
+    );
 
     return {
       ok: true,

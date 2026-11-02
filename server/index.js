@@ -60,6 +60,7 @@ import {
 import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from '../src/core/levels/extractor.js';
 import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
+import { verifyLiveFormDom } from '../src/core/levels/verifier.js';
 
 dotenv.config();
 
@@ -214,6 +215,13 @@ function createLiveBrowserExecutor(page, runId) {
   return async (toolName, toolArgs) => {
     if (toolName === 'browser_action') {
       const { action, script, selector, selectorOrText, value } = toolArgs || {};
+      if (action === 'verify_dom_state') {
+        const verifyRes = await verifyLiveFormDom(page, toolArgs.intendedFields || {}, {
+          initialUrl: toolArgs.initialUrl,
+          isSubmitAction: Boolean(toolArgs.isSubmitAction)
+        });
+        return verifyRes;
+      }
       if (action === 'batch_fill_section' && script) {
         const evalRes = await page.evaluate((code) => {
           try {
