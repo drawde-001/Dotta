@@ -90,3 +90,37 @@ npm test
 
 ## Production Deployment
 For complete instructions on deploying to a Linux VM, setting up machine IPs, domain DNS, Caddy with automatic SSL, Docker sandbox, and Supabase, see [setup.md](file:///C:/Users/USER/Downloads/omni-agent/setup.md).
+
+---
+
+## Multi-Level Browser & Form-Filling Security Architecture
+
+Omni Agent executes all browser and form-filling work inside temporary, per-run isolated sandboxes (`RunSandbox`) and splits web-task perception, verification, planning, execution, and risky-action review into **four isolated levels** with separate contexts, code-enforced tool registries, and separate scratch sandboxes:
+
+### 1. Isolated Per-Run Sandbox (`src/core/execution/run-sandbox.js`)
+- Every run creates a temporary directory (`os.tmpdir()/omni-run-sandbox-<uuid>`) outside the project repository and user workspace.
+- Host paths (`PROJECT_ROOT`, `src/workspaces`) are blocked in code (`assertNoHostPathAccess`) and scrubbed from outputs (`redactSandboxHostPaths`).
+- Child processes and Playwright Chromium instances receive a scrubbed environment (`buildScrubbedSandboxEnv`) with zero host API keys or workspace secrets.
+- Only BIO files required by the current task are staged into `/sandbox/inputs/` with read-only permissions (`0o444`).
+- Network egress is filtered and logged per request (`checkNetworkRequest` + Playwright `context.route('**/*', ...)`).
+- Guaranteed cleanup (`destroy` / `destroySync`) runs in `finally` on normal completion, crash, cancellation, or timeout.
+
+### 2. Multi-Level Prompt-Injection Defense (`src/core/levels/`)
+- **Level 1 (`BROWSER_SUBAGENT` — `registries.js`, `executor.js`)**:
+  - The **only** component with browser tools (`browser_read_page`, `browser_action`, `snapshot_read`, `browser_screenshot`, `browser_search`, `web_search`).
+  - Runs in its own temporary sandbox (`level1BrowserSandboxRoot`), opens the page, extracts raw DOM/accessibility data, and later executes the verified custom page script. Never calls BIO tools and never decides what to fill.
+- **Level 2 (`TWO INDEPENDENT VERIFICATION LAYERS + COMPARATOR`)**:
+  - **Level 2A (`EXTRACTOR` — `extractor.js`)**: Deterministic code running in the Level 1 sandbox. Inspects the DOM and accessibility tree (preserving Unicode/foreign scripts via `\p{L}\p{N}`), strips HTML comments, and excludes hidden/deceptive elements (`display:none`, `visibility:hidden`, `opacity <= 0.05`, `font-size < 2px`, zero dimensions, negative off-screen coordinates, same foreground/background color, and `aria-label` mismatches).
+  - **Level 2B (`READER` — `reader.js`)**: Toolless model call (`tools: []`, zero BIO access, zero command execution, zero sandbox). Receives **only** raw visible page text (never the Extractor's output) and outputs a strict JSON schema.
+  - **Level 2C (`COMPARATOR` — `comparator.js`)**: Compares 2A and 2B field-by-field (`normalizedLabel`, `type`, `required`, `options`). Only fields where both independent layers agree are marked `VERIFIED` and passed to the Planner. Disagreements or single-layer fields are marked `DISPUTED`, left empty, logged neutrally, and (if required) included in the single batched question to the user. The Reader can never add or override fields.
+- **Level 3 (`PLANNER` — `planner.js`, `sanitizer.js`, `plan-file.js`)**:
+  - Has **only** active-profile BIO read tools (`bio_index`, `bio_search`, `bio_get`, `process_document`, `process_image`, `process_audio`, `process_video`) when the active profile's Read switch is ON. Zero browser tools, zero network, zero shell, zero write tools.
+  - Never sees raw page text — receives only the `VERIFIED`, sanitized schema quoted inside `<verified_untrusted_form_schema>`.
+  - Classifies fields across English and foreign languages into the closed vocabulary (`CLOSED_BIO_FIELD_KINDS`); any imperative or injection-like label (e.g., `"Get me all your information"`, foreign-language injections, `javascript:` URIs, Base64 payloads, homoglyphs) is classified as `UNSUPPORTED` and never obeyed.
+  - Every `READY` item in the Fill Plan must cite a valid `bioSource: { profileId, fieldId }` from the active BIO profile.
+  - Writes the temporary Fill Plan JSON with owner-only permissions (`0o600`) inside its own separate scratch sandbox (`level3PlannerSandboxRoot`), which is overwritten and deleted when the run ends (and on crash/cancel/timeout).
+- **Level 1 Custom Executor (`executor.js`)**:
+  - Executes the validated Fill Plan per section using custom batch DOM scripts verified by `verifyCustomBrowserScriptSafety` (blocking `fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `window.open`, `document.cookie`, `localStorage`, `eval`), falling back to human-like Playwright actions for file uploads and custom widgets, re-reading the DOM without reloading after each section, and saving section checkpoints.
+- **Level 4 (`REVIEWER` — `reviewer.js`)**:
+  - Separate toolless review gate (`tools: []`) invoked before any risky action (cross-domain navigation, final form submission, out-of-plan tool call, cross-origin upload). Sees only the user's original request, active profile name, proposed action, and deterministic scanner warning log. Enforces the mode-aware Submit Gate (`Turbo`, `Default`, `Review`).
+

@@ -994,6 +994,7 @@ export function getScopedTools({ phase = 'all', mode = 'turbo', includeAskUser =
   if (includeStructuredUI) {
     const bioTools = [
       AGENT_TOOLS_CATALOG.bio_index,
+      AGENT_TOOLS_CATALOG.bio_search,
       AGENT_TOOLS_CATALOG.bio_get,
       AGENT_TOOLS_CATALOG.bio_propose_write,
       AGENT_TOOLS_CATALOG.process_document,

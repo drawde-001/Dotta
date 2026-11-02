@@ -72,8 +72,26 @@ export function calculateTurnCost(usageMetadata = {}, model = process.env.DEFAUL
 }
 
 /**
+/**
+ * Computes the initial turn budget based on the user's task complexity.
+ * In dynamic mode, this ceiling automatically expands as the agent makes forward progress.
+ */
+export function computeInitialTurnBudget(instruction = '') {
+  const text = String(instruction || '').trim();
+  if (!text) return 60;
+  const isComplexWebOrFormTask =
+    /https?:\/\/|\b(apply|application|form|fill|submit|upload|multi-step|register|checkout|scrape|workflow|pipeline|refactor|build|implement)\b/i.test(
+      text
+    );
+  if (isComplexWebOrFormTask || text.length > 250) {
+    return 100;
+  }
+  return 60;
+}
+
+/**
  * Tracks multi-dimensional budgets:
- * - max_turns
+ * - dynamic or explicit max_turns (scales to 100+ turns when making progress)
  * - cost cap (counting thinking tokens)
  * - max_identical_calls (fingerprint normalized args)
  * - wall-clock timeout
@@ -81,10 +99,26 @@ export function calculateTurnCost(usageMetadata = {}, model = process.env.DEFAUL
  */
 export class AgentBudgetTracker {
   constructor(options = {}) {
-    this.maxTurns = options.maxTurns ?? 50;
+    const hasExplicitNumericMaxTurns =
+      typeof options.maxTurns === 'number' &&
+      Number.isFinite(options.maxTurns) &&
+      options.maxTurns > 0;
+
+    this.dynamicTurns =
+      options.dynamicTurns !== undefined
+        ? Boolean(options.dynamicTurns)
+        : !hasExplicitNumericMaxTurns;
+
+    this.initialMaxTurns = hasExplicitNumericMaxTurns
+      ? options.maxTurns
+      : computeInitialTurnBudget(options.instruction);
+    this.maxTurns = this.initialMaxTurns;
+    this.maxTurnExpansionStep = options.maxTurnExpansionStep ?? 30;
+    this.maxStallTurns = options.maxStallTurns ?? 15;
+
     this.maxBudgetUsd = options.maxBudgetUsd ?? 2.00;
     this.maxIdenticalCalls = options.maxIdenticalCalls ?? 5;
-    this.timeoutMs = options.timeoutMs ?? 300000;
+    this.timeoutMs = options.timeoutMs ?? 600000;
     this.model = options.model || process.env.DEFAULT_MODEL || 'meta-muse-spark';
 
     this.turnCount = 0;
@@ -94,10 +128,20 @@ export class AgentBudgetTracker {
     this.totalThoughtTokens = 0;
 
     this.callFingerprints = new Map();
+    this.distinctFingerprints = new Set();
     this.maxConsecutiveIdentical = options.maxConsecutiveIdentical ?? 3;
     this.callHistory = [];
+    this.mutationCounter = 0;
+    this.progressEvents = 0;
+    this.lastProgressTurn = 0;
+    this.turnExpansions = 0;
     this.startTime = Date.now();
     this.stopReason = null;
+  }
+
+  recordProgress(amount = 1) {
+    this.progressEvents += Math.max(1, Number(amount) || 1);
+    this.lastProgressTurn = this.turnCount;
   }
 
   checkTimeout() {
@@ -114,6 +158,24 @@ export class AgentBudgetTracker {
     if (timeoutReason) return timeoutReason;
 
     this.turnCount++;
+
+    // Dynamic turn scaling: if the agent is approaching the current turn ceiling
+    // and has been making forward progress within the stall window, automatically
+    // expand the turn budget so long multi-step tasks (100+ turns) never die arbitrarily.
+    if (
+      this.dynamicTurns &&
+      this.maxTurns !== null &&
+      this.maxTurns !== undefined &&
+      this.maxTurns !== Infinity &&
+      this.turnCount >= this.maxTurns - 5
+    ) {
+      const turnsSinceProgress = this.turnCount - this.lastProgressTurn;
+      if (this.progressEvents > 0 && turnsSinceProgress <= this.maxStallTurns) {
+        this.maxTurns += this.maxTurnExpansionStep;
+        this.turnExpansions++;
+      }
+    }
+
     if (
       this.maxTurns !== null &&
       this.maxTurns !== undefined &&
@@ -146,10 +208,37 @@ export class AgentBudgetTracker {
   }
 
   recordToolCall(toolName, toolArgs) {
-    const fp = fingerprintToolCall(toolName, toolArgs);
+    const isMutatingTool =
+      toolName === 'browser_action' ||
+      toolName === 'browser_read_page' ||
+      toolName === 'read_page' ||
+      toolName === 'form_execute_batch' ||
+      toolName === 'file_write' ||
+      toolName === 'file_edit' ||
+      toolName === 'shell_run';
+
+    if (isMutatingTool) {
+      this.mutationCounter++;
+    }
+
+    // Read-only page snapshots after a browser mutation inspect a NEW page state;
+    // include the current mutationCounter so legitimate post-action snapshots do not
+    // trip the cumulative identical-call cap, while consecutive snapshots without
+    // any intervening mutation still share a fingerprint and get caught.
+    const effectiveArgs =
+      toolName === 'snapshot_read'
+        ? { ...(toolArgs || {}), _mutationEpoch: this.mutationCounter }
+        : toolArgs;
+
+    const fp = fingerprintToolCall(toolName, effectiveArgs);
     const count = (this.callFingerprints.get(fp) || 0) + 1;
     this.callFingerprints.set(fp, count);
     this.callHistory.push({ toolName, fp, toolArgs, timestamp: Date.now() });
+
+    if (!this.distinctFingerprints.has(fp)) {
+      this.distinctFingerprints.add(fp);
+      this.recordProgress(1);
+    }
 
     // 1. Cumulative identical calls limit
     if (count > this.maxIdenticalCalls) {
@@ -234,6 +323,10 @@ export class AgentBudgetTracker {
     return {
       stopReason: this.stopReason || 'success',
       turns: this.turnCount,
+      maxTurns: this.maxTurns,
+      dynamicTurns: this.dynamicTurns,
+      turnExpansions: this.turnExpansions,
+      progressEvents: this.progressEvents,
       costUsd: this.cumulativeCostUsd,
       elapsedMs: Date.now() - this.startTime,
       usage: {

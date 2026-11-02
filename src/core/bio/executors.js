@@ -438,6 +438,7 @@ export async function executeBioSearch({ userId, query = '', profileId = null, m
 
   const matchingEntryIds = [];
   for (const e of profile.entries || []) {
+    if (!entryReadable(e)) continue;
     const nameMatch = (e.name || '').toLowerCase().includes(cleanQ);
     const typeMatch = (e.type || '').toLowerCase().includes(cleanQ);
     const descMatch = (e.description || '').toLowerCase().includes(cleanQ);

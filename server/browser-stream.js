@@ -6,17 +6,31 @@
  */
 import fs from 'fs';
 import { chromium } from 'playwright-core';
+import { buildScrubbedSandboxEnv } from '../src/core/execution/run-sandbox.js';
 
 let browser = null;
+let browserContext = null;
 let page = null;
 let cdp = null;
 let isStarting = false;
 let terminationTimer = null;
 let isAgentRunning = false;
 let globalBroadcast = null;
+let activeBrowserSandbox = null;
 
 export function setBrowserBroadcast(fn) {
   globalBroadcast = fn;
+}
+
+export function setActiveBrowserSandbox(sandbox) {
+  activeBrowserSandbox = sandbox || null;
+  if (activeBrowserSandbox && browserContext) {
+    activeBrowserSandbox.browserContext = browserContext;
+  }
+}
+
+export function getActiveBrowserSandbox() {
+  return activeBrowserSandbox;
 }
 
 export function onAgentRunStart() {
@@ -71,6 +85,12 @@ export async function closeLiveBrowser(broadcast) {
       await page.close().catch(() => {});
     } catch {}
     page = null;
+  }
+  if (browserContext) {
+    try {
+      await browserContext.close().catch(() => {});
+    } catch {}
+    browserContext = null;
   }
   if (browser) {
     try {
@@ -129,24 +149,29 @@ export function findChromeExecutable() {
 
 export async function initLiveBrowser(broadcast, initialUrl = null) {
   cancelBrowserTermination();
-  if (browser && page) return { browser, page };
+  if (browser && page) return { browser, page, context: browserContext };
   if (isStarting) {
     while (isStarting) {
       await new Promise((r) => setTimeout(r, 100));
     }
-    if (browser && page) return { browser, page };
+    if (browser && page) return { browser, page, context: browserContext };
   }
 
   isStarting = true;
-  console.log('[BrowserStream] Launching live Chromium with CDP screencasting...');
+  console.log('[BrowserStream] Launching live Chromium with CDP screencasting in isolated sandbox context...');
 
   const execPath = findChromeExecutable();
+  const scrubbedEnv = buildScrubbedSandboxEnv(activeBrowserSandbox?.sandboxRoot);
   const launchOptions = {
     headless: true,
+    env: scrubbedEnv,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
+      '--disable-file-system',
+      '--disable-sync',
+      '--disable-extensions',
       '--enable-surface-synchronization',
       '--run-all-compositor-stages-before-draw',
       '--disable-blink-features=AutomationControlled'
@@ -163,13 +188,42 @@ export async function initLiveBrowser(broadcast, initialUrl = null) {
 
   try {
     browser = await chromium.launch(launchOptions);
-    page = await browser.newPage({
+    browserContext = await browser.newContext({
       viewport: { width: 1280, height: 800 },
+      bypassCSP: false,
+      ignoreHTTPSErrors: false,
+      permissions: [],
+      serviceWorkers: 'block',
+      acceptDownloads: false,
       userAgent:
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
     });
 
-    cdp = await page.context().newCDPSession(page);
+    if (activeBrowserSandbox) {
+      activeBrowserSandbox.browserContext = browserContext;
+    }
+
+    // Intercept & log all browser network egress through active RunSandbox policy
+    await browserContext.route('**/*', async (route) => {
+      const req = route.request();
+      const url = req.url();
+      if (activeBrowserSandbox && !activeBrowserSandbox.destroyed) {
+        const check = activeBrowserSandbox.checkNetworkRequest(url, {
+          method: req.method(),
+          resourceType: req.resourceType()
+        });
+        if (!check.allowed) {
+          console.warn(`[BrowserStream] Blocked network request to ${url} (${check.reason})`);
+          await route.abort('accessdenied').catch(() => {});
+          return;
+        }
+      }
+      await route.continue().catch(() => {});
+    });
+
+    page = await browserContext.newPage();
+
+    cdp = await browserContext.newCDPSession(page);
 
     cdp.on('Page.screencastFrame', async (event) => {
       try {
@@ -199,7 +253,7 @@ export async function initLiveBrowser(broadcast, initialUrl = null) {
     await page.goto(startUrl, { waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
 
     console.log(`[BrowserStream] Chromium screencast successfully started on ${startUrl}.`);
-    return { browser, page };
+    return { browser, page, context: browserContext };
   } catch (err) {
     console.error('[BrowserStream] Failed to initialize live Chromium:', err.message);
     throw err;
