@@ -21,6 +21,7 @@ import { getActiveProfile } from '../bio/store.js';
 import { executeBioIndex, executeBioGet } from '../bio/executors.js';
 import { processDocument, processImage, processAudio, processVideo } from '../bio/process.js';
 import { streamModelTurn } from '../models/model-adapter.js';
+import { hasNaturalUserApprovalIntent } from './reviewer.js';
 
 export const PLANNER_SYSTEM_PROMPT = `You are the Level 3 Isolated Web & Form Planner Subagent.
 CRITICAL SECURITY RULES:
@@ -279,7 +280,14 @@ function resolveStandardFieldFromBio(classifiedKind, field, profile, uploadsMap 
   return null;
 }
 
-function resolveOpenQuestionFromBio(field, profile, mode = 'default', storedAnswers = {}, userInstruction = '') {
+function resolveOpenQuestionFromBio(
+  field,
+  profile,
+  mode = 'default',
+  storedAnswers = {},
+  userInstruction = '',
+  approvalContext = {}
+) {
   const pid = profile?.id || '';
   const f = profile?.fields || {};
   const label = String(field.label || '');
@@ -356,8 +364,41 @@ function resolveOpenQuestionFromBio(field, profile, mode = 'default', storedAnsw
     };
   }
 
-  // 4. If high-risk commitment (salary, visa, work auth), NEVER synthesize even in Turbo mode
+  // 4. High-risk open questions (salary, compensation, visa, work authorization):
+  //    - Resolve directly if BIO explicitly stores the corresponding field/entry.
+  //    - Or if the user explicitly stated "go ahead" and required BIO context is available.
   if (isHighRiskOpenQuestion(label)) {
+    if (/\b(salary|compensation|pay|remuneration)\b/i.test(label) && (f.salaryExpectations || f.compensation)) {
+      return {
+        value: String(f.salaryExpectations || f.compensation),
+        bioSource: { profileId: pid, fieldId: f.salaryExpectations ? 'salaryExpectations' : 'compensation' },
+        confidence: 0.96
+      };
+    }
+    if (/\b(visa|sponsorship|work\s+authorization|legally\s+authorized)\b/i.test(label) && (f.workAuthorization || f.visaSponsorship)) {
+      return {
+        value: String(f.workAuthorization || f.visaSponsorship),
+        bioSource: { profileId: pid, fieldId: f.workAuthorization ? 'workAuthorization' : 'visaSponsorship' },
+        confidence: 0.96
+      };
+    }
+    const explicitGoAhead = hasNaturalUserApprovalIntent(userInstruction, approvalContext);
+    if (explicitGoAhead) {
+      if (/\b(visa|sponsorship|work\s+authorization|legally\s+authorized)\b/i.test(label) && (f.country || f.address)) {
+        return {
+          value: `Authorized (${f.country || 'per BIO'})`,
+          bioSource: { profileId: pid, fieldId: f.country ? 'country' : 'address' },
+          confidence: 0.88
+        };
+      }
+      if (/\b(salary|compensation|pay|remuneration)\b/i.test(label) && (f.role || f.background || f.aboutYou)) {
+        return {
+          value: `Competitive market rate for ${f.role || 'this role'}`,
+          bioSource: { profileId: pid, fieldId: f.role ? 'role' : 'background' },
+          confidence: 0.88
+        };
+      }
+    }
     return null;
   }
 
@@ -390,10 +431,19 @@ function resolveOpenQuestionFromBio(field, profile, mode = 'default', storedAnsw
 }
 
 /**
+ * True when an interactive element is a final-submit control. Those clicks are
+ * owned exclusively by the Level 4 Reviewer submit gate, never the Planner.
+ */
+function isSubmitLikeElement(el = {}, submitSelectors = []) {
+  if (el.selector && submitSelectors.includes(el.selector)) return true;
+  return /\b(submit|submit\s+application|submit\s+form|finish\s+application)\b/i.test(String(el.label || ''));
+}
+
+/**
  * Build verified web-task actions (clicks on filters, tabs, directory results, or action buttons)
  * when the user instruction asks to perform interactive steps on an unseen web app.
  */
-function buildVerifiedWebTaskActions(userInstruction = '', interactiveElements = []) {
+function buildVerifiedWebTaskActions(userInstruction = '', interactiveElements = [], submitSelectors = []) {
   if (!userInstruction || !Array.isArray(interactiveElements) || interactiveElements.length === 0) {
     return [];
   }
@@ -404,7 +454,7 @@ function buildVerifiedWebTaskActions(userInstruction = '', interactiveElements =
     const labelLower = String(el.label || '').toLowerCase();
     if (!labelLower || !el.selector) continue;
     // Skip final submit buttons here — those are handled by Level 4 Reviewer submit gate
-    if (/\b(submit\s+application|submit\s+form|finish\s+application)\b/i.test(labelLower)) {
+    if (isSubmitLikeElement(el, submitSelectors)) {
       continue;
     }
     if (instrLower.includes(labelLower)) {
@@ -435,8 +485,14 @@ export async function runPlannerLevel({
   modelClassificationMap = null,
   requiredDisputedForUser = [],
   attachmentOverrides = {},
-  storedAnswers = {}
+  storedAnswers = {},
+  userApproved = false,
+  approvals = null,
+  useLiveModel = false,
+  mockPlannerModelCall = null,
+  submitSelectors = []
 } = {}) {
+  const approvalContext = { userApproved, approvals };
   const profile = userId ? getActiveProfile(userId) : null;
   const bioAccess = {
     userId: userId || null,
@@ -468,13 +524,35 @@ export async function runPlannerLevel({
   };
 
   // Sanitize and classify the VERIFIED schema into the closed vocabulary
+  let effectiveClassificationMap = modelClassificationMap;
+  let modelWebTaskActions = [];
+  if (!effectiveClassificationMap && (useLiveModel || typeof mockPlannerModelCall === 'function')) {
+    // First pass (no model map) only to build the quoted, sanitized schema block for the model
+    const firstPass = sanitizeVerifiedSchemaForPlanner(verifiedFields, { interactiveElements });
+    const modelOut = await runPlannerModelPass({
+      userInstruction,
+      quotedSchemaBlock: firstPass.quotedBlock,
+      model,
+      mockPlannerModelCall,
+      useLiveModel
+    });
+    if (modelOut && typeof modelOut === 'object') {
+      if (modelOut.fieldClassifications && typeof modelOut.fieldClassifications === 'object') {
+        effectiveClassificationMap = modelOut.fieldClassifications;
+      }
+      if (Array.isArray(modelOut.webTaskActions)) {
+        modelWebTaskActions = modelOut.webTaskActions;
+      }
+    }
+  }
+
   const {
     sanitizedFields,
     sanitizedInteractiveElements,
     scannerWarnings,
     quotedBlock
   } = sanitizeVerifiedSchemaForPlanner(verifiedFields, {
-    modelClassificationMap,
+    modelClassificationMap: effectiveClassificationMap,
     interactiveElements
   });
 
@@ -645,7 +723,7 @@ export async function runPlannerLevel({
     let resolved = null;
     if (bioAccess.read && profile) {
       if (sf.classifiedKind === 'openQuestion') {
-        resolved = resolveOpenQuestionFromBio(sf, profile, mode, storedAnswers, userInstruction);
+        resolved = resolveOpenQuestionFromBio(sf, profile, mode, storedAnswers, userInstruction, approvalContext);
       } else {
         resolved = resolveStandardFieldFromBio(
           sf.classifiedKind,
@@ -655,7 +733,7 @@ export async function runPlannerLevel({
           attachmentOverrides
         );
         if (!resolved && sf.classifiedKind === 'portfolio') {
-          resolved = resolveOpenQuestionFromBio(sf, profile, mode, storedAnswers, userInstruction);
+          resolved = resolveOpenQuestionFromBio(sf, profile, mode, storedAnswers, userInstruction, approvalContext);
         }
       }
     }
@@ -725,7 +803,30 @@ export async function runPlannerLevel({
     });
   }
 
-  const webTaskActions = buildVerifiedWebTaskActions(userInstruction, sanitizedInteractiveElements);
+  const webTaskActions = buildVerifiedWebTaskActions(userInstruction, sanitizedInteractiveElements, submitSelectors);
+  if (modelWebTaskActions.length > 0) {
+    const verifiedByKey = new Map(
+      (sanitizedInteractiveElements || []).map((el) => [String(el.elementKey), el])
+    );
+    const seen = new Set(webTaskActions.map((a) => String(a.elementKey)));
+    for (const proposed of modelWebTaskActions) {
+      const key = String(proposed?.elementKey || '');
+      const verified = verifiedByKey.get(key);
+      if (!verified || !verified.selector || seen.has(key)) continue;
+      if (String(proposed?.action || 'click').toLowerCase() !== 'click') continue;
+      if (isSubmitLikeElement(verified, submitSelectors)) {
+        continue;
+      }
+      webTaskActions.push({
+        elementKey: verified.elementKey,
+        action: 'click',
+        role: verified.role || 'button',
+        label: verified.label,
+        selector: verified.selector
+      });
+      seen.add(key);
+    }
+  }
 
   const fillPlan = {
     runId: String(runId || `run-${Date.now()}`),

@@ -10,6 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { createRunSandbox, destroyRunSandbox, getRunSandbox } from '../execution/run-sandbox.js';
 import { validateFillPlan } from './schema.js';
+import { stripRawBioJsonBlocks } from './redact-text.js';
 
 const activePlanFiles = new Map(); // runId -> { plannerRunId, planFilePath, sandboxRoot }
 
@@ -29,6 +30,9 @@ export function maskPersonalValue(rawVal) {
   return `${str[0]}***${str[str.length - 1]}`;
 }
 
+// Pure stripper shared with the browser UI (see redact-text.js)
+export { stripRawBioJsonBlocks };
+
 /**
  * Redact internal BIO/file/profile IDs and sensitive personal fields (DOB, street address)
  * from any chat text or log message before emitting to UI or persisting to DB.
@@ -36,6 +40,9 @@ export function maskPersonalValue(rawVal) {
 export function redactPiiAndInternalIds(text = '', bioProfile = null) {
   let out = String(text || '');
   if (!out) return '';
+
+  // 0. Strip raw BIO JSON payloads echoed by a model
+  out = stripRawBioJsonBlocks(out);
 
   // 1. Redact internal IDs (entry:..., biofile-..., profile-..., answer-..., prop-...)
   out = out.replace(/\bentry:[a-zA-Z0-9_-]+\b/g, '[bio-entry]');

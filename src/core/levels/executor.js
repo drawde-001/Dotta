@@ -224,8 +224,8 @@ export function buildCustomWebTaskScript(webTaskActions = []) {
   for (const act of actions) {
     let el = document.querySelector(act.selector) || document.getElementById(act.elementKey);
     if (!el) {
-      const candidates = Array.from(document.querySelectorAll('button, a, [role="button"], [role="tab"]'));
-      el = candidates.find((c) => (c.textContent || '').trim().toLowerCase() === String(act.label || '').trim().toLowerCase());
+      const candidates = Array.from(document.querySelectorAll('button, input[type="submit"], a, [role="button"], [role="tab"]'));
+      el = candidates.find((c) => ((c.textContent || c.value || '').trim().toLowerCase() === String(act.label || '').trim().toLowerCase()));
     }
     if (!el) {
       results.push({ elementKey: act.elementKey, label: act.label, status: 'not_found' });
