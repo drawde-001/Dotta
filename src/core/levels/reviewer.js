@@ -452,6 +452,7 @@ export async function runReviewerLevel({
     decision: finalDecision,
     reason: finalReason,
     requiresUserConfirmation: finalRequiresUserConfirmation,
+    hardConstraint: Boolean(deterministic.hardConstraint),
     reviewContextSent: reviewContext
   };
   reviewerAuditLog.push(entry);

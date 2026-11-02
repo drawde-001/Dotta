@@ -17,7 +17,7 @@
 
 const OVERRIDE_PATTERNS = [
   /ignore\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions|prompts|rules)/i,
-  /disregard\s+(your\s+)?(instructions|rules|guidelines|system\s+prompt)/i,
+  /disregard\s+(all\s+)?(the\s+)?(your\s+|previous\s+|prior\s+)?(instructions|rules|guidelines|system\s+prompt|prompts)/i,
   /forget\s+(everything|all|your\s+instructions|the\s+above)/i,
   /new\s+instructions\s*:/i,
   /you\s+are\s+now\s+(in\s+)?(developer|dan|jailbreak|unrestricted)/i,
@@ -31,13 +31,14 @@ const FORGED_TAG_PATTERNS = [
   /<\/?\s*(system|developer|assistant|untrusted_web_content)[^>]*>/i,
   /^\s*\[\s*system\s*\]/im,
   /\bSYSTEM\s*:\s*you\s+(are|must|should)/i,
+  /\b(system|developer|assistant)\s+(message|prompt|directive)\s*:/i,
   /<\|im_start\|>|<\|im_end\|>|<\|system\|>/i
 ];
 
 const EXFIL_PATTERNS = [
   /(send|upload|post|email|forward|leak|exfiltrate|transmit)\b[^.\n]{0,60}?\b(to|at|via|into)\b[^.\n]{0,40}?(https?:\/\/|[\w.+-]+@[\w-]+\.[\w.]+)/i,
   /(reveal|print|show|repeat|output| disclose|leak)\b[^.\n]{0,40}?\b(system\s+prompt|initial\s+instructions|your\s+instructions|developer\s+message)/i,
-  /curl\s+[^\n]*\$\{?\w*(KEY|TOKEN|SECRET|PASSWORD)/i,
+  /curl\s+[^\n]*(https?:\/\/|-d|-X\s*POST|\$\{?\w*(KEY|TOKEN|SECRET|PASSWORD|USER))/i,
   /fetch\s*\([^)]*\)\s*\.then\([^)]*send/i
 ];
 
