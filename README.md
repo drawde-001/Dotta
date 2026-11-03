@@ -1,15 +1,26 @@
 # Dotta
 
 [![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge)](https://dotta.duckdns.org)
+[![Demo Video](https://img.shields.io/badge/Demo_Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 [![Model](https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
 [![Inference Partner](https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white)](https://modal.com)
 [![Repository](https://img.shields.io/badge/GitHub-drawde--001%2FDotta-black?style=for-the-badge&logo=github)](https://github.com/drawde-001/Dotta)
 
-🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)
+🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)  
+📺 **Demo Video:** [https://www.youtube.com/watch?v=Fy-d29LnUJs](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 
 Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box.
 
 Dotta is an autonomous web task automation AI agent featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
+
+---
+
+## 📺 Demo Video
+
+[![Watch Dotta in Action](https://img.youtube.com/vi/Fy-d29LnUJs/maxresdefault.jpg)](https://www.youtube.com/watch?v=Fy-d29LnUJs)
+
+> 🎥 **[Watch the Full Demo on YouTube (https://www.youtube.com/watch?v=Fy-d29LnUJs)](https://www.youtube.com/watch?v=Fy-d29LnUJs)**  
+> See Dotta autonomously navigate web portals, stage cryptographic BIO assets, adapt to dynamic forms, and complete multi-step tasks in real time.
 
 ---
 
