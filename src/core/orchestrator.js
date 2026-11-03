@@ -765,6 +765,9 @@ export class DottaEngine extends EventEmitter {
         ? messages
         : [{ role: 'user', parts: [{ text: instruction || 'Start execution' }] }]
     );
+    if (!Array.isArray(contents)) {
+      contents = [{ role: 'user', parts: [{ text: instruction || 'Start execution' }] }];
+    }
 
     // Extract and attach media parts (audio, image, video, PDF) from attachments or messages
     const incomingAttachments = Array.isArray(attachments) && attachments.length > 0

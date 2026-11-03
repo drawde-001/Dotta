@@ -172,6 +172,8 @@ export function normalizeThreadContents(promptOrContents) {
   if (normalized.length === 0) {
     return [{ role: 'user', parts: [{ text: 'Hello' }] }];
   }
+
+  return normalized;
 }
 
 /**

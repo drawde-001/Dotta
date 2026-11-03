@@ -83,7 +83,9 @@ export function toStandardChatMessages(contents, systemInstruction) {
     }
   };
 
-  for (const item of contents) {
+  const safeContents = Array.isArray(contents) ? contents : [];
+  for (const item of safeContents) {
+    if (!item) continue;
     const parts = Array.isArray(item.parts) ? item.parts : [];
 
     if (item.role === 'model' || item.role === 'assistant') {
