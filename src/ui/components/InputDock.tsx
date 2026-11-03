@@ -1265,10 +1265,27 @@ export const InputDock: React.FC<InputDockProps> = ({
         if (response.ok) {
           const data = await response.json();
           const serverTranscript = String(data.transcript || '').trim();
-          const isRefusal =
-            /don'?t (have the ability to|have access to|see|find|have|detect) (any |an |the )?audio|cannot (hear|transcribe|listen|access|process)|can'?t (hear|transcribe|listen|access|process|provide a (verbatim )?transcription)|not (able|equipped) to (listen|transcribe|process|hear)|unable to (transcribe|listen|process|hear)|no audio (file )?(was|is|has been) (included|provided|attached|received|found|present)|no spoken words to transcribe|there('?s| is| are) (nothing|no spoken words) (for me )?to transcribe|don'?t have an audio file|can'?t process audio|if you (can )?upload (the |an )?audio|please upload (the |an |or attach )?audio/i.test(
-              serverTranscript
-            );
+          const isRefusal = [
+            /don'?t (have the ability|have access|have ears|see|find|have|detect) (to |any |an |the )?(listen|transcribe|hear|process|audio)/i,
+            /don'?t have the ability/i,
+            /cannot (hear|transcribe|listen|access|process)/i,
+            /can'?t (hear|transcribe|listen|access|process|generate|provide|create)/i,
+            /not (able|equipped) to (listen|transcribe|process|hear)/i,
+            /unable to (transcribe|listen|process|hear|access)/i,
+            /no audio (file|transcript|input|recording|data|attachment)? (was|is|has been) (included|provided|attached|received|found|present|sent)/i,
+            /no (audio|speech|spoken words) (was|were|has been) (provided|included|found|attached)/i,
+            /there('?s| is| are) no audio/i,
+            /no spoken words to transcribe/i,
+            /there('?s| is| are) (nothing|no spoken words|no audio) (for me )?to transcribe/i,
+            /don'?t have an audio/i,
+            /can'?t process audio/i,
+            /can'?t generate a (verbatim )?transcription/i,
+            /cannot generate a (verbatim )?transcription/i,
+            /if you (can |could )?provide (the |a )?(text|transcript|description)/i,
+            /if you (can )?upload (the |an )?audio/i,
+            /please (provide|upload|attach) (the |an |or attach )?(text|audio|transcript)/i,
+            /happy to assist with formatting, editing, or summarizing/i
+          ].some((pat) => pat.test(serverTranscript));
           if (
             data.ok &&
             serverTranscript &&

@@ -123,7 +123,30 @@ function extractTranscriptFromResponseJson(json) {
 export function isAudioTranscriptionRefusal(text = '') {
   const str = String(text || '').trim();
   if (!str) return false;
-  return /don'?t (have the ability to|have access to|see|find|have|detect) (any |an |the )?audio|cannot (hear|transcribe|listen|access|process)|can'?t (hear|transcribe|listen|access|process|provide a (verbatim )?transcription)|not (able|equipped) to (listen|transcribe|process|hear)|unable to (transcribe|listen|process|hear)|no audio (file )?(was|is|has been) (included|provided|attached|received|found|present)|no spoken words to transcribe|there('?s| is| are) (nothing|no spoken words) (for me )?to transcribe|don'?t have an audio file|can'?t process audio|if you (can )?upload (the |an )?audio|please upload (the |an |or attach )?audio/i.test(str);
+
+  const refusalPatterns = [
+    /don'?t (have the ability|have access|have ears|see|find|have|detect) (to |any |an |the )?(listen|transcribe|hear|process|audio)/i,
+    /don'?t have the ability/i,
+    /cannot (hear|transcribe|listen|access|process)/i,
+    /can'?t (hear|transcribe|listen|access|process|generate|provide|create)/i,
+    /not (able|equipped) to (listen|transcribe|process|hear)/i,
+    /unable to (transcribe|listen|process|hear|access)/i,
+    /no audio (file|transcript|input|recording|data|attachment)? (was|is|has been) (included|provided|attached|received|found|present|sent)/i,
+    /no (audio|speech|spoken words) (was|were|has been) (provided|included|found|attached)/i,
+    /there('?s| is| are) no audio/i,
+    /no spoken words to transcribe/i,
+    /there('?s| is| are) (nothing|no spoken words|no audio) (for me )?to transcribe/i,
+    /don'?t have an audio/i,
+    /can'?t process audio/i,
+    /can'?t generate a (verbatim )?transcription/i,
+    /cannot generate a (verbatim )?transcription/i,
+    /if you (can |could )?provide (the |a )?(text|transcript|description)/i,
+    /if you (can )?upload (the |an )?audio/i,
+    /please (provide|upload|attach) (the |an |or attach )?(text|audio|transcript)/i,
+    /happy to assist with formatting, editing, or summarizing/i
+  ];
+
+  return refusalPatterns.some((pattern) => pattern.test(str));
 }
 
 /**
@@ -158,6 +181,9 @@ async function callMetaMuseVoiceTranscribe({
 
   const configuredBase = (
     options.baseUrl ||
+    process.env.MUSE_VOICE_URL ||
+    process.env.META_VOICE_URL ||
+    process.env.MUSE_ASR_URL ||
     process.env.MODAL_MUSE_SPARK_URL ||
     process.env.MODEL_API_BASE_URL ||
     process.env.META_MUSE_BASE_URL ||
@@ -170,10 +196,17 @@ async function callMetaMuseVoiceTranscribe({
     new Set(
       [
         configuredBase,
+        process.env.MUSE_VOICE_URL,
+        process.env.META_VOICE_URL,
+        process.env.MUSE_ASR_URL,
+        process.env.FIREWORKS_API_URL,
+        process.env.TOGETHER_API_URL,
         process.env.MODEL_API_BASE_URL,
         process.env.META_MUSE_BASE_URL,
-        'https://api.meta.ai/v1',
-        'https://api.llama.com/v1'
+        process.env.MUSE_BASE_URL,
+        process.env.META_BASE_URL,
+        process.env.FIREWORKS_API_KEY ? 'https://api.fireworks.ai/inference/v1' : null,
+        process.env.TOGETHER_API_KEY ? 'https://api.together.xyz/v1' : null
       ].filter(Boolean)
     )
   );
@@ -589,19 +622,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   }
 
   // 4. Meta Family (Default): Route strictly within Meta models across serving endpoints
-  // Primary A: If Muse Spark Open or Modal preferred, invoke model directly
-  if (base64 && (/open|modal|816b/i.test(preferredModel) || !preferredModel || preferredModel === 'muse-spark-open')) {
-    const modalRes = await callModalMuseSparkAudio({
-      base64,
-      rawMime,
-      timeoutMs: 25000
-    });
-    if (modalRes && modalRes.ok && modalRes.text) {
-      return modalRes;
-    }
-  }
-
-  // Primary B / Same-family fallback: muse-voice-transcribe-1.0 across Meta / Fireworks / Llama endpoints
+  // Primary 1 (First): Meta Voice Transcribe (muse-voice-transcribe-1.0 across Meta / Fireworks / Llama / Modal endpoints)
   const museVoiceRes = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -609,26 +630,26 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     defaultExt,
     filename,
     options,
-    timeoutMs: 25000,
+    timeoutMs: 10000,
     isFinalFallback: false
   });
-  if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text) {
+  if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text && !isAudioTranscriptionRefusal(museVoiceRes.text)) {
     return museVoiceRes;
   }
 
-  // Primary C: Sister Meta models fallback (Modal if not tried above)
-  if (base64 && !/open|modal|816b/i.test(preferredModel)) {
-    const modalFallback = await callModalMuseSparkAudio({
+  // Primary 2 (Second): Sister Meta models in same family (Muse Spark Open via Modal vLLM)
+  if (base64) {
+    const modalRes = await callModalMuseSparkAudio({
       base64,
       rawMime,
-      timeoutMs: 25000
+      timeoutMs: 10000
     });
-    if (modalFallback && modalFallback.ok && modalFallback.text) {
-      return modalFallback;
+    if (modalRes && modalRes.ok && modalRes.text && !isAudioTranscriptionRefusal(modalRes.text)) {
+      return modalRes;
     }
   }
 
-  // Primary D: Final Meta family handover across all Meta provider endpoints
+  // Primary 3 (Third): Final Meta family handover across all Meta provider endpoints
   const finalMetaRes = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -636,15 +657,15 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     defaultExt,
     filename,
     options,
-    timeoutMs: 30000,
+    timeoutMs: 10000,
     isFinalFallback: true
   });
   if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text && !isAudioTranscriptionRefusal(finalMetaRes.text)) {
     return finalMetaRes;
   }
 
-  // Cross-family fallback: If Meta endpoints cannot transcribe audio or are offline,
-  // fall back to available multimodal audio engines (Gemini Multimodal Audio or Whisper)
+  // ONLY WHEN ALL SAME-FAMILY META MODELS & ENDPOINTS FAIL:
+  // Fall back to another family model (Gemini Multimodal Audio in this case, or Whisper if configured)
   if (base64) {
     const geminiFallback = await callGeminiAudioTranscribe({
       base64,
@@ -659,6 +680,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
       };
     }
   }
+
 
   // Final in-family fallback for Meta
   return {
@@ -691,6 +713,7 @@ export function getSameFamilyModelCandidates(selectedModel = 'muse-spark-open') 
   if (isMetaFamilyModel(req)) {
     const models = Array.from(
       new Set([
+        'muse-voice-transcribe-1.0',
         req,
         req.toLowerCase() === 'muse-spark-open' ? 'meta-models/Muse-Spark-Open-816B-A42B' : req,
         'muse-spark-open',
@@ -705,12 +728,15 @@ export function getSameFamilyModelCandidates(selectedModel = 'muse-spark-open') 
       new Set(
         [
           process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+          process.env.MUSE_VOICE_URL,
+          process.env.META_VOICE_URL,
+          process.env.MUSE_ASR_URL,
+          process.env.FIREWORKS_API_URL,
+          process.env.TOGETHER_API_URL,
           process.env.MODEL_API_BASE_URL,
           process.env.META_MUSE_BASE_URL,
-          'https://api.meta.ai/v1',
-          'https://api.llama.com/v1',
-          'https://api.fireworks.ai/inference/v1',
-          'https://api.together.xyz/v1'
+          process.env.FIREWORKS_API_KEY ? 'https://api.fireworks.ai/inference/v1' : null,
+          process.env.TOGETHER_API_KEY ? 'https://api.together.xyz/v1' : null
         ].filter(Boolean)
       )
     );

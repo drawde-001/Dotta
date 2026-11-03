@@ -13,6 +13,9 @@ import {
   validateImageMetadata,
   calculateMediaSegments,
   transcribeAudioSequentially,
+  getSameFamilyModelCandidates,
+  isMetaFamilyModel,
+  isAudioTranscriptionRefusal,
   MAX_IMAGE_SIZE_BYTES,
   MAX_AUDIO_DURATION_SECONDS
 } from '../src/core/media/media-processor.js';
@@ -100,6 +103,47 @@ assert.strictEqual(
   'Hello Dotta test segment. Hello Dotta test segment. Hello Dotta test segment.'
 );
 console.log('✓ Sequential chunk transcription and gathering verified.');
+
+// [Test 5] Verifying Meta Family Same-Family Hierarchy Ordering
+console.log('\n[Test 5] Verifying Meta Same-Family Hierarchy & Candidate Ordering...');
+assert.strictEqual(isMetaFamilyModel('muse-spark-open'), true);
+assert.strictEqual(isMetaFamilyModel('meta-models/Muse-Spark-Open-816B-A42B'), true);
+assert.strictEqual(isMetaFamilyModel('gemini-3.8-flash'), false);
+assert.strictEqual(isMetaFamilyModel('claude-3-5-sonnet'), false);
+
+const metaCandidates = getSameFamilyModelCandidates('muse-spark-open');
+assert.strictEqual(metaCandidates.family, 'meta');
+// Crucial: muse-voice-transcribe-1.0 MUST be the very first candidate
+assert.strictEqual(
+  metaCandidates.models[0],
+  'muse-voice-transcribe-1.0',
+  'muse-voice-transcribe-1.0 must be the first candidate model for Meta audio'
+);
+// All subsequent models must be in the same Meta family
+assert.ok(metaCandidates.models.includes('meta-models/Muse-Spark-Open-816B-A42B'));
+assert.ok(metaCandidates.models.includes('muse-spark-open'));
+assert.ok(metaCandidates.models.includes('muse-wonder-1.0'));
+assert.ok(metaCandidates.models.includes('muse-spark-1.3'));
+console.log('✓ Meta same-family candidate ordering verified: muse-voice-transcribe-1.0 is #1.');
+
+// [Test 6] Verifying Audio Transcription Refusal Detection
+console.log('\n[Test 6] Verifying Audio Transcription Refusal Detection...');
+const refusal1 = "I don't have the ability to listen to or process audio files, so I can't transcribe what was said. If you can provide a text transcript...";
+const refusal2 = "I'm sorry, but I don't have access to any audio in this chat. If you can provide a text transcript...";
+const refusal3 = "No audio was included in your message, so I can't transcribe it.";
+const refusal4 = "No audio file was provided with your request, so there are no spoken words to transcribe.";
+const refusal5 = "I don't have the ability to listen to or transcribe audio files, and no audio transcript was provided in your message, so I can't generate a verbatim transcription. If you can provide the text or a description of what you need help with, I'm happy to assist with formatting, editing, or summarizing it.";
+const validTranscript1 = "You can choose between four preset positions.";
+const validTranscript2 = "Schedule a meeting with Sarah for tomorrow at 2 PM.";
+
+assert.strictEqual(isAudioTranscriptionRefusal(refusal1), true);
+assert.strictEqual(isAudioTranscriptionRefusal(refusal2), true);
+assert.strictEqual(isAudioTranscriptionRefusal(refusal3), true);
+assert.strictEqual(isAudioTranscriptionRefusal(refusal4), true);
+assert.strictEqual(isAudioTranscriptionRefusal(refusal5), true);
+assert.strictEqual(isAudioTranscriptionRefusal(validTranscript1), false);
+assert.strictEqual(isAudioTranscriptionRefusal(validTranscript2), false);
+console.log('✓ Audio transcription refusal detection correctly discriminates refusals from transcripts.');
 
 console.log('\n======================================================');
 console.log('ALL MEDIA PROCESSOR & AUDIO TESTS PASSED SUCCESSFULLY!');

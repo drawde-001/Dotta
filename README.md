@@ -1,30 +1,31 @@
 # Dotta
 
 [![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge&logo=googlechrome&logoColor=white)](https://dotta.duckdns.org)
-[![Model](https://img.shields.io/badge/Powered_by-Meta_Muse-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
+[![Model](https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
+[![Inference Partner](https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white)](https://modal.com)
 [![Repository](https://img.shields.io/badge/GitHub-drawde--001%2FDotta-black?style=for-the-badge&logo=github)](https://github.com/drawde-001/Dotta)
 
 🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)
 
-Dotta is an autonomous web task automation AI agent powered by **Meta Muse**, featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
+Dotta is an autonomous web task automation AI agent powered by **Meta Muse** (Meta Muse Spark Open 816B MoE on Modal), featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
 
 ---
 
 ## What is Dotta?
 
-Dotta is built to eliminate the tedious, repetitive friction of interacting with the modern web. Instead of manually filling out 15-page job applications, navigating clunky e-commerce checkout funnels, re-entering your shipping and contact information, or copying and pasting profile data into registration portals, you delegate the entire workflow to Dotta.
+Dotta is built to eliminate the tedious, repetitive friction of interacting with the modern web. Instead of manually filling out 15-page application forms, navigating clunky e-commerce checkout funnels, re-entering your shipping and contact information, or copying and pasting profile data into registration portals, you delegate the entire workflow to Dotta.
 
 Dotta executes web tasks directly in a live browser, adapts to dynamic DOM structures, stages your verified documents and identity assets, verifies every field constraint, and reports back with verifiable proof.
 
 ### Everyday Web Tasks Dotta Automates
-Dotta is purpose-built to handle routine, multi-step web tasks autonomously:
+Dotta is purpose-built to handle routine, multi-step web tasks autonomously on behalf of the user—acting strictly as a **user-side productivity agent** that eliminates repetitive data entry:
 
-* 📝 **Job Applications & Talent Onboarding**: Navigates modern ATS platforms (Lever, Greenhouse, Ashby, Workday), selects matching roles, autofills complex work experience and contact fields, and attaches your verified PDF resume and headshot directly from your BIO.
+* 📝 **Applicant-Side Talent & Job Submissions**: Navigates modern application portals (Lever, Greenhouse, Ashby, Workday, talent portals), autofills complex work history and contact fields on behalf of the applicant, and stages verified PDF resumes and headshots directly from your BIO—freeing applicants from hours of repetitive typing *(Note: Dotta is an applicant-side form assistant, not an HR candidate screener)*.
 * 🛒 **E-Commerce Cart Checkout & Purchasing Flows**: Browses stores, searches for products matching your criteria, selects sizes/options, adds items to cart, navigates to the checkout funnel, and populates shipping addresses and contact information from your BIO—holding securely at the final payment gate for your review.
 * 🍽️ **Table & Service Reservations**: Searches platforms like OpenTable and Resy for available dining slots, selects party sizes, and completes reservation bookings with your contact preferences.
 * 🎟️ **Conference & Event Registrations**: Automatically completes multi-page attendee registrations, developer portals, and hackathon applications without manual data entry.
 * 🏢 **Vendor & Portal Onboarding**: Completes vendor registrations, business profiles, and account creation wizards across SaaS tools and service portals.
-* 📄 **Form Submissions & Document Uploads**: Handles surveys, government forms, utility applications, and customer support inquiries with truthful DOM validation and cryptographic document staging.
+* 📄 **Government & Portal Submissions**: Handles surveys, utility applications, permit filings, and customer support inquiries with truthful DOM validation and cryptographic document staging.
 
 ---
 
@@ -197,14 +198,29 @@ Dotta features an autonomous, model-driven browser and form-filling architecture
 
 ---
 
-## Model: Meta Muse
+## Meta AI & Partner Inference Stack
 
-Dotta is powered by **Meta Muse** (`meta-muse-spark`) out-of-the-box.
+Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box.
 
-* **Model ID:** `meta-muse-spark` (wire model `muse-spark-1.3`)
-* **Endpoint:** `https://api.meta.ai/v1`
-* **Configuration:** Provide `META_MUSE_API_KEY` in your `.env` file.
-* **Alternative Providers:** Seamlessly supports Anthropic Claude, OpenAI, Google Gemini, and DeepSeek via unified adapters in `src/core/models/`.
+Built natively for the Meta Global AI Developer Hackathon, Dotta leverages Meta's frontier open-weights and multimodal model ecosystem across dedicated serving endpoints:
+
+### 1. Core Reasoning & Autonomous Planning: Meta Muse Spark Open
+* **Primary Brain:** `meta-models/Muse-Spark-Open-816B-A42B` (Meta Muse Spark Open 816B Mixture-of-Experts)
+* **Inference Partner:** Hosted on **Modal** serverless vLLM GPU infrastructure (`https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1`), leveraging hackathon infrastructure partner endpoints.
+* **Role:** Drives the multi-turn autonomous execution loop—inspecting live DOM snapshots, synthesizing sandbox scripts, verifying form constraints, evaluating security gates, and orchestrating browser tools.
+* **Hackathon Award Alignment:** Purpose-built for the **$10,000 Best Build on Meta Open Weight Models** bonus award and the **$5,000 Best Agentic Use-Case** award.
+
+### 2. Speech Perception: Meta Voice Transcribe
+* **Model:** `muse-voice-transcribe-1.0` (Meta Voice Transcribe)
+* **Role:** High-fidelity verbatim audio-to-text dictation across the chat input dock and the media processing pipeline (`src/core/media/media-processor.js`).
+* **Strict Same-Family Fallback:** Incoming voice notes strictly query Meta Voice Transcribe first across Meta serving endpoints before evaluating sister Meta models, preserving in-family privacy and accuracy.
+
+### 3. Visual Grounding: Meta Muse Vision & SAM 3.1
+* **Models:** Meta Muse Vision, SAM 3.1, and Muse Image adapters.
+* **Role:** Inspects non-standard interactive widgets, verifies uploaded image aspect ratios and dimensions, and visually grounds DOM elements before executing high-risk browser clicks.
+
+### 4. Alternative Model Support
+* Seamless fallback to Meta Model API (`muse-spark-1.3`, `muse-wonder-1.0`), alongside unified fallback adapters for Google Gemini, Anthropic Claude, and OpenAI in `src/core/models/`.
 
 ---
 
