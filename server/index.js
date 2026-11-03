@@ -55,8 +55,15 @@ import {
   scheduleBrowserTermination,
   cancelBrowserTermination,
   closeLiveBrowser,
-  setBrowserBroadcast
+  setBrowserBroadcast,
+  getActiveBrowserSandbox
 } from './browser-stream.js';
+import {
+  assertResourceOwnership,
+  sendUniformNotFound,
+  generateSignedDownloadToken,
+  verifySignedDownloadToken
+} from '../src/core/auth/access-control.js';
 import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
 import { extractLiveDomSchemaInPlaywright } from '../src/core/levels/extractor.js';
 import { createSandboxToolkit } from '../src/core/levels/sandbox-tools.js';
@@ -122,12 +129,7 @@ app.use((req, res, next) => {
       userId = candidate;
     }
   }
-  if (!userId) {
-    const headerId = sanitizeUserId(req.get('x-user-id'));
-    if (headerId) {
-      userId = headerId;
-    }
-  }
+  // Server-issued signed cookie is authoritative; x-user-id header spoofing is rejected
   req.userId = userId;
   next();
 });
@@ -135,44 +137,89 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: '50mb' }));
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: '/ws' });
+const wss = new WebSocketServer({ noServer: true });
 const wsClients = new Set();
 
-function broadcast(msg) {
+function broadcast(msg, targetUserId = null) {
   const json = typeof msg === 'string' ? msg : JSON.stringify(msg);
+  const activeOwner = targetUserId || getActiveBrowserSandbox()?.userId;
   for (const client of wsClients) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(json);
+      if (!activeOwner || client.userId === activeOwner) {
+        client.send(json);
+      }
     }
   }
 }
 setBrowserBroadcast(broadcast);
 
-wss.on('connection', async (ws) => {
-  wsClients.add(ws);
-  console.log(`[WS] Client connected. Total: ${wsClients.size}`);
-
-  const page = getLiveBrowserPage();
-  ws.send(
-    JSON.stringify({
-      type: 'init',
-      url: page ? page.url() : ''
-    })
-  );
-
-  ws.on('message', async (message) => {
-    try {
-      const data = JSON.parse(message);
-      await handleBrowserWsMessage(data, broadcast);
-    } catch (err) {
-      console.error('[WS Error]', err.message);
+server.on('upgrade', (req, socket, head) => {
+  const host = req.headers.host || 'localhost';
+  const url = new URL(req.url, `http://${host}`);
+  if (url.pathname === '/ws') {
+    const rawCookies = req.headers.cookie || '';
+    const cookies = Object.fromEntries(
+      rawCookies
+        .split(';')
+        .map((c) => c.trim().split('='))
+        .filter(([k]) => k)
+        .map(([k, ...v]) => [k, decodeURIComponent(v.join('='))])
+    );
+    const rawSession = String(cookies[SESSION_COOKIE] || '');
+    const dot = rawSession.lastIndexOf('.');
+    let userId = null;
+    if (dot > 0) {
+      const candidate = rawSession.slice(0, dot);
+      const sig = rawSession.slice(dot + 1);
+      if (sanitizeUserId(candidate) && sig === signUserId(candidate)) {
+        userId = candidate;
+      }
     }
-  });
 
-  ws.on('close', () => {
-    wsClients.delete(ws);
-    console.log(`[WS] Client disconnected. Total: ${wsClients.size}`);
-  });
+    if (!userId) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.userId = userId;
+      wsClients.add(ws);
+      console.log(`[WS] Authenticated client connected for user ${userId}. Total: ${wsClients.size}`);
+
+      const page = getLiveBrowserPage();
+      const currentActive = getActiveBrowserSandbox();
+      if (!currentActive || currentActive.userId === userId) {
+        ws.send(
+          JSON.stringify({
+            type: 'init',
+            url: page ? page.url() : ''
+          })
+        );
+      }
+
+      ws.on('message', async (message) => {
+        try {
+          // Ownership verification: user can only interact with their own browser session
+          const activeSandbox = getActiveBrowserSandbox();
+          if (activeSandbox && activeSandbox.userId && activeSandbox.userId !== ws.userId) {
+            return;
+          }
+          const data = JSON.parse(message);
+          await handleBrowserWsMessage(data, broadcast);
+        } catch (err) {
+          console.error('[WS Error]', err.message);
+        }
+      });
+
+      ws.on('close', () => {
+        wsClients.delete(ws);
+        console.log(`[WS] Client disconnected (${userId}). Total: ${wsClients.size}`);
+      });
+    });
+  } else {
+    socket.destroy();
+  }
 });
 
 const engine = new DottaEngine({
@@ -1101,6 +1148,16 @@ app.get('/api/auth/me', (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
+  if (req.userId) {
+    for (const client of wsClients) {
+      if (client.userId === req.userId && client.readyState === WebSocket.OPEN) {
+        try {
+          client.send(JSON.stringify({ type: 'session_ended' }));
+          client.close(1008, 'Session ended');
+        } catch {}
+      }
+    }
+  }
   res.clearCookie(SESSION_COOKIE, { path: '/' });
   return res.json({ ok: true });
 });
@@ -1162,9 +1219,14 @@ app.get('/api/threads', async (req, res) => {
 });
 
 app.get('/api/threads/:threadId', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('thread', req.params.threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
     let thread = getUserThread(userId, req.params.threadId);
     if (!thread) {
       const dbThread = await getDbConversation(userId, req.params.threadId);
@@ -1173,7 +1235,7 @@ app.get('/api/threads/:threadId', async (req, res) => {
       }
     }
     if (!thread) {
-      return res.status(404).json({ ok: false, error: 'Thread not found' });
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
     }
     res.json({ ok: true, thread });
   } catch (err) {
@@ -1198,10 +1260,15 @@ app.post('/api/threads', (req, res) => {
   }
 });
 
-app.patch('/api/threads/:threadId', (req, res) => {
+app.patch('/api/threads/:threadId', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('thread', req.params.threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
     const thread = saveUserThread(userId, req.params.threadId, req.body || {});
     res.json({ ok: true, thread });
   } catch (err) {
@@ -1209,10 +1276,15 @@ app.patch('/api/threads/:threadId', (req, res) => {
   }
 });
 
-app.delete('/api/threads/:threadId', (req, res) => {
+app.delete('/api/threads/:threadId', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('thread', req.params.threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
     const deleted = deleteUserThread(userId, req.params.threadId);
     res.json({ ok: true, deleted });
   } catch (err) {
@@ -1430,14 +1502,11 @@ app.get('/api/user/uploads', async (req, res) => {
 });
 
 // Per-user sandboxed workspace (one isolated folder per user ID).
-// Only files inside workspaces/user-<userId>/ are ever listed or read.
+// Server session is strictly authoritative: unauthenticated requests are rejected with 401.
 function requireSandboxUserId(req, res) {
-  // Server session is authoritative; header/body IDs are only a first-contact fallback.
-  const userId =
-    sanitizeUserId(req.userId) ||
-    sanitizeUserId(req.get('x-user-id') || req.query.userId || req.body?.userId);
+  const userId = sanitizeUserId(req.userId);
   if (!userId) {
-    res.status(400).json({ ok: false, error: 'Missing or invalid user id' });
+    res.status(401).json({ ok: false, error: 'Authentication required' });
     return null;
   }
   return userId;
@@ -1453,26 +1522,95 @@ app.get('/api/workspace/files', (req, res) => {
   }
 });
 
-app.get('/api/workspace/file', (req, res) => {
+app.get('/api/workspace/file', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
+  const filePath = String(req.query.path || '');
   try {
-    const file = readUserWorkspaceFile(userId, String(req.query.path || ''));
+    const isOwner = await assertResourceOwnership('workspace_file', filePath, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
+    const file = readUserWorkspaceFile(userId, filePath);
+    if (!file) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
     res.json({ ok: true, file });
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
   }
 });
 
-// Raw sandbox file bytes (photos, entry files) — ownership checked via sandbox.
-app.get('/api/workspace/raw', (req, res) => {
+// Signed download token generator (short-lived HMAC token bound to user and file path)
+app.get('/api/workspace/signed-url', (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
+  const filePath = String(req.query.path || '');
+  if (!filePath) {
+    return res.status(400).json({ ok: false, error: 'File path required' });
+  }
+  const { token, expires } = generateSignedDownloadToken(userId, filePath, SESSION_SECRET, 300);
+  const downloadUrl = `/api/workspace/download?path=${encodeURIComponent(filePath)}&token=${encodeURIComponent(token)}`;
+  res.json({ ok: true, downloadUrl, expires });
+});
+
+// Download endpoint: strictly verified via signed token or active session ownership
+app.get('/api/workspace/download', async (req, res) => {
+  const startMs = Date.now();
+  const filePath = String(req.query.path || '');
+  const token = String(req.query.token || '');
+  let verifiedUserId = sanitizeUserId(req.userId);
+
+  if (token) {
+    const queryUserId = sanitizeUserId(req.query.userId);
+    const candidateUser = verifiedUserId || queryUserId;
+    if (candidateUser && verifySignedDownloadToken(token, candidateUser, filePath, SESSION_SECRET)) {
+      verifiedUserId = candidateUser;
+    } else {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
+  }
+
+  if (!verifiedUserId) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+  }
+
+  const isOwner = await assertResourceOwnership('workspace_file', filePath, verifiedUserId);
+  if (!isOwner) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+  }
+
   try {
-    const root = getUserWorkspaceRoot(userId);
-    const resolved = validateAndResolvePath(root, String(req.query.path || ''));
+    const root = getUserWorkspaceRoot(verifiedUserId);
+    const resolved = validateAndResolvePath(root, filePath);
     if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
-      return res.status(404).json({ ok: false, error: 'File not found' });
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
+    const safeBase = path.basename(resolved);
+    res.setHeader('Content-Disposition', `attachment; filename="${safeBase}"`);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.sendFile(resolved);
+  } catch {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+  }
+});
+
+// Raw sandbox file bytes (photos, entry files) — ownership checked via sandbox
+app.get('/api/workspace/raw', async (req, res) => {
+  const startMs = Date.now();
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  const filePath = String(req.query.path || '');
+  try {
+    const isOwner = await assertResourceOwnership('workspace_file', filePath, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
+    const root = getUserWorkspaceRoot(userId);
+    const resolved = validateAndResolvePath(root, filePath);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
     }
     const ext = path.extname(resolved).toLowerCase();
     const mime =
@@ -1491,7 +1629,7 @@ app.get('/api/workspace/raw', (req, res) => {
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.send(fs.readFileSync(resolved));
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
   }
 });
 
@@ -1515,11 +1653,16 @@ app.get('/api/bio', (req, res) => {
   }
 });
 
-app.put('/api/bio/fields', (req, res) => {
+app.put('/api/bio/fields', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
     const { profileId, fieldId, value } = req.body || {};
+    const isOwner = await assertResourceOwnership('bio_profile', profileId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     const profile = bioSetField(userId, String(profileId || ''), String(fieldId || ''), value);
     res.json({ ok: true, profile });
   } catch (err) {
@@ -1527,11 +1670,16 @@ app.put('/api/bio/fields', (req, res) => {
   }
 });
 
-app.patch('/api/bio/profile', (req, res) => {
+app.patch('/api/bio/profile', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
     const { profileId, name, grants } = req.body || {};
+    const isOwner = await assertResourceOwnership('bio_profile', profileId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     const profile = bioUpdateProfile(userId, String(profileId || ''), { name, grants });
     res.json({ ok: true, profile });
   } catch (err) {
@@ -1550,10 +1698,15 @@ app.post('/api/bio/profiles', (req, res) => {
   }
 });
 
-app.post('/api/bio/profiles/:id/activate', (req, res) => {
+app.post('/api/bio/profiles/:id/activate', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('bio_profile', req.params.id, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     const profile = bioSetActiveProfile(userId, req.params.id);
     res.json({ ok: true, profile });
   } catch (err) {
@@ -1561,10 +1714,15 @@ app.post('/api/bio/profiles/:id/activate', (req, res) => {
   }
 });
 
-app.delete('/api/bio/profiles/:id', (req, res) => {
+app.delete('/api/bio/profiles/:id', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('bio_profile', req.params.id, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     const profiles = bioDeleteProfile(userId, req.params.id);
     res.json({ ok: true, profiles });
   } catch (err) {
@@ -1595,11 +1753,16 @@ function writeSandboxUpload(userId, file, buffer) {
   return rel;
 }
 
-app.post('/api/bio/entries', (req, res) => {
+app.post('/api/bio/entries', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
     const { profileId, name, type, description, file } = req.body || {};
+    const isOwner = await assertResourceOwnership('bio_profile', profileId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     let entryFile = null;
     let textContent = '';
     if (file && file.dataBase64) {
@@ -1627,10 +1790,15 @@ app.post('/api/bio/entries', (req, res) => {
   }
 });
 
-app.patch('/api/bio/entries/:id', (req, res) => {
+app.patch('/api/bio/entries/:id', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('bio_entry', req.params.id, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_entry' });
+    }
     const { profileId, name, description, agentReadable } = req.body || {};
     const entry = bioUpdateEntry(userId, String(profileId || ''), req.params.id, {
       name,
@@ -1643,10 +1811,15 @@ app.patch('/api/bio/entries/:id', (req, res) => {
   }
 });
 
-app.delete('/api/bio/entries/:id', (req, res) => {
+app.delete('/api/bio/entries/:id', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const isOwner = await assertResourceOwnership('bio_entry', req.params.id, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_entry' });
+    }
     const entries = bioDeleteEntry(userId, String(req.query.profileId || ''), req.params.id);
     res.json({ ok: true, entries });
   } catch (err) {
@@ -1654,11 +1827,16 @@ app.delete('/api/bio/entries/:id', (req, res) => {
   }
 });
 
-app.post('/api/bio/photo', (req, res) => {
+app.post('/api/bio/photo', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
     const { profileId, file } = req.body || {};
+    const isOwner = await assertResourceOwnership('bio_profile', profileId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     if (!file || !String(file.mime || '').startsWith('image/')) {
       throw new Error('Photo must be an image file');
     }
@@ -1671,11 +1849,16 @@ app.post('/api/bio/photo', (req, res) => {
   }
 });
 
-app.post('/api/bio/cv', (req, res) => {
+app.post('/api/bio/cv', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
     const { profileId, file } = req.body || {};
+    const isOwner = await assertResourceOwnership('bio_profile', profileId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'bio_profile' });
+    }
     if (!file) throw new Error('CV file is required');
     if (!/\.(pdf|doc|docx|txt|md)$/i.test(file.name || '')) {
       throw new Error('CV must be a PDF, DOC, DOCX, TXT or MD file');
@@ -1692,6 +1875,12 @@ app.post('/api/bio/cv', (req, res) => {
 
 // Explicit browser termination endpoint
 app.post('/api/browser/close', async (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  const activeSandbox = getActiveBrowserSandbox();
+  if (activeSandbox && activeSandbox.userId && activeSandbox.userId !== userId) {
+    return res.status(403).json({ ok: false, error: 'Unauthorized to close active browser' });
+  }
   try {
     await closeLiveBrowser(broadcast);
     res.json({ ok: true, closed: true });
@@ -1700,15 +1889,19 @@ app.post('/api/browser/close', async (req, res) => {
   }
 });
 
-
-// Serve generated images from Meta muse-image-1.0
+// Serve generated images from Meta muse-image-1.0 (strictly user-owned)
 app.get('/api/images/:filename', (req, res) => {
-  const item = getGeneratedImage(req.params.filename);
+  const startMs = Date.now();
+  const userId = sanitizeUserId(req.userId);
+  if (!userId) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'image' });
+  }
+  const item = getGeneratedImage(req.params.filename, userId);
   if (!item || !item.buffer) {
-    return res.status(404).json({ ok: false, error: 'Image not found' });
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'image' });
   }
   res.setHeader('Content-Type', item.mimeType || 'image/webp');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
   res.send(item.buffer);
 });
 

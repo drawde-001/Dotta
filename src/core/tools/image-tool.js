@@ -35,17 +35,30 @@ function detectMimeAndExt(b64) {
   return { mimeType: 'image/png', ext: 'png' };
 }
 
-export function storeGeneratedImage(b64Data, prompt = '') {
+export function storeGeneratedImage(input, prompt = '', userId = null) {
+  let b64Data = input;
+  let cleanPrompt = prompt;
+  let ownerId = userId;
+  let explicitBuffer = null;
+
+  if (input && typeof input === 'object' && !Buffer.isBuffer(input)) {
+    b64Data = input.b64Data || input.base64 || '';
+    explicitBuffer = input.buffer || null;
+    cleanPrompt = input.prompt || prompt || '';
+    ownerId = input.userId || userId || null;
+  }
+
   const cleanB64 = String(b64Data || '').replace(/^data:[^;]+;base64,/, '');
   const { mimeType, ext } = detectMimeAndExt(cleanB64);
-  const buffer = Buffer.from(cleanB64, 'base64');
-  const id = `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const buffer = explicitBuffer || Buffer.from(cleanB64, 'base64');
+  const id = crypto.randomUUID();
   const filename = `${id}.${ext}`;
 
   generatedImageStore.set(filename, {
     buffer,
     mimeType,
-    prompt,
+    prompt: cleanPrompt,
+    userId: ownerId,
     createdAt: Date.now()
   });
 
@@ -69,31 +82,36 @@ export function storeGeneratedImage(b64Data, prompt = '') {
   };
 }
 
-export function getGeneratedImage(filename) {
+export function getGeneratedImage(filename, userId = null) {
   const safeName = path.basename(String(filename || ''));
   if (!safeName) return null;
 
+  let item = null;
   if (generatedImageStore.has(safeName)) {
-    return generatedImageStore.get(safeName);
+    item = generatedImageStore.get(safeName);
+  } else {
+    const diskPath = path.join(IMAGE_CACHE_DIR, safeName);
+    if (fs.existsSync(diskPath)) {
+      try {
+        const buffer = fs.readFileSync(diskPath);
+        const ext = path.extname(safeName).toLowerCase();
+        const mimeType =
+          ext === '.webp' ? 'image/webp' : ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' : 'image/png';
+        item = { buffer, mimeType, createdAt: Date.now() };
+      } catch {}
+    }
   }
 
-  const diskPath = path.join(IMAGE_CACHE_DIR, safeName);
-  if (fs.existsSync(diskPath)) {
-    try {
-      const buffer = fs.readFileSync(diskPath);
-      const ext = path.extname(safeName).toLowerCase();
-      const mimeType =
-        ext === '.webp'
-          ? 'image/webp'
-          : ext === '.jpg' || ext === '.jpeg'
-            ? 'image/jpeg'
-            : ext === '.gif'
-              ? 'image/gif'
-              : 'image/png';
-      return { buffer, mimeType };
-    } catch {}
+  if (!item) return null;
+  // If image is tied to a user, strictly enforce matching userId (and unauthenticated/null gets null)
+  if (item.userId) {
+    if (!userId || item.userId !== userId) {
+      return null;
+    }
+  } else if (!userId) {
+    return null;
   }
-  return null;
+  return item;
 }
 
 /**

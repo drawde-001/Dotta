@@ -7,6 +7,10 @@ import {
 import { applyBioProposal, discardBioProposal } from '../src/core/bio/store.js';
 import { getUserThread, saveUserThread } from '../src/core/state/store.js';
 import { onAgentRunStart, onAgentRunEnd } from './browser-stream.js';
+import {
+  assertResourceOwnership,
+  sendUniformNotFound
+} from '../src/core/auth/access-control.js';
 
 export function writeAgUiEvent(res, event) {
   if (res.writableEnded) return;
@@ -19,6 +23,25 @@ export function writeAgUiEvent(res, event) {
 
 export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
   return async function handleAgUiChat(req, res) {
+    const startMs = Date.now();
+    // Strict server session check: req.userId must be established from verified cookie
+    const userId = sanitizeUserId(req.userId);
+    if (!userId) {
+      return res.status(401).json({ ok: false, error: 'Authentication required' });
+    }
+
+    const body = req.body || {};
+    let threadId = body.threadId;
+
+    if (threadId) {
+      const isOwner = await assertResourceOwnership('thread', threadId, userId);
+      if (!isOwner) {
+        return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+      }
+    } else {
+      threadId = crypto.randomUUID();
+    }
+
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
@@ -27,8 +50,6 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
       res.flushHeaders();
     }
 
-    const body = req.body || {};
-    const threadId = body.threadId || crypto.randomUUID();
     const runId = crypto.randomUUID();
     const model = body.model || process.env.DEFAULT_MODEL || 'muse-spark-open';
     const messages = Array.isArray(body.messages) ? body.messages : [];
@@ -48,10 +69,8 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     const resume = body.resume || null;
     const mode = body.mode || 'turbo';
     const effort = body.effort || 'medium';
-    // Per-user sandbox: agent file tools are confined to this user's folder.
-    // The server-issued session (req.userId) wins over any client-supplied ID.
-    const userId = sanitizeUserId(req.userId || body.userId || req.get('x-user-id'));
-    const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
+    // Per-user sandbox: agent file tools are strictly confined to this user's folder
+    const workspaceRoot = getUserWorkspaceRoot(userId);
 
     if (userId && threadId) {
       try {

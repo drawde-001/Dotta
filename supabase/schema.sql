@@ -84,12 +84,19 @@ ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_uploads ENABLE ROW LEVEL SECURITY;
 
--- Service Role Policy (Full Access for backend API)
-CREATE POLICY "Service role full access on users" ON public.users FOR ALL USING (true);
-CREATE POLICY "Service role full access on user_profiles" ON public.user_profiles FOR ALL USING (true);
-CREATE POLICY "Service role full access on user_settings" ON public.user_settings FOR ALL USING (true);
-CREATE POLICY "Service role full access on user_sessions" ON public.user_sessions FOR ALL USING (true);
-CREATE POLICY "Service role full access on conversations" ON public.conversations FOR ALL USING (true);
-CREATE POLICY "Service role full access on user_audit_logs" ON public.user_audit_logs FOR ALL USING (true);
-CREATE POLICY "Service role full access on user_uploads" ON public.user_uploads FOR ALL USING (true);
+-- Service Role Full Access Policies (only backend service role can bypass)
+CREATE POLICY "Service role full access on users" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_profiles" ON public.user_profiles FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_settings" ON public.user_settings FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_sessions" ON public.user_sessions FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on conversations" ON public.conversations FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_audit_logs" ON public.user_audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_uploads" ON public.user_uploads FOR ALL TO service_role USING (true) WITH CHECK (true);
+
+-- Authenticated User Scoped Access Policies (Strict user_id = auth.uid()::text)
+CREATE POLICY "Users access own record" ON public.users FOR ALL TO authenticated USING (auth.uid()::text = id) WITH CHECK (auth.uid()::text = id);
+CREATE POLICY "Users access own profile" ON public.user_profiles FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+CREATE POLICY "Users access own settings" ON public.user_settings FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+CREATE POLICY "Users access own conversations" ON public.conversations FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+CREATE POLICY "Users access own uploads" ON public.user_uploads FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 
