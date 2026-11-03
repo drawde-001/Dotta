@@ -26,9 +26,7 @@ export function ThreadsPanel({ onCollapse, onOpenBio }) {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch('/api/bio', {
-          headers: { 'x-user-id': getUserId() }
-        });
+        const res = await fetch('/api/bio');
         const data = await res.json().catch(() => null);
         const active =
           data?.profiles?.find((p) => p.isActive) || data?.profiles?.[0];

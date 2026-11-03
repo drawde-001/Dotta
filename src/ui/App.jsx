@@ -24,8 +24,25 @@ import {
   Zap,
   Shuffle,
   PanelLeftOpen,
-  PanelRightOpen
+  PanelRightOpen,
+  AlertCircle
 } from 'lucide-react';
+
+/**
+ * Validates returnTo path to prevent open redirect vulnerabilities.
+ * Only allows same-origin relative paths starting with a single '/'.
+ */
+export function validateReturnTo(path) {
+  if (typeof path !== 'string') return '/';
+  const trimmed = path.trim();
+  if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('://') || trimmed.includes('\\')) {
+    return '/';
+  }
+  if (!/^\/[a-zA-Z0-9_\-\/?&=%#.]*$/.test(trimmed)) {
+    return '/';
+  }
+  return trimmed;
+}
 
 export default function App() {
   const [messages, setMessages] = useState([]);
@@ -41,8 +58,9 @@ export default function App() {
   const [activeTabId, setActiveTabId] = useState('plus');
   const [currentUser, setLocalCurrentUser] = useState(() => getCurrentUser());
   const [authChecking, setAuthChecking] = useState(true);
+  const [notFoundNotice, setNotFoundNotice] = useState(null);
 
-  // Check authenticated session on mount
+  // Check authenticated session on mount (Zero-Flash Route Guard)
   useEffect(() => {
     let cancelled = false;
     async function checkAuth() {
@@ -53,17 +71,34 @@ export default function App() {
           if (!cancelled && data?.ok && data.user) {
             setCurrentUser(data.user);
             setLocalCurrentUser(data.user);
+
+            // If user logged in and on /login route, redirect to returnTo or /
+            const currentPath = window.location.pathname;
+            if (currentPath === '/login') {
+              const params = new URLSearchParams(window.location.search);
+              const returnTo = validateReturnTo(params.get('returnTo'));
+              window.history.replaceState(null, '', returnTo);
+            }
           }
         } else {
           if (!cancelled) {
             clearCurrentUser();
             setLocalCurrentUser(null);
+
+            // Unauthenticated: redirect to /login?returnTo=... before any chat screen is drawn
+            const currentPath = window.location.pathname;
+            const currentSearch = window.location.search;
+            if (currentPath !== '/login') {
+              const fullPath = currentPath + currentSearch;
+              const returnToParam = encodeURIComponent(fullPath);
+              window.history.replaceState(null, '', `/login?returnTo=${returnToParam}`);
+            }
           }
         }
       } catch {
-        const local = getCurrentUser();
-        if (!cancelled && local) {
-          setLocalCurrentUser(local);
+        if (!cancelled) {
+          clearCurrentUser();
+          setLocalCurrentUser(null);
         }
       } finally {
         if (!cancelled) setAuthChecking(false);
@@ -76,14 +111,34 @@ export default function App() {
   const handleLoginSuccess = (user) => {
     setCurrentUser(user);
     setLocalCurrentUser(user);
+
+    // Validate returnTo parameter before redirecting
+    const params = new URLSearchParams(window.location.search);
+    const returnTo = validateReturnTo(params.get('returnTo'));
+    window.history.replaceState(null, '', returnTo);
   };
 
   const handleLogout = async () => {
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch {}
+    if (wsRef.current) {
+      try {
+        wsRef.current.close(1000, 'User logged out');
+      } catch {}
+      wsRef.current = null;
+    }
     clearCurrentUser();
     setLocalCurrentUser(null);
+    setMessages([]);
+    setThreads([]);
+    threadMessagesMapRef.current = {};
+    setOpenFiles([]);
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch {}
+    window.history.replaceState(null, '', '/login');
   };
 
   // Dynamic rotating subtitles for Hero screen
@@ -138,17 +193,55 @@ export default function App() {
     threadMessagesMapRef.current[activeThreadId] = messages;
   }, [messages, activeThreadId]);
 
-  // Load persistent threads tied to user profile on mount
+  // Load persistent threads tied to authenticated user profile on mount
   useEffect(() => {
     let cancelled = false;
+    if (authChecking || !currentUser) return;
+
     async function initUserThreads() {
       try {
-        const res = await fetch('/api/threads', {
-          headers: { 'x-user-id': getUserId() }
-        });
+        const res = await fetch('/api/threads');
         if (!res.ok) return;
         const data = await res.json().catch(() => null);
         if (cancelled || !data?.ok || !Array.isArray(data.threads)) return;
+
+        // Check if there is an initial thread in the URL e.g. /chat/<uuid>
+        const chatMatch = window.location.pathname.match(/^\/chat\/([a-zA-Z0-9-]+)/);
+        const urlThreadId = chatMatch ? chatMatch[1] : null;
+
+        if (urlThreadId) {
+          // Attempt to load the thread from URL
+          const threadRes = await fetch(`/api/threads/${urlThreadId}`);
+          if (threadRes.status === 404 || !threadRes.ok) {
+            // Not found or not owned -> show 404 notice and redirect to /
+            if (!cancelled) {
+              setNotFoundNotice({
+                active: true,
+                message: 'Chat not found. This thread does not exist or you do not have permission to access it.'
+              });
+              setTimeout(() => {
+                if (!cancelled) {
+                  setNotFoundNotice(null);
+                  window.history.replaceState(null, '', '/');
+                  handleNewChat();
+                }
+              }, 2500);
+            }
+            return;
+          }
+
+          const threadData = await threadRes.json();
+          if (!cancelled && threadData?.ok && threadData.thread) {
+            const currentThread = threadData.thread;
+            const msgs = Array.isArray(currentThread.messages) ? currentThread.messages : [];
+            threadMessagesMapRef.current[urlThreadId] = msgs;
+            setMessages(msgs);
+            setActiveThreadId(urlThreadId);
+            currentThreadIdRef.current = urlThreadId;
+            setThreads(data.threads.length > 0 ? data.threads : [currentThread]);
+            return;
+          }
+        }
 
         if (data.threads.length > 0) {
           const loadedThreads = data.threads.map((t) => ({
@@ -165,9 +258,7 @@ export default function App() {
           currentThreadIdRef.current = firstId;
 
           try {
-            const threadRes = await fetch(`/api/threads/${firstId}`, {
-              headers: { 'x-user-id': getUserId() }
-            });
+            const threadRes = await fetch(`/api/threads/${firstId}`);
             if (threadRes.ok) {
               const threadData = await threadRes.json();
               if (!cancelled && threadData?.ok && Array.isArray(threadData?.thread?.messages)) {
@@ -177,25 +268,23 @@ export default function App() {
             }
           } catch {}
         } else {
-          // Initialize first thread in user database
-          const freshId = `thread-${Date.now()}`;
-          const initThread = {
-            id: freshId,
-            title: 'New chat',
-            status: 'regular',
-            lastMessageAt: new Date(),
-            isGeneratingTitle: false
-          };
-          setThreads([initThread]);
-          setActiveThreadId(freshId);
-          currentThreadIdRef.current = freshId;
-          threadMessagesMapRef.current[freshId] = [];
-          setMessages([]);
-          fetch('/api/threads', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
-            body: JSON.stringify({ id: freshId, title: 'New chat', status: 'regular', messages: [] })
-          }).catch(() => {});
+          // Initialize first thread via server POST /api/threads
+          try {
+            const createRes = await fetch('/api/threads', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ title: 'New chat', status: 'regular', messages: [] })
+            });
+            const createData = await createRes.json();
+            if (createData?.ok && createData.thread) {
+              const fresh = createData.thread;
+              setThreads([fresh]);
+              setActiveThreadId(fresh.id);
+              currentThreadIdRef.current = fresh.id;
+              threadMessagesMapRef.current[fresh.id] = [];
+              setMessages([]);
+            }
+          } catch {}
         }
       } catch (err) {
         console.warn('[App] Error initializing user threads:', err);
@@ -206,7 +295,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authChecking, currentUser]);
 
   const handleOpenFileTab = (fileData) => {
     if (!fileData) return;
@@ -339,59 +428,84 @@ export default function App() {
     setActionSetIndex((prev) => (prev + 1) % quickActionSets.length);
   };
 
-  const handleNewChat = useCallback(() => {
+  const handleNewChat = useCallback(async () => {
     if (isRunning) return;
-    const newId = `thread-${Date.now()}`;
-    threadMessagesMapRef.current[newId] = [];
-    const newThread = {
-      id: newId,
-      title: 'New chat',
-      status: 'regular',
-      lastMessageAt: new Date(),
-      isGeneratingTitle: false
-    };
-    setThreads((prev) => [newThread, ...prev]);
-    setActiveThreadId(newId);
-    currentThreadIdRef.current = newId;
-    setMessages([]);
-    setActiveInterrupt(null);
-
-    fetch('/api/threads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
-      body: JSON.stringify({
+    try {
+      const res = await fetch('/api/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'New chat',
+          status: 'regular',
+          messages: []
+        })
+      });
+      const data = await res.json().catch(() => null);
+      const newId = data?.thread?.id || (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`);
+      const newThread = {
         id: newId,
         title: 'New chat',
         status: 'regular',
-        messages: []
-      })
-    }).catch(() => {});
+        lastMessageAt: new Date(),
+        isGeneratingTitle: false
+      };
+      threadMessagesMapRef.current[newId] = [];
+      setThreads((prev) => [newThread, ...prev]);
+      setActiveThreadId(newId);
+      currentThreadIdRef.current = newId;
+      setMessages([]);
+      setActiveInterrupt(null);
+      window.history.pushState(null, '', '/');
+    } catch {
+      const newId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`;
+      threadMessagesMapRef.current[newId] = [];
+      setActiveThreadId(newId);
+      currentThreadIdRef.current = newId;
+      setMessages([]);
+      setActiveInterrupt(null);
+      window.history.pushState(null, '', '/');
+    }
   }, [isRunning]);
 
   const handleSwitchThread = useCallback(async (targetId) => {
     if (isRunning || targetId === activeThreadId) return;
-    setActiveThreadId(targetId);
-    currentThreadIdRef.current = targetId;
     setActiveInterrupt(null);
 
     const cached = threadMessagesMapRef.current[targetId];
     if (Array.isArray(cached) && cached.length > 0) {
+      setActiveThreadId(targetId);
+      currentThreadIdRef.current = targetId;
       setMessages(cached);
+      window.history.pushState(null, '', '/chat/' + targetId);
     } else {
       try {
-        const res = await fetch(`/api/threads/${targetId}`, {
-          headers: { 'x-user-id': getUserId() }
-        });
+        const res = await fetch(`/api/threads/${targetId}`);
+        if (res.status === 404) {
+          setNotFoundNotice({
+            active: true,
+            message: 'Chat not found (404). This thread does not exist or you do not have permission to access it.'
+          });
+          return;
+        }
         if (res.ok) {
           const data = await res.json();
           const msgs = Array.isArray(data?.thread?.messages) ? data.thread.messages : [];
           threadMessagesMapRef.current[targetId] = msgs;
+          setActiveThreadId(targetId);
+          currentThreadIdRef.current = targetId;
           setMessages(msgs);
+          window.history.pushState(null, '', '/chat/' + targetId);
         } else {
-          setMessages(cached || []);
+          setNotFoundNotice({
+            active: true,
+            message: 'Chat not found (404). This thread does not exist or you do not have permission to access it.'
+          });
         }
       } catch {
-        setMessages(cached || []);
+        setNotFoundNotice({
+          active: true,
+          message: 'Chat not found (404). This thread does not exist or you do not have permission to access it.'
+        });
       }
     }
   }, [isRunning, activeThreadId]);
@@ -402,39 +516,21 @@ export default function App() {
     );
     fetch(`/api/threads/${targetId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: newTitle })
     }).catch(() => {});
   }, []);
 
   const handleDeleteThread = useCallback((targetId) => {
     fetch(`/api/threads/${targetId}`, {
-      method: 'DELETE',
-      headers: { 'x-user-id': getUserId() }
+      method: 'DELETE'
     }).catch(() => {});
 
     setThreads((prev) => {
       const remaining = prev.filter((t) => t.id !== targetId);
       if (remaining.length === 0) {
-        const freshId = `thread-${Date.now()}`;
-        threadMessagesMapRef.current[freshId] = [];
-        setActiveThreadId(freshId);
-        currentThreadIdRef.current = freshId;
-        setMessages([]);
-        fetch('/api/threads', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
-          body: JSON.stringify({ id: freshId, title: 'New chat', status: 'regular', messages: [] })
-        }).catch(() => {});
-        return [
-          {
-            id: freshId,
-            title: 'New chat',
-            status: 'regular',
-            lastMessageAt: new Date(),
-            isGeneratingTitle: false
-          }
-        ];
+        handleNewChat();
+        return [];
       }
       if (activeThreadId === targetId) {
         const nextActive = remaining[0].id;
@@ -442,10 +538,35 @@ export default function App() {
         currentThreadIdRef.current = nextActive;
         const cached = threadMessagesMapRef.current[nextActive] || [];
         setMessages(cached);
+        window.history.pushState(null, '', '/chat/' + nextActive);
       }
       return remaining;
     });
-  }, [activeThreadId]);
+  }, [activeThreadId, handleNewChat]);
+
+  // Handle browser back/forward history navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname;
+      const chatMatch = path.match(/^\/chat\/([a-zA-Z0-9-]+)/);
+      if (chatMatch) {
+        const targetId = chatMatch[1];
+        if (targetId !== currentThreadIdRef.current) {
+          handleSwitchThread(targetId);
+        }
+      } else if (path === '/' || path === '') {
+        handleNewChat();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [handleSwitchThread, handleNewChat]);
+
+  const handleDismissNotFound = useCallback(() => {
+    setNotFoundNotice(null);
+    window.history.replaceState(null, '', '/');
+    handleNewChat();
+  }, [handleNewChat]);
 
   const handleSendMessage = async (userMessage, options = {}) => {
     let userText = '';
@@ -470,6 +591,9 @@ export default function App() {
 
     // If this is the first message in the thread, trigger silent title generation
     const currentTId = currentThreadIdRef.current;
+    if (currentTId && window.location.pathname !== `/chat/${currentTId}`) {
+      window.history.pushState(null, '', `/chat/${currentTId}`);
+    }
     const isFirstInThread = (messages.length === 0);
     if (isFirstInThread && userText.trim()) {
       setThreads((prev) =>
@@ -524,7 +648,7 @@ export default function App() {
 
           fetch(`/api/threads/${currentTId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: genTitle || 'New chat', lastMessageAt: Date.now() })
           }).catch(() => {});
         } catch {
@@ -1008,7 +1132,7 @@ export default function App() {
         if (Array.isArray(msgsToSave) && msgsToSave.length > 0) {
           fetch(`/api/threads/${activeTId}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-user-id': getUserId() },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               messages: msgsToSave,
               lastMessageAt: Date.now()
@@ -1456,6 +1580,28 @@ export default function App() {
           </div>
         </div>
       </AssistantRuntimeProvider>
+
+      {/* 404 Notice Modal for missing/unowned resources */}
+      {notFoundNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="max-w-md w-full bg-[#141417] border border-white/[0.08] rounded-2xl p-6 shadow-2xl flex flex-col items-center text-center">
+            <div className="h-12 w-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-4">
+              <AlertCircle size={24} />
+            </div>
+            <h2 className="text-lg font-semibold text-white mb-2">Chat not found (404)</h2>
+            <p className="text-sm text-zinc-400 mb-6">
+              {notFoundNotice.message || 'This conversation does not exist, has been deleted, or belongs to another user.'}
+            </p>
+            <button
+              type="button"
+              onClick={handleDismissNotFound}
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm transition cursor-pointer"
+            >
+              Start a new chat
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
