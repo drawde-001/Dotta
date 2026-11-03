@@ -154,7 +154,7 @@ export default function App() {
   const abortControllerRef = useRef(null);
   const wsRef = useRef(null);
   const browserIdleTimerRef = useRef(null);
-  const initialThreadIdRef = useRef(`thread-${Date.now()}`);
+  const initialThreadIdRef = useRef(typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`);
   const [threads, setThreads] = useState(() => [
     {
       id: initialThreadIdRef.current,
@@ -207,7 +207,6 @@ export default function App() {
               setTimeout(() => {
                 if (!cancelled) {
                   setNotFoundNotice(null);
-                  window.history.replaceState(null, '', '/');
                   handleNewChat();
                 }
               }, 2500);
@@ -241,6 +240,9 @@ export default function App() {
           const firstId = loadedThreads[0].id;
           setActiveThreadId(firstId);
           currentThreadIdRef.current = firstId;
+          if (!urlThreadId && window.location.pathname !== '/chat/' + firstId) {
+            window.history.replaceState(null, '', '/chat/' + firstId);
+          }
 
           try {
             const threadRes = await fetch(`/api/threads/${firstId}`);
@@ -268,6 +270,7 @@ export default function App() {
               currentThreadIdRef.current = fresh.id;
               threadMessagesMapRef.current[fresh.id] = [];
               setMessages([]);
+              window.history.replaceState(null, '', '/chat/' + fresh.id);
             }
           } catch {}
         }
@@ -435,20 +438,28 @@ export default function App() {
         isGeneratingTitle: false
       };
       threadMessagesMapRef.current[newId] = [];
-      setThreads((prev) => [newThread, ...prev]);
+      setThreads((prev) => [newThread, ...prev.filter((t) => t.id !== newId)]);
       setActiveThreadId(newId);
       currentThreadIdRef.current = newId;
       setMessages([]);
       setActiveInterrupt(null);
-      window.history.pushState(null, '', '/');
+      window.history.pushState(null, '', '/chat/' + newId);
     } catch {
       const newId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`;
+      const newThread = {
+        id: newId,
+        title: 'New chat',
+        status: 'regular',
+        lastMessageAt: new Date(),
+        isGeneratingTitle: false
+      };
       threadMessagesMapRef.current[newId] = [];
+      setThreads((prev) => [newThread, ...prev.filter((t) => t.id !== newId)]);
       setActiveThreadId(newId);
       currentThreadIdRef.current = newId;
       setMessages([]);
       setActiveInterrupt(null);
-      window.history.pushState(null, '', '/');
+      window.history.pushState(null, '', '/chat/' + newId);
     }
   }, [isRunning]);
 

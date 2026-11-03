@@ -9,6 +9,7 @@ import { getUserThread, saveUserThread } from '../src/core/state/store.js';
 import { onAgentRunStart, onAgentRunEnd } from './browser-stream.js';
 import {
   assertResourceOwnership,
+  isResourceOwnedByOther,
   sendUniformNotFound
 } from '../src/core/auth/access-control.js';
 
@@ -36,10 +37,24 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     if (threadId) {
       const isOwner = await assertResourceOwnership('thread', threadId, userId);
       if (!isOwner) {
-        return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+        const ownedByOther = await isResourceOwnedByOther('thread', threadId, userId);
+        if (ownedByOther) {
+          return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+        }
+        // Thread does not exist yet anywhere: pre-register it for this authenticated user
+        saveUserThread(userId, threadId, {
+          title: 'New chat',
+          status: 'active',
+          model: body.model || process.env.DEFAULT_MODEL || 'muse-spark-open'
+        });
       }
     } else {
       threadId = crypto.randomUUID();
+      saveUserThread(userId, threadId, {
+        title: 'New chat',
+        status: 'active',
+        model: body.model || process.env.DEFAULT_MODEL || 'muse-spark-open'
+      });
     }
 
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');

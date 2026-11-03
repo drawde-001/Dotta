@@ -62,58 +62,192 @@ export function listUserThreads(userId) {
     console.error(`[AgentStore Error reading user thread index for ${userId}]:`, err.message);
   }
 
-  if (!Array.isArray(list) || list.length === 0) {
-    // Reconstruct index if missing by scanning user directory
-    const userDir = getUserThreadDir(userId);
-    try {
-      const files = fs.readdirSync(userDir);
-      for (const f of files) {
-        if (f.endsWith('.json') && f !== '_index.json') {
-          try {
-            const raw = JSON.parse(fs.readFileSync(path.join(userDir, f), 'utf8'));
-            if (raw.id || raw.threadId) {
-              list.push({
-                id: raw.id || raw.threadId,
-                title: raw.title || 'New chat',
-                status: raw.status || 'regular',
-                lastMessageAt: raw.lastMessageAt || raw.updatedAt || raw.createdAt || Date.now(),
-                createdAt: raw.createdAt || Date.now(),
-                updatedAt: raw.updatedAt || Date.now(),
-                messageCount: Array.isArray(raw.messages) ? raw.messages.length : (raw.turns?.length || 0)
-              });
+  const userDir = getUserThreadDir(userId);
+  const dataDir = getDataDir();
+
+  // Legacy auto-migration: check root dataDir for orphaned thread-*.json files
+  try {
+    const rootFiles = fs.readdirSync(dataDir);
+    for (const f of rootFiles) {
+      if (f.startsWith('thread-') && f.endsWith('.json')) {
+        const legacyPath = path.join(dataDir, f);
+        try {
+          const raw = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+          const threadId = raw.id || raw.threadId || f.replace(/\.json$/, '');
+          // If unowned or owned by this user, copy into this user's secure folder
+          if (!raw.userId || raw.userId === userId) {
+            const destPath = path.join(userDir, `${threadId}.json`);
+            if (!fs.existsSync(destPath)) {
+              const normalized = normalizeThreadObject(raw, threadId, userId);
+              atomicWriteJson(destPath, normalized);
+              saveDbConversation(userId, threadId, normalized).catch(() => {});
             }
-          } catch {}
-        }
+          }
+        } catch {}
       }
-      if (list.length > 0) {
-        atomicWriteJson(indexPath, list);
+    }
+  } catch {}
+
+  // Re-read or construct list from user directory
+  try {
+    const files = fs.readdirSync(userDir);
+    const discovered = [];
+    for (const f of files) {
+      if (f.endsWith('.json') && f !== '_index.json') {
+        try {
+          const raw = JSON.parse(fs.readFileSync(path.join(userDir, f), 'utf8'));
+          const id = raw.id || raw.threadId || f.replace(/\.json$/, '');
+          const count = Array.isArray(raw.messages) ? raw.messages.length : (Array.isArray(raw.turns) ? raw.turns.length : 0);
+          discovered.push({
+            id,
+            title: raw.title || 'New chat',
+            status: raw.status || 'regular',
+            lastMessageAt: raw.lastMessageAt || raw.updatedAt || raw.createdAt || Date.now(),
+            createdAt: raw.createdAt || Date.now(),
+            updatedAt: raw.updatedAt || Date.now(),
+            messageCount: count
+          });
+        } catch {}
       }
-    } catch {}
-  }
+    }
+    if (discovered.length > 0) {
+      list = discovered;
+      atomicWriteJson(indexPath, list);
+    }
+  } catch {}
 
   // Sort by lastMessageAt descending
   return list.sort((a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0));
 }
 
 /**
- * Retrieve a specific thread for a user
+ * Normalizes thread data into assistant-ui standard schema with messages array.
+ */
+export function normalizeThreadObject(raw, threadId = null, userId = null) {
+  if (!raw || typeof raw !== 'object') return null;
+
+  const id = raw.id || raw.threadId || threadId;
+  const ownerId = raw.userId || userId;
+  const title = raw.title || 'New chat';
+  const status = raw.status || 'regular';
+  const createdAt = raw.createdAt || Date.now();
+  const updatedAt = raw.updatedAt || raw.lastMessageAt || Date.now();
+  const lastMessageAt = raw.lastMessageAt || updatedAt;
+
+  // Normalize messages
+  let messages = [];
+  if (Array.isArray(raw.messages) && raw.messages.length > 0) {
+    messages = raw.messages;
+  } else if (Array.isArray(raw.turns) && raw.turns.length > 0) {
+    messages = raw.turns.map((t, idx) => {
+      const role = t.role === 'model' ? 'assistant' : (t.role || 'user');
+      const textParts = (t.parts || []).filter((p) => p.text && !p.thought).map((p) => p.text);
+      const thoughtParts = (t.parts || []).filter((p) => p.thought && p.text).map((p) => p.text);
+      const contentText = textParts.join('\n\n') || (thoughtParts.length > 0 ? thoughtParts.join('\n\n') : '');
+      return {
+        id: `msg-${t.timestamp || Date.now()}-${idx + 1}`,
+        role,
+        content: contentText,
+        parts: t.parts || [{ text: contentText }],
+        timestamp: t.timestamp || Date.now()
+      };
+    });
+  } else if (Array.isArray(raw.contents) && raw.contents.length > 0) {
+    messages = raw.contents.map((c, idx) => {
+      const role = c.role === 'model' ? 'assistant' : (c.role || 'user');
+      const text = (c.parts || []).map((p) => p.text || '').filter(Boolean).join('\n\n');
+      return {
+        id: `msg-${Date.now()}-${idx + 1}`,
+        role,
+        content: text,
+        parts: c.parts || [{ text }],
+        timestamp: Date.now()
+      };
+    });
+  }
+
+  return {
+    ...raw,
+    id,
+    threadId: id,
+    userId: ownerId,
+    title,
+    status,
+    messages,
+    createdAt,
+    updatedAt,
+    lastMessageAt
+  };
+}
+
+/**
+ * Retrieve a specific thread for a user with automatic schema normalization & migration.
  */
 export function getUserThread(userId, threadId) {
   if (!threadId) return null;
   const userPath = getThreadFilePath(threadId, userId);
+  let raw = null;
+  let fromLegacy = false;
+
   if (fs.existsSync(userPath)) {
     try {
-      return JSON.parse(fs.readFileSync(userPath, 'utf8'));
+      raw = JSON.parse(fs.readFileSync(userPath, 'utf8'));
     } catch {}
   }
+
   // Fallback to legacy global root thread path
-  const globalPath = getThreadFilePath(threadId);
-  if (fs.existsSync(globalPath)) {
+  if (!raw) {
+    const globalPath = getThreadFilePath(threadId);
+    if (fs.existsSync(globalPath)) {
+      try {
+        raw = JSON.parse(fs.readFileSync(globalPath, 'utf8'));
+        fromLegacy = true;
+      } catch {}
+    }
+  }
+
+  // Fallback to project root data/threads
+  if (!raw) {
+    const rootDataPath = path.resolve(__dirname, '../../../data/threads', `${String(threadId).replace(/[^a-zA-Z0-9_-]/g, '_')}.json`);
+    if (fs.existsSync(rootDataPath)) {
+      try {
+        raw = JSON.parse(fs.readFileSync(rootDataPath, 'utf8'));
+        fromLegacy = true;
+      } catch {}
+    }
+  }
+
+  if (!raw) return null;
+
+  // Security check: if legacy thread specifies a different owner, do not return it
+  if (raw.userId && userId && raw.userId !== userId) {
+    return null;
+  }
+
+  const normalized = normalizeThreadObject(raw, threadId, userId);
+
+  // If retrieved from a legacy un-migrated location, copy it to the secure user directory
+  if (fromLegacy && userId) {
     try {
-      return JSON.parse(fs.readFileSync(globalPath, 'utf8'));
+      atomicWriteJson(userPath, normalized);
+      const list = listUserThreads(userId);
+      if (!list.some((t) => t.id === normalized.id)) {
+        list.unshift({
+          id: normalized.id,
+          title: normalized.title,
+          status: normalized.status,
+          lastMessageAt: normalized.lastMessageAt,
+          createdAt: normalized.createdAt,
+          updatedAt: normalized.updatedAt,
+          messageCount: normalized.messages.length
+        });
+        atomicWriteJson(getUserIndexPath(userId), list);
+      }
+      saveDbConversation(userId, normalized.id, normalized).catch(() => {});
     } catch {}
   }
-  return null;
+
+  return normalized;
 }
 
 /**

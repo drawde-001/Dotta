@@ -5,9 +5,11 @@
  * Miss Rate-Limiting, and Signed Download Security.
  */
 
+import fs from 'fs';
+import path from 'path';
 import crypto from 'crypto';
-import { getUserThread } from '../state/store.js';
-import { getDbConversation, logDbAudit } from '../db/supabase.js';
+import { getUserThread, getDataDir } from '../state/store.js';
+import { getDbConversation, logDbAudit, getSupabaseClient } from '../db/supabase.js';
 import { loadUserBio } from '../bio/store.js';
 import { getUserWorkspaceRoot, validateAndResolvePath } from '../execution/workspace.js';
 
@@ -110,6 +112,58 @@ export async function assertResourceOwnership(resourceType, resourceId, userId) 
       } catch {
         return false;
       }
+    }
+
+    default:
+      return false;
+  }
+}
+
+/**
+ * Check if a resource exists and belongs to ANOTHER user.
+ * Returns true ONLY if the resource exists AND is owned by someone else.
+ * Returns false if the resource does not exist or is owned by the current user.
+ */
+export async function isResourceOwnedByOther(resourceType, resourceId, userId) {
+  if (!resourceType || !resourceId) return false;
+  const cleanUserId = String(userId || '');
+  const cleanResourceId = String(resourceId);
+
+  switch (resourceType) {
+    case 'thread': {
+      // 1. Check local directory across other users
+      try {
+        const dataDir = getDataDir();
+        if (fs.existsSync(dataDir)) {
+          const safeId = cleanResourceId.replace(/[^a-zA-Z0-9_-]/g, '_');
+          const entries = fs.readdirSync(dataDir, { withFileTypes: true });
+          for (const entry of entries) {
+            if (entry.isDirectory() && entry.name !== cleanUserId) {
+              const otherPath = path.join(dataDir, entry.name, `${safeId}.json`);
+              if (fs.existsSync(otherPath)) {
+                return true;
+              }
+            }
+          }
+        }
+      } catch {}
+
+      // 2. Check Supabase conversations for other user
+      try {
+        const client = getSupabaseClient();
+        if (client) {
+          const { data } = await client
+            .from('conversations')
+            .select('user_id')
+            .eq('id', cleanResourceId)
+            .maybeSingle();
+          if (data && data.user_id && data.user_id !== cleanUserId) {
+            return true;
+          }
+        }
+      } catch {}
+
+      return false;
     }
 
     default:
