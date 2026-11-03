@@ -72,9 +72,7 @@ import {
   verifyUserCredentials,
   createUser,
   findUserById,
-  sanitizeUserOutput,
-  DEFAULT_CREDENTIALS,
-  JUDGES_CREDENTIALS
+  sanitizeUserOutput
 } from '../src/core/auth/user-store.js';
 import {
   logDbUserSession,

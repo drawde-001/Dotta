@@ -367,7 +367,7 @@ export function buildCustomSectionFillScript(sectionItems = []) {
         }
         const cs = window.getComputedStyle(el);
         const bc = cs.borderColor || '';
-        const m = bc.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+        const m = bc.match(/rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)/);
         if (m) {
           const r = parseInt(m[1], 10), g = parseInt(m[2], 10), b = parseInt(m[3], 10);
           if (r > 170 && g < 90 && b < 90) {

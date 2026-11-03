@@ -7,25 +7,9 @@ import { syncUserToDb } from '../db/supabase.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
 
-// Default initial master credentials for Eddy
-export const DEFAULT_CREDENTIALS = {
-  email: 'eddy@dotta.ai',
-  password: 'Dotta2026!',
-  name: 'Edward Obi (Eddy)',
-  firstName: 'Edward',
-  lastName: 'Obi',
-  role: 'admin'
-};
-
-// Official credentials for Hackathon Judges & Reviewers
-export const JUDGES_CREDENTIALS = {
-  email: 'judges@dotta.ai',
-  password: 'DottaJudges2026!',
-  name: 'Hackathon Judges & Reviewers',
-  firstName: 'Hackathon',
-  lastName: 'Judges',
-  role: 'judge'
-};
+// Accounts are created through sign-up. Optional admin/reviewer accounts can be
+// provisioned from environment variables (see .env.example); no credentials
+// are stored in source.
 
 export function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
   const hash = crypto.scryptSync(password, salt, 64).toString('hex');
@@ -54,34 +38,26 @@ export function loadUsers() {
     console.warn('[UserStore] Error reading users.json:', err.message);
   }
 
-  // 1. Ensure Eddy's master account exists
-  const hasEddy = usersList.some((u) => u.email === 'eddy@dotta.ai');
-  if (!hasEddy) {
-    const { hash, salt } = hashPassword(DEFAULT_CREDENTIALS.password);
-    usersList.unshift({
-      id: 'user-eddy-master',
-      email: DEFAULT_CREDENTIALS.email.toLowerCase(),
-      name: DEFAULT_CREDENTIALS.name,
-      firstName: DEFAULT_CREDENTIALS.firstName,
-      lastName: DEFAULT_CREDENTIALS.lastName,
-      role: DEFAULT_CREDENTIALS.role,
-      hash,
-      salt,
-      createdAt: Date.now()
-    });
-  }
-
-  // 2. Ensure Judges account exists
-  const hasJudges = usersList.some((u) => u.email === 'judges@dotta.ai');
-  if (!hasJudges) {
-    const { hash, salt } = hashPassword(JUDGES_CREDENTIALS.password);
+  // Optional operator-provisioned accounts. Credentials come ONLY from the
+  // environment (never from source) and are created only if missing.
+  const seeds = [
+    { emailKey: 'ADMIN_EMAIL', passKey: 'ADMIN_PASSWORD', nameKey: 'ADMIN_NAME', role: 'admin', id: 'user-admin' },
+    { emailKey: 'REVIEWER_EMAIL', passKey: 'REVIEWER_PASSWORD', nameKey: 'REVIEWER_NAME', role: 'judge', id: 'user-reviewer' }
+  ];
+  for (const s of seeds) {
+    const seedEmail = String(process.env[s.emailKey] || '').trim().toLowerCase();
+    const seedPass = String(process.env[s.passKey] || '');
+    if (!seedEmail || !seedEmail.includes('@') || seedPass.length < 12) continue;
+    if (usersList.some((u) => u.email === seedEmail)) continue;
+    const { hash, salt } = hashPassword(seedPass);
+    const displayName = process.env[s.nameKey] || seedEmail.split('@')[0];
     usersList.push({
-      id: 'user-judges-review',
-      email: JUDGES_CREDENTIALS.email.toLowerCase(),
-      name: JUDGES_CREDENTIALS.name,
-      firstName: JUDGES_CREDENTIALS.firstName,
-      lastName: JUDGES_CREDENTIALS.lastName,
-      role: JUDGES_CREDENTIALS.role,
+      id: s.id,
+      email: seedEmail,
+      name: displayName,
+      firstName: displayName.split(' ')[0] || '',
+      lastName: displayName.split(' ').slice(1).join(' '),
+      role: s.role,
       hash,
       salt,
       createdAt: Date.now()
@@ -134,25 +110,15 @@ export function sanitizeUserOutput(user) {
 
 export function verifyUserCredentials(email, password) {
   const cleanEmail = String(email || '').trim().toLowerCase();
-  let user = findUserByEmail(cleanEmail);
+  const user = findUserByEmail(cleanEmail);
 
-  if (!user && cleanEmail === 'eddy@dotta.ai') {
-    user = findUserByEmail('eddy@dotta.ai');
-  }
-  if (!user && cleanEmail === 'judges@dotta.ai') {
-    user = findUserByEmail('judges@dotta.ai');
-  }
-
-  if (!user || !user.hash || !user.salt) return null;
-  let valid = verifyPassword(password, user.hash, user.salt);
-
-  if (!valid && user.email === 'eddy@dotta.ai' && password === DEFAULT_CREDENTIALS.password) {
-    valid = true;
-  }
-  if (!valid && user.email === 'judges@dotta.ai' && password === JUDGES_CREDENTIALS.password) {
-    valid = true;
+  if (!user || !user.hash || !user.salt) {
+    // Burn comparable CPU time so unknown emails are not distinguishable by timing
+    verifyPassword(String(password || ''), '00', '00');
+    return null;
   }
 
+  const valid = verifyPassword(String(password || ''), user.hash, user.salt);
   return valid ? sanitizeUserOutput(user) : null;
 }
 

@@ -189,7 +189,7 @@ async function callMetaMuseVoiceTranscribe({
     process.env.META_MUSE_BASE_URL ||
     process.env.MUSE_BASE_URL ||
     process.env.META_BASE_URL ||
-    'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1'
+    ''
   ).replace(/\/$/, '');
 
   const baseUrls = Array.from(
@@ -378,10 +378,8 @@ export async function callModalMuseSparkAudio({
   const key = modalToken || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
   if (!key || !base64) return null;
 
-  const modalUrl = (
-    process.env.MODAL_MUSE_SPARK_URL ||
-    'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1'
-  ).replace(/\/+$/, '');
+  const modalUrl = (process.env.MODAL_MUSE_SPARK_URL || '').replace(/\/+$/, '');
+  if (!modalUrl) return null;
 
   const format = rawMime.includes('mp3') ? 'mp3' : 'wav';
 
@@ -561,7 +559,7 @@ export function getSameFamilyModelCandidates(selectedModel = 'muse-spark-open') 
   const endpoints = Array.from(
     new Set(
       [
-        process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+        process.env.MODAL_MUSE_SPARK_URL,
         process.env.MUSE_VOICE_URL,
         process.env.META_VOICE_URL,
         process.env.MUSE_ASR_URL,

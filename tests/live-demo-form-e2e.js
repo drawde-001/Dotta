@@ -11,7 +11,7 @@ import {
 } from '../src/core/bio/store.js';
 import { runMultiLevelFormPipeline } from '../src/core/levels/pipeline.js';
 
-const LIVE_USER_ID = `live-demo-user-${Date.now()}`;
+const LIVE_USER_ID = `test-live-demo-${Date.now()}`;
 
 const DEMO_INJECTION_FORM_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -87,7 +87,7 @@ async function main() {
   const profile = getActiveProfile(LIVE_USER_ID);
   updateProfile(LIVE_USER_ID, profile.id, { grants: { read: true, write: false } });
   setField(LIVE_USER_ID, profile.id, 'fullName', 'Edward Obi');
-  setField(LIVE_USER_ID, profile.id, 'email', 'eddy@dotta.dev');
+  setField(LIVE_USER_ID, profile.id, 'email', 'alex.morgan@example.com');
   setField(LIVE_USER_ID, profile.id, 'phone', '+1-555-019-2834');
   setField(LIVE_USER_ID, profile.id, 'dob', '1994-08-21');
   setField(LIVE_USER_ID, profile.id, 'address', '742 Evergreen Terrace, Apt 4B');
@@ -287,7 +287,7 @@ async function main() {
     assert.equal(runResult.ok, true);
     assert.equal(runResult.sandboxes.distinctSandboxes, true, 'Browser and Planner ran in separate sandboxes');
     assert.equal(liveDomValues.fullName, 'Edward Obi');
-    assert.equal(liveDomValues.email, 'eddy@dotta.dev');
+    assert.equal(liveDomValues.email, 'alex.morgan@example.com');
     assert.equal(liveDomValues.phone, '+1-555-019-2834');
     assert.equal(liveDomValues.role, 'Principal AI Engineer');
     assert.equal(liveDomValues.linkedin, 'https://linkedin.com/in/edward-obi');

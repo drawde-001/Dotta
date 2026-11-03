@@ -208,7 +208,7 @@ Built natively for the Meta Global AI Developer Hackathon, Dotta leverages Meta'
 
 ### 1. Core Reasoning & Autonomous Planning: Meta Muse Spark Open
 * **Primary Brain:** `meta-models/Muse-Spark-Open-816B-A42B` (Meta Muse Spark Open 816B Mixture-of-Experts)
-* **Inference Partner:** Hosted on **Modal** serverless vLLM GPU infrastructure (`https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1`), leveraging hackathon infrastructure partner endpoints.
+* **Inference Partner:** Hosted on **Modal** serverless vLLM GPU infrastructure via OpenAI-compatible endpoints configured through `MODAL_MUSE_SPARK_URL` in `.env`.
 * **Role:** Drives the multi-turn autonomous execution loop—inspecting live DOM snapshots, synthesizing sandbox scripts, verifying form constraints, evaluating security gates, and orchestrating browser tools.
 * **Hackathon Award Alignment:** Purpose-built for the **$10,000 Best Build on Meta Open Weight Models** bonus award and the **$5,000 Best Agentic Use-Case** award.
 
@@ -242,7 +242,7 @@ dotta/
 │   ├── index.js              # Express server & API endpoints
 │   ├── ag-ui-bridge.js       # AG-UI 1.0 Server-Sent Events bridge
 │   └── caddy/
-│       └── Caddyfile         # Caddy automatic HTTPS reverse proxy (dotta.duckdns.org)
+│       └── Caddyfile         # Caddy automatic HTTPS reverse proxy
 ├── src/
 │   ├── core/                 # Autonomous Engine Core
 │   │   ├── orchestrator.js   # DottaEngine execution loop (Powered by Meta Muse)
@@ -269,44 +269,22 @@ dotta/
 
 ---
 
-## Supabase Database Integration & Multi-User Architecture
+## Database & Accounts
 
-Dotta is connected to **Supabase** (`vjuoutdhpnnmasstfiwo`) for persistent multi-tenant session storage, user credential mapping, conversation history, and security audit logs:
+Dotta uses a **Supabase** (PostgreSQL) project of your own to store accounts, conversations and activity logs.
 
-### 1. Database Schema (`supabase/schema.sql`)
-The PostgreSQL database is organized into six synchronized tables:
-* **`public.users`**: Unique user identifiers, normalized emails, cryptographic password hashes (`scrypt`), and creation timestamps.
-* **`public.user_profiles`**: Display names, roles (`admin`, `judge`, `user`), and bio identity preferences.
-* **`public.user_settings`**: Default model preferences (`muse-spark-open`), thinking budgets, and auto-save toggles.
-* **`public.user_sessions`**: Authenticated sessions with IP addresses, user-agent metadata, and expiration windows.
-* **`public.conversations`**: Multi-turn conversation threads, AG-UI streaming message turns, and run metadata indexed strictly per `user_id`.
-* **`public.user_audit_logs`**: Immutable audit logs capturing every tool execution, BIO access request, and permission grant.
+### 1. Create Your Database
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Open the SQL editor and run [`supabase/schema.sql`](supabase/schema.sql). It creates the tables and the row-level security policies.
+3. Copy your project URL and anon key into your `.env` file (`SUPABASE_URL`, `SUPABASE_ANON_KEY`).
 
-### 2. Built-in Accounts for Hackathon Judges & Administrators
-Dotta comes with pre-configured, database-synchronized accounts:
-* **Master Admin (Eddy)**: `eddy@dotta.ai` / `Dotta2026!`
-* **Official Hackathon Judges & Reviewers**: `judges@dotta.ai` / `DottaJudges2026!`
+### 2. Accounts
+Users create their own accounts from the **Sign up** page. Passwords are stored only as salted hashes. Nothing is pre-created and no default credentials exist.
 
-### 3. Dynamic User Onboarding
-When any new user creates an account via the UI (`/api/auth/signup`), Dotta automatically:
-1. Generates an isolated user ID (`user-<timestamp>-<hash>`).
-2. Creates an isolated sandbox filesystem directory (`src/workspaces/<userId>`).
-3. Writes and synchronizes the user record and profile directly to Supabase (`syncUserToDb`).
-4. Binds all subsequent conversations, BIO digital identity entries, and audit traces strictly to that user ID.
+If you want to provision an admin or reviewer account on a fresh install, set `ADMIN_EMAIL` / `ADMIN_PASSWORD` (and optionally `REVIEWER_EMAIL` / `REVIEWER_PASSWORD`) in your `.env`. Use a strong password of at least 12 characters. The account is created on first start and the values are never written anywhere else.
 
-### 4. Supabase Setup & CLI Configuration
-To inspect or manage the database directly:
-```bash
-# Link local environment to Supabase project
-supabase login
-supabase link --project-ref vjuoutdhpnnmasstfiwo
-
-# Push schema changes
-supabase db push
-```
-
-* **Project URL:** `https://vjuoutdhpnnmasstfiwo.supabase.co`
-* **Direct Connection String:** `postgresql://postgres:[YOUR-PASSWORD]@db.vjuoutdhpnnmasstfiwo.supabase.co:5432/postgres`
+### 3. Per-User Isolation
+Each account gets its own private workspace, chats and BIO data, and nothing is shared between users.
 
 ---
 
@@ -355,52 +333,17 @@ node tests/phase1-sandbox.test.js
 
 ---
 
-## Access Control & Resource Ownership Architecture
+## Privacy & Access Control
 
-Dotta enforces strict, server-side resource ownership across all transport layers (REST, SSE, WebSocket, files, and generated media):
+Everything a user creates in Dotta (chats, runs, BIO profiles, uploaded files and generated media) belongs to that user alone:
 
-### 1. Unguessable Cryptographic Identifiers
-- Every thread, run, upload, BIO entry, and generated media asset is issued a server-generated `crypto.randomUUID()`.
-- Identifiers are never sequential, never predictable, and never chosen by the client.
-
-### 2. Server-Side Ownership Enforcement
-- **Central Assertion (`assertResourceOwnership`)**: Every route accepting an ID strictly verifies that the resource exists AND is owned by the authenticated session user (`user_id = auth.uid()`).
-- **Timing-Safe Uniform 404 (`sendUniformNotFound`)**: Missing resources and unowned resources return the exact same HTTP 404 status, identical response body (`{"ok":false,"error":"Resource not found"}`), and a normalized timing floor ($\ge 35\text{ms}$) to prevent resource existence enumeration.
-- **Miss Rate Limiting**: Repeated miss attempts (>20 per 60 seconds per IP/user) trigger an HTTP 429 response, preventing automated enumeration attacks.
-- **Audit Logging**: Access denial attempts are logged with user ID, route, and IP address without recording payload content.
-
-### 3. Transport Security Across REST, SSE & WebSocket
-- **REST**: Cookie-issued HMAC session tokens (`dotta_session`) are authoritative; header-based user spoofing is rejected.
-- **SSE Streams (`/api/chat`)**: Session authentication and thread ownership are asserted upfront before setting event-stream headers. Unauthenticated clients receive 401; unowned threads receive uniform 404.
-- **WebSocket (`/ws`)**: Upgraded via explicit handshake verification on `server.on('upgrade')`. Unauthenticated connections are rejected with HTTP 401. Active browser screencasting is strictly filtered by session owner. On logout, all active WebSockets for that user close immediately with code 1008 ("Session ended").
-- **Signed Downloads (`/api/workspace/download`)**: User workspace files are accessed only through short-lived HMAC signed tokens (5-minute expiry) bound to the specific user and file path.
-
-### 4. Zero-Flash Frontend Routing & Open Redirect Defense
-- **Zero-Flash Guard**: Accessing a direct `/chat/:uuid` link while unauthenticated renders only a neutral loading shell while authentication is verified. Zero chat content, message text, or thread titles ever flash.
-- **Safe `returnTo` Validation**: Redirect parameters after unauthenticated visits are strictly validated (`validateReturnTo`) to allow only same-origin relative paths starting with a single `/`. Off-site redirects (`https://...`, `//...`, `javascript:...`) are neutralized to `/`.
-- **404 Notice Modal**: Attempting to open an unowned or deleted thread displays a prominent "Chat not found (404)" notice before smoothly redirecting the user to `/`.
-- **Logout Cache Purge**: Logging out immediately clears thread lists, cached messages, open tabs, and local storage caches to prevent data leakage on shared workstations.
-
-### Files Modified for Access Control:
-- `src/core/auth/access-control.js` — Central ownership assertion, uniform 404 timing defense, miss rate-limiting, signed downloads.
-- `server/index.js` — Secure cookie session middleware, WebSocket upgrade handshake auth, REST & download ownership checks.
-- `server/ag-ui-bridge.js` — Upfront SSE stream authentication and thread ownership checks.
-- `src/core/bio/store.js` — Cryptographic UUIDs for BIO profiles and entries.
-- `src/core/state/store.js` — Cryptographic UUIDs for messages.
-- `src/core/tools/image-tool.js` — User-bound storage and access verification for generated images.
-- `src/core/db/supabase.js` — Explicit user-scoped filtering on all database operations and UUID upload IDs.
-- `supabase/schema.sql` — Row Level Security (RLS) policies enforcing `auth.uid()::text = user_id`.
-- `src/ui/lib/url.js` — Open redirect defense and returnTo path validation.
-- `src/ui/App.jsx` — Zero-flash route guard, URL synchronization (`/chat/:uuid`), 404 notice modal, and logout cache purge.
-- `src/ui/components/ThreadsPanel.jsx` — Clean session-bound BIO fetching.
+- Every item gets a random, unguessable ID, so links cannot be guessed.
+- Ownership is checked on the server for every request, over every channel the app uses. Someone who is not the owner gets the same "not found" answer as for something that does not exist.
+- Signed-out visitors are sent to the sign-in page and returned to where they were headed after signing in. Nothing from a chat is shown before sign-in is confirmed.
+- Signing out clears locally cached chat data and closes any open live connections.
 
 ---
 
 ## Production Deployment
 
-Dotta is configured for production deployment under **`dotta.duckdns.org`** with automatic SSL via Caddy reverse proxy and containerized microservices:
-
-* **Primary Domain:** `https://dotta.duckdns.org`
-* **Automated SSL/TLS:** Handled by Caddy via Let's Encrypt / ZeroSSL in `server/caddy/Caddyfile`.
-* **Container Architecture:** Defined in `docker-compose.yml` (`dotta_caddy`, `dotta_app`, `dotta_network`).
-* **Deployment Guide:** For detailed step-by-step setup on a clean Linux VM or VPS, see [`setup.md`](setup.md).
+Dotta ships with a `Dockerfile` and `docker-compose.yml` that run the app behind an automatic-HTTPS reverse proxy on any Linux VM or VPS with your own domain. For a step-by-step walkthrough, see [`setup.md`](setup.md).

@@ -1,7 +1,6 @@
 -- ==============================================================================
 -- Dotta Supabase PostgreSQL Database Schema
--- Project ID: vjuoutdhpnnmasstfiwo
--- Project URL: https://vjuoutdhpnnmasstfiwo.supabase.co
+-- Run this in the SQL editor of your own Supabase project.
 -- ==============================================================================
 
 -- 1. Users Table

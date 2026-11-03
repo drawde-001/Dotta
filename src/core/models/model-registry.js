@@ -221,7 +221,7 @@ export function getModelRegistry() {
   const registry = { ...MODEL_REGISTRY };
 
   // Muse Spark Open: Configured with deployed Modal endpoint
-  const sparkOpenEndpoint = process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1';
+  const sparkOpenEndpoint = process.env.MODAL_MUSE_SPARK_URL || '';
   registry['muse-spark-open'] = {
     ...registry['muse-spark-open'],
     endpoint: sparkOpenEndpoint,

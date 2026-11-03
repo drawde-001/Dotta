@@ -1,6 +1,6 @@
 # Dotta Production Setup & Deployment Guide
 
-This guide provides end-to-end instructions for deploying Dotta to a Linux virtual machine (Ubuntu 22.04 / 24.04 LTS or Debian 12), configuring your custom domain with automatic HTTPS via Caddy (e.g. `dotta.duckdns.org`), isolating tool execution with Docker, integrating Supabase, and wiring PM2 for seamless continuous deployment.
+This guide provides end-to-end instructions for deploying Dotta to a Linux virtual machine (Ubuntu 22.04 / 24.04 LTS or Debian 12), configuring your own domain with automatic HTTPS via Caddy (e.g. `yourdomain.com`), isolating tool execution with Docker, integrating Supabase, and wiring PM2 for seamless continuous deployment.
 
 ---
 
@@ -114,13 +114,13 @@ curl -4 ifconfig.me
 1. Log into your DNS management dashboard.
 2. Add an **A Record**:
    - **Type:** `A`
-   - **Name:** `@` (for root domain, e.g. `dotta.duckdns.org`) or `dotta` (for subdomain)
+   - **Name:** `@` (for root domain, e.g. `yourdomain.com`) or `dotta` (for subdomain)
    - **IPv4 Address:** Paste your VM public IP (e.g., `198.51.100.42`)
    - **TTL:** Auto or 300 seconds
    - **Proxy Status (if Cloudflare):** DNS only (gray cloud) during initial SSL provisioning, or enabled (orange cloud) with Full (Strict) SSL.
 3. Wait 1-2 minutes and verify DNS propagation:
    ```bash
-   dig +short dotta.duckdns.org
+   dig +short yourdomain.com
    ```
 
 ---
@@ -159,9 +159,9 @@ nano .env
 
 Set your production keys:
 ```env
-# Primary Model Provider (Meta Muse Spark Open on Modal)
+# Primary Model Provider
 DEFAULT_MODEL=muse-spark-open
-MODAL_MUSE_SPARK_URL=https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1
+MODAL_MUSE_SPARK_URL=https://your-model-endpoint.example.com/v1
 MODAL_PROXY_TOKEN_ID=your_modal_proxy_token_id
 MODAL_PROXY_TOKEN_SECRET=your_modal_proxy_token_secret
 MODAL_API_KEY=your_modal_api_key
@@ -174,10 +174,13 @@ MODEL_API_KEY=your_model_api_key
 # Server Settings
 PORT=3001
 NODE_ENV=production
-PUBLIC_DOMAIN=dotta.duckdns.org
+PUBLIC_DOMAIN=yourdomain.com
 
-# Supabase Database Configuration
-SUPABASE_URL=https://vjuoutdhpnnmasstfiwo.supabase.co
+# Long random string used to sign sessions:  openssl rand -hex 32
+SESSION_SECRET=your_long_random_string
+
+# Supabase Database Configuration (your own project)
+SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
@@ -185,24 +188,24 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 DOTTA_SANDBOX_DISTRO=dotta-sandbox
 ```
 
+> Keep your `.env` file private. It is git-ignored; never commit it or paste its contents anywhere public.
+
 ### Supabase Database Initialization
-Apply the database schema directly to your Supabase project using the Supabase CLI:
+Create your own project at [supabase.com](https://supabase.com), then apply the Dotta schema:
 ```bash
-# 1. Install & login to Supabase CLI
+# Option A: paste the contents of supabase/schema.sql into the Supabase SQL Editor and run it
+
+# Option B: use the Supabase CLI
 npm install -g supabase
 supabase login
-
-# 2. Link your local repo to the remote project
-supabase link --project-ref vjuoutdhpnnmasstfiwo
-
-# 3. Apply the Dotta schema
+supabase link --project-ref <your-project-ref>
 supabase db push
-# Or execute supabase/schema.sql in the Supabase SQL Editor
 ```
 
-Pre-seeded accounts are immediately available upon database sync:
-* **Master Admin**: `eddy@dotta.ai` / `Dotta2026!`
-* **Judges Review**: `judges@dotta.ai` / `DottaJudges2026!`
+### Accounts
+Create your account from the **Sign up** page once the app is running. No default accounts or passwords exist.
+
+To provision an admin account on a fresh install instead, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (at least 12 characters) in `.env` before the first start.
 
 ---
 
@@ -303,7 +306,7 @@ git pull origin main
 npm install
 npm run build
 pm2 reload dotta
-echo "Deployment successful! Live at https://dotta.duckdns.org"
+echo "Deployment successful! Live at https://yourdomain.com"
 ```
 Make it executable:
 ```bash
@@ -320,7 +323,7 @@ chmod +x deploy.sh
    # Returns: {"status":"healthy","defaultModel":"muse-spark-open", ...}
    ```
 2. **Verify Public HTTPS:**
-   Open `https://dotta.duckdns.org` in your browser.
+   Open `https://yourdomain.com` in your browser.
    - You will see the Assistant-UI chat shell connected to Dotta.
    - Enter a prompt: *"Create a file called notes.txt and list files"*.
    - The streaming tokens and real-time tool execution cards will render smoothly.

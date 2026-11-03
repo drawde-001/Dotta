@@ -234,7 +234,7 @@ export async function callMuseStream({
 
   if (isModal) {
     model = 'meta-models/Muse-Spark-Open-816B-A42B';
-    baseUrl = (process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1').replace(/\/+$/, '');
+    baseUrl = (process.env.MODAL_MUSE_SPARK_URL || '').replace(/\/+$/, '');
     
     if (process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET) {
       activeKey = `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`;

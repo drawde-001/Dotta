@@ -174,7 +174,7 @@ export function AuthScreen({ onLoginSuccess }) {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder={mode === 'signup' ? 'eg. johnfrancis@gmail.com' : 'eg. eddy@dotta.ai'}
+                placeholder="eg. johnfrancis@gmail.com"
                 required
                 className="w-full h-9 rounded-md px-3 text-sm text-white bg-white/[0.06] border border-white/[0.08] placeholder:text-white/40 outline-none transition hover:border-white/20 focus:border-white/50 focus:ring-1 focus:ring-white/30"
               />

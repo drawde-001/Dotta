@@ -50,9 +50,7 @@ export class MetaModelAdapter extends ModelAdapter {
     this.baseUrlGetter =
       typeof baseUrlGetter === 'function'
         ? baseUrlGetter
-        : () =>
-            process.env.MODAL_MUSE_SPARK_URL ||
-            'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1';
+        : () => process.env.MODAL_MUSE_SPARK_URL || '';
     this.defaultModel = defaultModel;
     this.modelResolver =
       typeof modelResolver === 'function'
@@ -284,9 +282,7 @@ export function getModelAdapter(providerName = 'meta') {
         process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
           ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
           : process.env.MODAL_API_KEY || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY'),
-      baseUrlGetter: () =>
-        process.env.MODAL_MUSE_SPARK_URL ||
-        'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+      baseUrlGetter: () => process.env.MODAL_MUSE_SPARK_URL || '',
       defaultModel: 'meta-models/Muse-Spark-Open-816B-A42B',
       modelResolver: (m) =>
         m && m.toLowerCase() === 'muse-spark-open'

@@ -33,7 +33,7 @@ services:
       - META_MUSE_API_KEY=${META_MUSE_API_KEY:-}
       - META_MUSE_BASE_URL=${META_MUSE_BASE_URL:-https://api.meta.ai/v1}
       - META_MUSE_MODEL=${META_MUSE_MODEL:-muse-spark-open}
-      - MODAL_MUSE_SPARK_URL=${MODAL_MUSE_SPARK_URL:-https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1}
+      - MODAL_MUSE_SPARK_URL=${MODAL_MUSE_SPARK_URL:-}
       - MODAL_PROXY_TOKEN_ID=${MODAL_PROXY_TOKEN_ID:-}
       - MODAL_PROXY_TOKEN_SECRET=${MODAL_PROXY_TOKEN_SECRET:-}
       - MODEL_API_KEY=${MODEL_API_KEY:-}

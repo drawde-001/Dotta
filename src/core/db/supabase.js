@@ -8,17 +8,15 @@
 import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vjuoutdhpnnmasstfiwo.supabase.co';
-const SUPABASE_ANON_KEY =
-  process.env.SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZqdW91dGRocG5ubWFzc3RmaXdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTMxNDI1MTQsImV4cCI6MjEwODcxODUxNH0.4iZipyNsXmhvbmrRNKJee7WLvih-OYsX51udLuzM0ec';
+const SUPABASE_URL = process.env.SUPABASE_URL || '';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 let supabaseInstance = null;
 
 export function getSupabaseClient() {
-  if (!supabaseInstance && SUPABASE_URL && SUPABASE_ANON_KEY) {
+  if (!supabaseInstance && SUPABASE_URL && SUPABASE_KEY) {
     try {
-      supabaseInstance = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      supabaseInstance = createClient(SUPABASE_URL, SUPABASE_KEY, {
         auth: {
           persistSession: false,
           autoRefreshToken: false
@@ -32,7 +30,7 @@ export function getSupabaseClient() {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+  return Boolean(SUPABASE_URL && SUPABASE_KEY);
 }
 
 /**
