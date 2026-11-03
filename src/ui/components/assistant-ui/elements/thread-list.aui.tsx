@@ -108,18 +108,28 @@ export const ThreadListItems: FC<
   );
 };
 
+const parseDate = (val: unknown): Date | undefined => {
+  if (!val) return undefined;
+  if (val instanceof Date) return isNaN(val.getTime()) ? undefined : val;
+  const d = new Date(val as any);
+  return isNaN(d.getTime()) ? undefined : d;
+};
+
 const dateGroupLabel = (
-  date: Date | undefined,
+  rawDate: unknown,
   startOfToday: number,
   startOfYesterday: number,
 ): string => {
+  const date = parseDate(rawDate);
   if (!date || date.getTime() >= startOfToday) return "Today";
   if (date.getTime() >= startOfYesterday) return "Yesterday";
   return "Earlier";
 };
 
-const startOfLocalDay = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+const startOfLocalDay = (date: Date) => {
+  const d = parseDate(date) || new Date();
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+};
 
 const subscribeToNextDay = (onDayChange: () => void) => {
   let timeout: number;
@@ -169,7 +179,7 @@ export const useThreadListGroups = (searchQuery = "") => {
 
   return useMemo(() => {
     const itemsById = new Map(threadItems.map((item) => [item.id, item]));
-    const dates = threadIds.map((id) => itemsById.get(id)?.lastMessageAt);
+    const dates = threadIds.map((id) => parseDate(itemsById.get(id)?.lastMessageAt));
     const filteredIndices = threadIds
       .map((id, index) => ({ id, index }))
       .filter(
@@ -190,8 +200,10 @@ export const useThreadListGroups = (searchQuery = "") => {
     const yesterday = new Date(startOfToday);
     yesterday.setDate(yesterday.getDate() - 1);
     const startOfYesterday = yesterday.getTime();
-    const time = (index: number) =>
-      dates[index]?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const time = (index: number) => {
+      const d = dates[index];
+      return d ? d.getTime() : Number.MAX_SAFE_INTEGER;
+    };
     const sorted = [...filteredIndices].sort((a, b) => time(b) - time(a));
 
     const result: ThreadListGroup[] = [];

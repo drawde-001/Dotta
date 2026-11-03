@@ -221,8 +221,15 @@ export default function App() {
             threadMessagesMapRef.current[urlThreadId] = msgs;
             setMessages(msgs);
             setActiveThreadId(urlThreadId);
-            currentThreadIdRef.current = urlThreadId;
-            setThreads(data.threads.length > 0 ? data.threads : [currentThread]);
+            const rawThreads = data.threads.length > 0 ? data.threads : [currentThread];
+            const loadedThreads = rawThreads.map((t) => ({
+              id: t.id,
+              title: t.title || 'New chat',
+              status: t.status || 'regular',
+              lastMessageAt: t.lastMessageAt instanceof Date ? t.lastMessageAt : new Date(t.lastMessageAt || t.createdAt || Date.now()),
+              isGeneratingTitle: false
+            }));
+            setThreads(loadedThreads);
             return;
           }
         }
@@ -1290,7 +1297,7 @@ export default function App() {
       id: t.id,
       title: t.title || 'New chat',
       status: 'regular',
-      lastMessageAt: t.lastMessageAt,
+      lastMessageAt: t.lastMessageAt instanceof Date ? t.lastMessageAt : new Date(t.lastMessageAt || Date.now()),
       custom: {
         isGeneratingTitle: Boolean(t.isGeneratingTitle),
         isRunning: Boolean(isRunning && t.id === activeThreadId)
