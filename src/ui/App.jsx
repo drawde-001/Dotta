@@ -1380,17 +1380,6 @@ export default function App() {
     fetch('/api/browser/close', { method: 'POST' }).catch(() => {});
   };
 
-  if (authChecking) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#070709] text-zinc-400">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
-          <span className="text-xs">Connecting to Dotta...</span>
-        </div>
-      </div>
-    );
-  }
-
   if (!currentUser) {
     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
   }
