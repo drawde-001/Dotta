@@ -355,6 +355,47 @@ node tests/phase1-sandbox.test.js
 
 ---
 
+## Access Control & Resource Ownership Architecture
+
+Dotta enforces strict, server-side resource ownership across all transport layers (REST, SSE, WebSocket, files, and generated media):
+
+### 1. Unguessable Cryptographic Identifiers
+- Every thread, run, upload, BIO entry, and generated media asset is issued a server-generated `crypto.randomUUID()`.
+- Identifiers are never sequential, never predictable, and never chosen by the client.
+
+### 2. Server-Side Ownership Enforcement
+- **Central Assertion (`assertResourceOwnership`)**: Every route accepting an ID strictly verifies that the resource exists AND is owned by the authenticated session user (`user_id = auth.uid()`).
+- **Timing-Safe Uniform 404 (`sendUniformNotFound`)**: Missing resources and unowned resources return the exact same HTTP 404 status, identical response body (`{"ok":false,"error":"Resource not found"}`), and a normalized timing floor ($\ge 35\text{ms}$) to prevent resource existence enumeration.
+- **Miss Rate Limiting**: Repeated miss attempts (>20 per 60 seconds per IP/user) trigger an HTTP 429 response, preventing automated enumeration attacks.
+- **Audit Logging**: Access denial attempts are logged with user ID, route, and IP address without recording payload content.
+
+### 3. Transport Security Across REST, SSE & WebSocket
+- **REST**: Cookie-issued HMAC session tokens (`dotta_session`) are authoritative; header-based user spoofing is rejected.
+- **SSE Streams (`/api/chat`)**: Session authentication and thread ownership are asserted upfront before setting event-stream headers. Unauthenticated clients receive 401; unowned threads receive uniform 404.
+- **WebSocket (`/ws`)**: Upgraded via explicit handshake verification on `server.on('upgrade')`. Unauthenticated connections are rejected with HTTP 401. Active browser screencasting is strictly filtered by session owner. On logout, all active WebSockets for that user close immediately with code 1008 ("Session ended").
+- **Signed Downloads (`/api/workspace/download`)**: User workspace files are accessed only through short-lived HMAC signed tokens (5-minute expiry) bound to the specific user and file path.
+
+### 4. Zero-Flash Frontend Routing & Open Redirect Defense
+- **Zero-Flash Guard**: Accessing a direct `/chat/:uuid` link while unauthenticated renders only a neutral loading shell while authentication is verified. Zero chat content, message text, or thread titles ever flash.
+- **Safe `returnTo` Validation**: Redirect parameters after unauthenticated visits are strictly validated (`validateReturnTo`) to allow only same-origin relative paths starting with a single `/`. Off-site redirects (`https://...`, `//...`, `javascript:...`) are neutralized to `/`.
+- **404 Notice Modal**: Attempting to open an unowned or deleted thread displays a prominent "Chat not found (404)" notice before smoothly redirecting the user to `/`.
+- **Logout Cache Purge**: Logging out immediately clears thread lists, cached messages, open tabs, and local storage caches to prevent data leakage on shared workstations.
+
+### Files Modified for Access Control:
+- `src/core/auth/access-control.js` — Central ownership assertion, uniform 404 timing defense, miss rate-limiting, signed downloads.
+- `server/index.js` — Secure cookie session middleware, WebSocket upgrade handshake auth, REST & download ownership checks.
+- `server/ag-ui-bridge.js` — Upfront SSE stream authentication and thread ownership checks.
+- `src/core/bio/store.js` — Cryptographic UUIDs for BIO profiles and entries.
+- `src/core/state/store.js` — Cryptographic UUIDs for messages.
+- `src/core/tools/image-tool.js` — User-bound storage and access verification for generated images.
+- `src/core/db/supabase.js` — Explicit user-scoped filtering on all database operations and UUID upload IDs.
+- `supabase/schema.sql` — Row Level Security (RLS) policies enforcing `auth.uid()::text = user_id`.
+- `src/ui/lib/url.js` — Open redirect defense and returnTo path validation.
+- `src/ui/App.jsx` — Zero-flash route guard, URL synchronization (`/chat/:uuid`), 404 notice modal, and logout cache purge.
+- `src/ui/components/ThreadsPanel.jsx` — Clean session-bound BIO fetching.
+
+---
+
 ## Production Deployment
 
 Dotta is configured for production deployment under **`dotta.duckdns.org`** with automatic SSL via Caddy reverse proxy and containerized microservices:
