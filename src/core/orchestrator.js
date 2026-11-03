@@ -893,7 +893,10 @@ export class DottaEngine extends EventEmitter {
               }
             }
           } catch (err) {
-            console.warn('[Orchestrator] Audio transcription for non-native model turn failed:', err.message);
+            console.error('[Orchestrator] Audio transcription failed:', err.message);
+            throw new Error(
+              `Audio processing failed: ${err.message || 'All Meta voice model endpoints (muse-voice-transcribe-1.0 and Muse-Spark-Open) are unreachable.'}`
+            );
           }
         }
       }
@@ -926,6 +929,19 @@ export class DottaEngine extends EventEmitter {
               text: `[User Decision / Confirmed Answer]:\n${answerSummary}\n\nThe user has already answered and confirmed this decision. Proceed directly with execution. Do NOT ask this question again.`
             }
           ]
+        });
+      }
+    }
+
+    // Persist incoming user turn into thread store & Supabase database
+    if (threadId) {
+      const lastUser = [...contents].reverse().find((c) => c.role === 'user');
+      if (lastUser && Array.isArray(lastUser.parts) && lastUser.parts.length > 0) {
+        persistTurn(threadId, {
+          role: 'user',
+          parts: lastUser.parts,
+          turnIndex: 0,
+          userId
         });
       }
     }

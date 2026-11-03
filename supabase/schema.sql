@@ -62,6 +62,19 @@ CREATE TABLE IF NOT EXISTS public.user_audit_logs (
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 7. User Uploads Table (Attachments & Media tied to User Profile ID)
+CREATE TABLE IF NOT EXISTS public.user_uploads (
+  id TEXT PRIMARY KEY,
+  user_id TEXT REFERENCES public.users(id) ON DELETE CASCADE,
+  thread_id TEXT,
+  name TEXT NOT NULL,
+  size BIGINT,
+  mime_type TEXT,
+  workspace_path TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
@@ -69,6 +82,7 @@ ALTER TABLE public.user_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_uploads ENABLE ROW LEVEL SECURITY;
 
 -- Service Role Policy (Full Access for backend API)
 CREATE POLICY "Service role full access on users" ON public.users FOR ALL USING (true);
@@ -77,3 +91,5 @@ CREATE POLICY "Service role full access on user_settings" ON public.user_setting
 CREATE POLICY "Service role full access on user_sessions" ON public.user_sessions FOR ALL USING (true);
 CREATE POLICY "Service role full access on conversations" ON public.conversations FOR ALL USING (true);
 CREATE POLICY "Service role full access on user_audit_logs" ON public.user_audit_logs FOR ALL USING (true);
+CREATE POLICY "Service role full access on user_uploads" ON public.user_uploads FOR ALL USING (true);
+

@@ -5,6 +5,7 @@
  * Synchronizes users, profiles, active sessions, conversations/threads, runs, and audit logs.
  */
 
+import crypto from 'crypto';
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://vjuoutdhpnnmasstfiwo.supabase.co';
@@ -164,6 +165,170 @@ export async function logDbUserSession({ sessionId, userId, userAgent = '', ipAd
 }
 
 /**
+ * Ensure a user exists in public.users and public.user_profiles to prevent foreign key errors
+ */
+export async function ensureDbUser(userId, fallbackData = {}) {
+  const sb = getSupabaseClient();
+  if (!sb || !userId) return null;
+
+  try {
+    const cleanId = String(userId);
+    const { data: existing } = await sb
+      .from('users')
+      .select('id')
+      .eq('id', cleanId)
+      .maybeSingle();
+
+    if (!existing) {
+      const now = new Date().toISOString();
+      const email = fallbackData.email || `${cleanId}@dotta.local`;
+      const name = fallbackData.name || cleanId;
+
+      await sb.from('users').upsert({
+        id: cleanId,
+        email,
+        password_hash: 'managed',
+        created_at: now,
+        updated_at: now
+      }, { onConflict: 'id' });
+
+      await sb.from('user_profiles').upsert({
+        user_id: cleanId,
+        name,
+        bio: 'Dotta User',
+        preferences: fallbackData.preferences || {},
+        updated_at: now
+      }, { onConflict: 'user_id' });
+
+      await sb.from('user_settings').upsert({
+        user_id: cleanId,
+        default_model: 'muse-spark-open',
+        thinking_budget: 2048,
+        auto_save: true,
+        updated_at: now
+      }, { onConflict: 'user_id' });
+    }
+    return cleanId;
+  } catch (err) {
+    console.warn('[Supabase] ensureDbUser warning:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Record an uploaded attachment in public.user_uploads, user_profiles, and audit logs
+ */
+export async function recordDbUserUpload({
+  id = null,
+  userId,
+  threadId = null,
+  name,
+  size = 0,
+  type = 'application/octet-stream',
+  workspacePath = '',
+  metadata = {}
+}) {
+  const sb = getSupabaseClient();
+  if (!sb || !userId || !name) return null;
+
+  try {
+    const cleanUserId = String(userId);
+    await ensureDbUser(cleanUserId);
+
+    const uploadId = id || crypto.randomUUID();
+    const now = new Date().toISOString();
+
+    // 1. Insert into public.user_uploads
+    const { data: inserted, error: uploadErr } = await sb
+      .from('user_uploads')
+      .upsert({
+        id: uploadId,
+        user_id: cleanUserId,
+        thread_id: threadId ? String(threadId) : null,
+        name: String(name).slice(0, 255),
+        size: Number(size) || 0,
+        mime_type: String(type || 'application/octet-stream').slice(0, 100),
+        workspace_path: String(workspacePath || ''),
+        metadata,
+        created_at: now
+      }, { onConflict: 'id' })
+      .select()
+      .single();
+
+    if (uploadErr) {
+      console.warn('[Supabase] recordDbUserUpload table warning:', uploadErr.message);
+    }
+
+    // 2. Tie directly into public.user_profiles.preferences.uploads
+    try {
+      const { data: profile } = await sb
+        .from('user_profiles')
+        .select('preferences')
+        .eq('user_id', cleanUserId)
+        .maybeSingle();
+
+      const prefs = profile?.preferences || {};
+      const existingUploads = Array.isArray(prefs.uploads) ? prefs.uploads : [];
+      const newUploadEntry = {
+        id: uploadId,
+        name: String(name),
+        size: Number(size) || 0,
+        type: String(type || 'application/octet-stream'),
+        workspacePath: String(workspacePath || ''),
+        threadId: threadId || null,
+        uploadedAt: now
+      };
+
+      const updatedUploads = [newUploadEntry, ...existingUploads.filter((u) => u.id !== uploadId)].slice(0, 50);
+
+      await sb.from('user_profiles').update({
+        preferences: {
+          ...prefs,
+          uploads: updatedUploads
+        },
+        updated_at: now
+      }).eq('user_id', cleanUserId);
+    } catch (profErr) {
+      console.warn('[Supabase] recordDbUserUpload profile sync error:', profErr.message);
+    }
+
+    // 3. Log audit action
+    await logDbAudit({
+      userId: cleanUserId,
+      action: 'FILE_UPLOAD',
+      details: { uploadId, name, size, type, workspacePath, threadId }
+    });
+
+    return inserted || { id: uploadId, user_id: cleanUserId, name, workspace_path: workspacePath };
+  } catch (err) {
+    console.warn('[Supabase] recordDbUserUpload unexpected error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * List uploaded files for a user from public.user_uploads
+ */
+export async function listDbUserUploads(userId) {
+  const sb = getSupabaseClient();
+  if (!sb || !userId) return [];
+
+  try {
+    const { data, error } = await sb
+      .from('user_uploads')
+      .select('*')
+      .eq('user_id', String(userId))
+      .order('created_at', { ascending: false });
+
+    if (error || !Array.isArray(data)) return [];
+    return data;
+  } catch (err) {
+    console.warn('[Supabase] listDbUserUploads error:', err.message);
+    return [];
+  }
+}
+
+/**
  * Upsert a conversation/thread into Supabase public.conversations
  */
 export async function saveDbConversation(userId, threadId, threadData = {}) {
@@ -171,22 +336,56 @@ export async function saveDbConversation(userId, threadId, threadData = {}) {
   if (!sb || !userId || !threadId) return null;
 
   try {
+    const cleanUserId = String(userId);
+    // Ensure user exists in users table before saving thread to satisfy foreign key constraint
+    await ensureDbUser(cleanUserId);
+
     const now = new Date().toISOString();
     const title = threadData.title || 'New chat';
-    const messages = Array.isArray(threadData.messages)
-      ? threadData.messages
-      : (Array.isArray(threadData.turns) ? threadData.turns : []);
+
+    // Normalize messages across messages, turns, and contents arrays
+    let messages = [];
+    if (Array.isArray(threadData.messages) && threadData.messages.length > 0) {
+      messages = threadData.messages;
+    } else if (Array.isArray(threadData.turns) && threadData.turns.length > 0) {
+      messages = threadData.turns.map((t, idx) => {
+        const text = Array.isArray(t.parts)
+          ? t.parts.filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('')
+          : (typeof t.text === 'string' ? t.text : '');
+        return {
+          id: `msg-${idx + 1}`,
+          role: t.role === 'model' ? 'assistant' : (t.role || 'user'),
+          content: text,
+          parts: t.parts,
+          timestamp: t.timestamp || Date.now()
+        };
+      });
+    } else if (Array.isArray(threadData.contents) && threadData.contents.length > 0) {
+      messages = threadData.contents.map((c, idx) => {
+        const text = Array.isArray(c.parts)
+          ? c.parts.filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('')
+          : (typeof c.text === 'string' ? c.text : '');
+        return {
+          id: `msg-${idx + 1}`,
+          role: c.role === 'model' ? 'assistant' : (c.role || 'user'),
+          content: text,
+          parts: c.parts,
+          timestamp: Date.now()
+        };
+      });
+    }
 
     const metadata = {
       status: threadData.status || 'regular',
       lastMessageAt: threadData.lastMessageAt || now,
       messageCount: messages.length,
-      model: threadData.model || 'muse-spark-open'
+      model: threadData.model || 'muse-spark-open',
+      ...(threadData.metadata || {})
     };
 
     const { error } = await sb.from('conversations').upsert({
       id: String(threadId),
-      user_id: String(userId),
+      user_id: cleanUserId,
       title: String(title).slice(0, 255),
       messages,
       metadata,
@@ -200,6 +399,7 @@ export async function saveDbConversation(userId, threadId, threadData = {}) {
     console.warn('[Supabase] saveDbConversation unexpected error:', err.message);
   }
 }
+
 
 /**
  * List conversations for a specific user from Supabase

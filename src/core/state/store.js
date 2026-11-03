@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { sanitizeUserId } from '../execution/workspace.js';
 import { saveDbConversation, deleteDbConversation } from '../db/supabase.js';
@@ -290,9 +291,38 @@ export function persistTurn(threadId, { role, parts, turnIndex, usageMetadata, u
 
   if (!Array.isArray(state.turns)) state.turns = [];
   if (!Array.isArray(state.contents)) state.contents = [];
+  if (!Array.isArray(state.messages)) state.messages = [];
   state.turns.push(newTurn);
   state.contents.push({ role, parts });
+
+  // Maintain human-readable messages representation for UI and Supabase
+  const msgText = Array.isArray(parts)
+    ? parts.filter((p) => !p.thought && typeof p.text === 'string').map((p) => p.text).join('')
+    : (typeof parts === 'string' ? parts : '');
+
+  const attachments = [];
+  if (Array.isArray(parts)) {
+    for (const p of parts) {
+      if (p.inlineData) {
+        attachments.push({
+          type: p.inlineData.mimeType,
+          name: p.inlineData.name || 'attachment'
+        });
+      }
+    }
+  }
+
+  state.messages.push({
+    id: crypto.randomUUID(),
+    role: role === 'model' ? 'assistant' : role,
+    content: msgText,
+    parts,
+    attachments: attachments.length > 0 ? attachments : undefined,
+    timestamp: Date.now()
+  });
+
   state.updatedAt = Date.now();
+  state.lastMessageAt = Date.now();
   if (userId && !state.userId) state.userId = userId;
 
   const targetUser = userId || state.userId;

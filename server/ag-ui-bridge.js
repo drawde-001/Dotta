@@ -1,9 +1,11 @@
+import crypto from 'crypto';
 import { DottaEngine } from '../src/core/index.js';
 import {
   sanitizeUserId,
   getUserWorkspaceRoot
 } from '../src/core/execution/workspace.js';
 import { applyBioProposal, discardBioProposal } from '../src/core/bio/store.js';
+import { getUserThread, saveUserThread } from '../src/core/state/store.js';
 import { onAgentRunStart, onAgentRunEnd } from './browser-stream.js';
 
 export function writeAgUiEvent(res, event) {
@@ -26,8 +28,8 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     }
 
     const body = req.body || {};
-    const threadId = body.threadId || `thread-${Date.now()}`;
-    const runId = body.runId || `run-${Date.now()}`;
+    const threadId = body.threadId || crypto.randomUUID();
+    const runId = crypto.randomUUID();
     const model = body.model || process.env.DEFAULT_MODEL || 'muse-spark-open';
     const messages = Array.isArray(body.messages) ? body.messages : [];
     const attachments = Array.isArray(body.attachments)
@@ -50,6 +52,23 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     // The server-issued session (req.userId) wins over any client-supplied ID.
     const userId = sanitizeUserId(req.userId || body.userId || req.get('x-user-id'));
     const workspaceRoot = userId ? getUserWorkspaceRoot(userId) : null;
+
+    if (userId && threadId) {
+      try {
+        const userText = instruction || '';
+        const autoTitle = userText.slice(0, 45).replace(/\s+/g, ' ').trim() || 'New chat';
+        const existingThread = getUserThread(userId, threadId);
+        if (!existingThread) {
+          saveUserThread(userId, threadId, {
+            title: autoTitle,
+            status: 'active',
+            model
+          });
+        }
+      } catch (err) {
+        console.warn('[ag-ui-bridge] Thread pre-registration warning:', err.message);
+      }
+    }
 
     console.log(
       `[Dotta Server] Incoming chat | thread: ${threadId} | model: ${model} | msgs: ${messages.length} | attachments: ${attachments.length} | prompt: "${instruction.slice(0, 100)}"`

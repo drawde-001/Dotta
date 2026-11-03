@@ -735,13 +735,26 @@ export async function transcribeAudioSequentially(segments, audioSource, options
         res = finalHandover;
       }
     }
-    results.push(res.text || '');
+
+    if (!res || !res.ok || !res.text) {
+      const errMsg =
+        res?.error ||
+        `Audio transcription failed on segment ${i + 1} of ${segments.length}. All Meta voice model endpoints (muse-voice-transcribe-1.0 and Muse-Spark-Open) are unreachable.`;
+      throw new Error(errMsg);
+    }
+
+    results.push(res.text.trim());
   }
 
   const combinedTranscript = results
-    .map((t) => t.trim())
     .filter(Boolean)
     .join(' ');
+
+  if (!combinedTranscript && segments.length > 0) {
+    throw new Error(
+      'Audio transcription failed. All Meta voice model endpoints (muse-voice-transcribe-1.0 and Muse-Spark-Open) returned empty transcripts.'
+    );
+  }
 
   return {
     ok: true,

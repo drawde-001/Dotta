@@ -476,7 +476,7 @@ export function getProfile(userId, profileId) {
 export function createProfile(userId, name) {
   const doc = loadUserBio(userId);
   const profile = {
-    id: `profile-${crypto.randomUUID().slice(0, 8)}`,
+    id: crypto.randomUUID(),
     name: String(name || `Profile ${doc.profiles.length + 1}`).slice(0, 80),
     isActive: doc.profiles.length === 0,
     grants: { read: false, write: false },
@@ -551,7 +551,7 @@ export function addEntry(userId, profileId, { name, type, description, file = nu
   const profile = doc.profiles.find((p) => p.id === profileId);
   if (!profile) throw new Error('Profile not found');
   const entry = {
-    id: `entry-${crypto.randomUUID().slice(0, 8)}`,
+    id: crypto.randomUUID(),
     name: String(name).trim().slice(0, 120),
     type,
     agentReadable: false,

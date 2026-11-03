@@ -69,7 +69,14 @@ import {
   DEFAULT_CREDENTIALS,
   JUDGES_CREDENTIALS
 } from '../src/core/auth/user-store.js';
-import { logDbUserSession, logDbAudit } from '../src/core/db/supabase.js';
+import {
+  logDbUserSession,
+  logDbAudit,
+  recordDbUserUpload,
+  listDbUserUploads,
+  listDbConversations,
+  getDbConversation
+} from '../src/core/db/supabase.js';
 
 dotenv.config();
 
@@ -1137,22 +1144,34 @@ app.post('/api/thread/title', async (req, res) => {
 });
 
 // ---- Chat Threads & Context Persistence (User-tied) ----
-app.get('/api/threads', (req, res) => {
+app.get('/api/threads', async (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
-    const threads = listUserThreads(userId);
+    let threads = listUserThreads(userId);
+    if (!Array.isArray(threads) || threads.length === 0) {
+      const dbThreads = await listDbConversations(userId);
+      if (Array.isArray(dbThreads) && dbThreads.length > 0) {
+        threads = dbThreads;
+      }
+    }
     res.json({ ok: true, threads });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-app.get('/api/threads/:threadId', (req, res) => {
+app.get('/api/threads/:threadId', async (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
-    const thread = getUserThread(userId, req.params.threadId);
+    let thread = getUserThread(userId, req.params.threadId);
+    if (!thread) {
+      const dbThread = await getDbConversation(userId, req.params.threadId);
+      if (dbThread) {
+        thread = dbThread;
+      }
+    }
     if (!thread) {
       return res.status(404).json({ ok: false, error: 'Thread not found' });
     }
@@ -1167,7 +1186,7 @@ app.post('/api/threads', (req, res) => {
   if (!userId) return;
   try {
     const body = req.body || {};
-    const threadId = body.id || body.threadId || `thread-${Date.now()}`;
+    const threadId = crypto.randomUUID();
     const thread = saveUserThread(userId, threadId, {
       ...body,
       id: threadId,
@@ -1274,7 +1293,9 @@ app.post('/api/attachments/process', async (req, res) => {
       // actually use it. The workspace folder is created on demand, tied to
       // the server-session user — never the root directory.
       let workspacePath = '';
-      const sessionUserId = sanitizeUserId(req.userId);
+      const sessionUserId =
+        sanitizeUserId(req.userId) ||
+        sanitizeUserId(req.get('x-user-id') || req.query?.userId || req.body?.userId);
       if (sessionUserId && att.dataUrl?.startsWith('data:')) {
         try {
           const comma = att.dataUrl.indexOf(',');
@@ -1323,7 +1344,11 @@ app.post('/api/attachments/process', async (req, res) => {
               textSummary = `[Audio Transcript of "${att.name}"]:\n${transcriptionResult.transcript}`;
             }
           } catch (err) {
-            console.warn('[Dotta Attachments] Background audio transcription error:', err.message);
+            console.error('[Dotta Attachments] Meta audio transcription failed:', err.message);
+            return res.status(503).json({
+              ok: false,
+              error: `Audio transcription failed for "${att.name}": ${err.message || 'All Meta voice model endpoints are unreachable.'}`
+            });
           }
         }
       }
@@ -1340,8 +1365,30 @@ app.post('/api/attachments/process', async (req, res) => {
         }
       }
 
+      // Permanently record file upload in Supabase tied to the user profile ID
+      if (sessionUserId) {
+        try {
+          const secureUploadId = crypto.randomUUID();
+          await recordDbUserUpload({
+            id: secureUploadId,
+            userId: sessionUserId,
+            threadId: req.body?.threadId || null,
+            name: att.name || `attachment-${orderNum}`,
+            size: att.size || 0,
+            type: att.type || 'application/octet-stream',
+            workspacePath: workspacePath || '',
+            metadata: {
+              order: orderNum,
+              summary: textSummary ? textSummary.slice(0, 500) : ''
+            }
+          });
+        } catch (dbErr) {
+          console.warn('[Dotta Attachments] Failed to record upload in Supabase:', dbErr.message);
+        }
+      }
+
       processedAttachments.push({
-        id: att.id || `att-${Date.now()}-${orderNum}`,
+        id: crypto.randomUUID(),
         order: orderNum,
         name: att.name,
         size: att.size,
@@ -1366,6 +1413,18 @@ app.post('/api/attachments/process', async (req, res) => {
     });
   } catch (err) {
     console.error('[API /api/attachments/process error]', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// List user uploaded files tied to their profile ID in Supabase
+app.get('/api/user/uploads', async (req, res) => {
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  try {
+    const uploads = await listDbUserUploads(userId);
+    res.json({ ok: true, uploads });
+  } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
