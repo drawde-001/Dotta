@@ -118,6 +118,15 @@ function extractTranscriptFromResponseJson(json) {
 }
 
 /**
+ * Detect whether a model's completion is a refusal saying it cannot process/listen to audio.
+ */
+export function isAudioTranscriptionRefusal(text = '') {
+  const str = String(text || '').trim();
+  if (!str) return false;
+  return /don'?t (have the ability to|have access to|see|find|have|detect) (any |an |the )?audio|cannot (hear|transcribe|listen|access|process)|can'?t (hear|transcribe|listen|access|process|provide a (verbatim )?transcription)|not (able|equipped) to (listen|transcribe|process|hear)|unable to (transcribe|listen|process|hear)|no audio (file )?(was|is|has been) (included|provided|attached|received|found|present)|no spoken words to transcribe|there('?s| is| are) (nothing|no spoken words) (for me )?to transcribe|don'?t have an audio file|can'?t process audio|if you (can )?upload (the |an )?audio|please upload (the |an |or attach )?audio/i.test(str);
+}
+
+/**
  * Helper: Call Meta Muse Voice Transcribe (muse-voice-transcribe-1.0) across Meta endpoints.
  */
 async function callMetaMuseVoiceTranscribe({
@@ -193,7 +202,7 @@ async function callMetaMuseVoiceTranscribe({
           if (contentType.includes('application/json')) {
             const json = await res.json();
             const text = extractTranscriptFromResponseJson(json);
-            if (text) {
+            if (text && !isAudioTranscriptionRefusal(text)) {
               return {
                 ok: true,
                 text,
@@ -205,7 +214,7 @@ async function callMetaMuseVoiceTranscribe({
             }
           } else {
             const text = (await res.text()).trim();
-            if (text && !text.startsWith('<')) {
+            if (text && !text.startsWith('<') && !isAudioTranscriptionRefusal(text)) {
               return {
                 ok: true,
                 text,
@@ -244,7 +253,7 @@ async function callMetaMuseVoiceTranscribe({
         if (jsonRes.ok) {
           const json = await jsonRes.json().catch(() => null);
           const text = extractTranscriptFromResponseJson(json);
-          if (text) {
+          if (text && !isAudioTranscriptionRefusal(text)) {
             return {
               ok: true,
               text,
@@ -297,6 +306,10 @@ async function callMetaMuseVoiceTranscribe({
             const json = await chatRes.json().catch(() => null);
             const text = extractTranscriptFromResponseJson(json);
             if (text) {
+              if (isAudioTranscriptionRefusal(text)) {
+                // Endpoint model does not support audio perception - break early to allow multimodal fallback
+                break;
+              }
               return {
                 ok: true,
                 text,
@@ -376,6 +389,10 @@ export async function callModalMuseSparkAudio({
       const json = await res.json().catch(() => null);
       const text = extractTranscriptFromResponseJson(json);
       if (text) {
+        if (isAudioTranscriptionRefusal(text)) {
+          console.warn('[MediaProcessor] Modal Muse Spark Open returned audio refusal rather than transcript.');
+          return null;
+        }
         return {
           ok: true,
           text,
@@ -622,8 +639,25 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     timeoutMs: 30000,
     isFinalFallback: true
   });
-  if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text) {
+  if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text && !isAudioTranscriptionRefusal(finalMetaRes.text)) {
     return finalMetaRes;
+  }
+
+  // Cross-family fallback: If Meta endpoints cannot transcribe audio or are offline,
+  // fall back to available multimodal audio engines (Gemini Multimodal Audio or Whisper)
+  if (base64) {
+    const geminiFallback = await callGeminiAudioTranscribe({
+      base64,
+      rawMime,
+      preferredModel: 'gemini-3.8-flash',
+      timeoutMs: 25000
+    });
+    if (geminiFallback && geminiFallback.ok && geminiFallback.text) {
+      return {
+        ...geminiFallback,
+        source: `meta_fallback:${geminiFallback.source}`
+      };
+    }
   }
 
   // Final in-family fallback for Meta
@@ -891,8 +925,18 @@ export async function transcribeAudioSequentially(segments, audioSource, options
           timeoutMs: 45000,
           isFinalFallback: true
         });
-        if (finalHandover && finalHandover.text) {
+        if (finalHandover && finalHandover.text && !isAudioTranscriptionRefusal(finalHandover.text)) {
           res = finalHandover;
+        } else if (fallbackBuf.length > 0) {
+          const geminiHandover = await callGeminiAudioTranscribe({
+            base64: fallbackBuf.toString('base64'),
+            rawMime,
+            preferredModel: 'gemini-3.8-flash',
+            timeoutMs: 35000
+          });
+          if (geminiHandover && geminiHandover.text) {
+            res = geminiHandover;
+          }
         }
       } else if (/gemini/i.test(preferredModel)) {
         // Gemini family handover

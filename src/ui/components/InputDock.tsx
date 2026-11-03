@@ -1265,10 +1265,15 @@ export const InputDock: React.FC<InputDockProps> = ({
         if (response.ok) {
           const data = await response.json();
           const serverTranscript = String(data.transcript || '').trim();
+          const isRefusal =
+            /don'?t (have the ability to|have access to|see|find|have|detect) (any |an |the )?audio|cannot (hear|transcribe|listen|access|process)|can'?t (hear|transcribe|listen|access|process|provide a (verbatim )?transcription)|not (able|equipped) to (listen|transcribe|process|hear)|unable to (transcribe|listen|process|hear)|no audio (file )?(was|is|has been) (included|provided|attached|received|found|present)|no spoken words to transcribe|there('?s| is| are) (nothing|no spoken words) (for me )?to transcribe|don'?t have an audio file|can'?t process audio|if you (can )?upload (the |an )?audio|please upload (the |an |or attach )?audio/i.test(
+              serverTranscript
+            );
           if (
             data.ok &&
             serverTranscript &&
-            !serverTranscript.startsWith('[Transcribed audio segment')
+            !serverTranscript.startsWith('[Transcribed audio segment') &&
+            !isRefusal
           ) {
             collectedTranscripts.push(serverTranscript);
           }

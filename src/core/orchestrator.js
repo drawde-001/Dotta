@@ -50,6 +50,10 @@ import {
   processAudio,
   processVideo
 } from './bio/process.js';
+import {
+  calculateMediaSegments,
+  transcribeAudioSequentially
+} from './media/media-processor.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools, getScopedToolsForIntent } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
 import { buildFunctionResponseParts, normalizeGeminiContents } from './models/gemini-protocol.js';
@@ -848,17 +852,48 @@ export class DottaEngine extends EventEmitter {
 
     if (attachmentMediaParts.length > 0) {
       const lastUser = [...contents].reverse().find((c) => c.role === 'user');
-      if (lastUser) {
-        for (const mp of attachmentMediaParts) {
-          const exists = lastUser.parts.some(
-            (p) => p.inlineData && p.inlineData.data === mp.inlineData.data
-          );
-          if (!exists) {
-            lastUser.parts.push(mp);
+      const targetUser = lastUser || { role: 'user', parts: [] };
+      if (!lastUser) {
+        contents.push(targetUser);
+      }
+
+      for (const mp of attachmentMediaParts) {
+        const exists = targetUser.parts.some(
+          (p) => p.inlineData && p.inlineData.data === mp.inlineData.data
+        );
+        if (!exists) {
+          targetUser.parts.push(mp);
+        }
+
+        // For non-native audio models (like Meta Muse Spark Open), transcribe the audio
+        // and inject the transcript as text so the model has the audio speech content in its turn
+        if (
+          mp.inlineData?.mimeType?.startsWith('audio/') &&
+          !isNativeMediaModel(model) &&
+          mp.inlineData.data
+        ) {
+          try {
+            const audioBuf = Buffer.from(mp.inlineData.data, 'base64');
+            const transcriptRes = await transcribeAudioSequentially(
+              calculateMediaSegments(300, 600),
+              { buffer: audioBuf, mimeType: mp.inlineData.mimeType },
+              { preferredModel: model }
+            );
+            if (transcriptRes?.transcript) {
+              const snippet = transcriptRes.transcript.slice(0, 40);
+              const alreadyHasTranscript = targetUser.parts.some(
+                (p) => p.text && p.text.includes(snippet)
+              );
+              if (!alreadyHasTranscript) {
+                targetUser.parts.push({
+                  text: `\n[Attached Audio Transcript]:\n"${transcriptRes.transcript}"\n`
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('[Orchestrator] Audio transcription for non-native model turn failed:', err.message);
           }
         }
-      } else {
-        contents.push({ role: 'user', parts: attachmentMediaParts });
       }
     }
 

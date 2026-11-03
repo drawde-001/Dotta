@@ -1283,6 +1283,24 @@ app.post('/api/attachments/process', async (req, res) => {
             textSummary = Buffer.from(base64, 'base64').toString('utf8').slice(0, 3000);
           } catch {}
         }
+      } else if (att.type?.startsWith('audio/') || att.name?.match(/\.(wav|mp3|m4a|ogg|webm|flac)$/i)) {
+        if (att.dataUrl?.startsWith('data:')) {
+          try {
+            const comma = att.dataUrl.indexOf(',');
+            const base64 = att.dataUrl.slice(comma + 1);
+            const buffer = Buffer.from(base64, 'base64');
+            const transcriptionResult = await transcribeAudioSequentially(
+              calculateMediaSegments(300, 600),
+              { buffer, mimeType: att.type || 'audio/wav', filename: att.name },
+              { preferredModel: req.body?.model || process.env.DEFAULT_MODEL || 'muse-spark-open' }
+            );
+            if (transcriptionResult?.transcript) {
+              textSummary = `[Audio Transcript of "${att.name}"]:\n${transcriptionResult.transcript}`;
+            }
+          } catch (err) {
+            console.warn('[Dotta Attachments] Background audio transcription error:', err.message);
+          }
+        }
       }
 
       // Screen attachment-derived text before it enters agent context.
