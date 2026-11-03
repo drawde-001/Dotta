@@ -1,114 +1,24 @@
+/**
+ * model-adapter.js
+ *
+ * Dedicated Meta Muse Model Adapter for Dotta.
+ * Exclusively interfaces with Meta Muse models (Muse Spark Open, Muse Wonder,
+ * Muse Spark versions) served via Meta's Chat Completions
+ * API and partner inference endpoints (Modal serverless vLLM).
+ */
+
 import {
-  consolidateGeminiParts,
-  normalizeGeminiContents,
-  toGeminiFunctionDeclarations
-} from './gemini-protocol.js';
+  consolidateMessageParts,
+  normalizeThreadContents
+} from './content-protocol.js';
 import {
-  toOpenAiMessages,
-  toOpenAiTools
+  toStandardChatMessages,
+  toStandardChatTools
 } from './muse-provider.js';
-import { getApiKey, getApiKeys, getGeminiApiKeys } from '../env.js';
-
-export const GEMINI_MODEL_CATALOG = {
-  'gemini-3.8-flash': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'medium', defaultThinkingBudget: 2048, defaultMaxOutputTokens: 8192 },
-  'gemini-3.6-flash': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'medium', defaultThinkingBudget: 2048, defaultMaxOutputTokens: 8192 },
-  'gemini-3.5-flash-lite': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'minimal', defaultThinkingBudget: 1024, defaultMaxOutputTokens: 8192 },
-  'gemini-3.1-flash-lite': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'minimal', defaultThinkingBudget: 1024, defaultMaxOutputTokens: 8192 },
-  'gemini-4-argon': { status: 'stable', isCurrent: true, contextWindow: 1048576, defaultThinking: 'medium', defaultThinkingBudget: 2048, defaultMaxOutputTokens: 8192 },
-  'gemini-3-flash-preview': { status: 'preview', isCurrent: true, contextWindow: 1048576, defaultThinking: 'high', defaultThinkingBudget: 4096, defaultMaxOutputTokens: 12288 },
-  'gemini-3.1-pro-preview': { status: 'preview', isCurrent: true, contextWindow: 1048576, defaultThinking: 'high', defaultThinkingBudget: 4096, defaultMaxOutputTokens: 12288 },
-  'gemini-2.5-flash': { status: 'legacy_access', isCurrent: true, contextWindow: 1048576, defaultThinking: 'on', defaultThinkingBudget: 2048, defaultMaxOutputTokens: 8192 },
-  'gemini-2.5-pro': { status: 'legacy_access', isCurrent: true, contextWindow: 1048576, defaultThinking: 'on', defaultThinkingBudget: 4096, defaultMaxOutputTokens: 12288 },
-  'gemini-2.0-flash': { status: 'shut_down', isCurrent: false, replacement: 'gemini-3.8-flash' },
-  'gemini-2.0-flash-lite': { status: 'shut_down', isCurrent: false, replacement: 'gemini-3.5-flash-lite' },
-  'gemini-3-pro-preview': { status: 'shut_down', isCurrent: false, replacement: 'gemini-3.1-pro-preview' },
-  'gemini-3.1-flash-lite-preview': { status: 'shut_down', isCurrent: false, replacement: 'gemini-3.1-flash-lite' },
-  'gemini-1.5-flash': { status: 'deprecated', isCurrent: false, replacement: 'gemini-3.8-flash' },
-  'gemini-1.5-pro': { status: 'deprecated', isCurrent: false, replacement: 'gemini-3.1-pro-preview' }
-};
-
-export function resolveGeminiModelCandidates(requestedModel = 'gemini-3.8-flash') {
-  const req = String(requestedModel || 'gemini-3.8-flash').trim();
-  const entry = GEMINI_MODEL_CATALOG[req];
-
-  if (!entry) {
-    const validKeys = Object.entries(GEMINI_MODEL_CATALOG)
-      .filter(([, v]) => v.isCurrent)
-      .map(([k]) => k);
-    throw new Error(
-      `Invalid model ID "${req}". Valid models: ${validKeys.join(', ')}`
-    );
-  }
-
-  if (entry.status === 'shut_down' || entry.status === 'deprecated') {
-    const replacement = entry.replacement || 'gemini-3.8-flash';
-    console.warn(
-      `[ModelAdapter Warning] Model "${req}" is ${entry.status.toUpperCase()}. Auto-migrating to "${replacement}".`
-    );
-    return [replacement, 'gemini-3-flash-preview', 'gemini-3.1-pro-preview'];
-  }
-
-  const targetModel = entry.aliasFor || req;
-  const candidates = [targetModel];
-  const defaults = [
-    'gemini-3.8-flash',
-    'gemini-3.6-flash',
-    'gemini-3-flash-preview',
-    'gemini-3.5-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-3.1-pro-preview'
-  ];
-  for (const def of defaults) {
-    if (!candidates.includes(def)) candidates.push(def);
-  }
-  return candidates;
-}
-
-export function resolveGenerationConfig(model = 'gemini-3.8-flash', userGenConfig = {}, minHeadroom = 2048) {
-  const { effort, ...cleanGenConfig } = userGenConfig;
-  const entry = GEMINI_MODEL_CATALOG[model] || {};
-  let defaultBudget = entry.defaultThinkingBudget || 2048;
-  const defaultMaxOutput = entry.defaultMaxOutputTokens || 8192;
-
-  if (effort) {
-    const ef = String(effort).toLowerCase();
-    if (ef === 'minimal') defaultBudget = 512;
-    else if (ef === 'low') defaultBudget = 1024;
-    else if (ef === 'medium') defaultBudget = 2048;
-    else if (ef === 'high' || ef === 'max') {
-      defaultBudget = model.includes('pro') ? 8192 : 4096;
-    }
-  }
-
-  const thinkingConfig = {
-    includeThoughts: true,
-    ...(cleanGenConfig.thinkingConfig || {})
-  };
-
-  if (thinkingConfig.thinkingBudget === undefined && thinkingConfig.thinkingLevel === undefined) {
-    if (defaultBudget > 0) {
-      thinkingConfig.thinkingBudget = defaultBudget;
-    }
-  }
-
-  const thinkingBudget = typeof thinkingConfig.thinkingBudget === 'number' ? thinkingConfig.thinkingBudget : 0;
-  let maxOutputTokens = typeof cleanGenConfig.maxOutputTokens === 'number'
-    ? cleanGenConfig.maxOutputTokens
-    : defaultMaxOutput;
-
-  if (thinkingBudget > 0 && maxOutputTokens - thinkingBudget < minHeadroom) {
-    maxOutputTokens = thinkingBudget + minHeadroom;
-  }
-
-  return {
-    ...cleanGenConfig,
-    maxOutputTokens,
-    thinkingConfig
-  };
-}
+import { getApiKey } from '../env.js';
 
 export class ModelAdapter {
-  constructor(providerName) {
+  constructor(providerName = 'meta') {
     this.providerName = providerName;
   }
 
@@ -121,328 +31,115 @@ export class ModelAdapter {
   }
 }
 
-function maskGeminiKey(key) {
-  if (!key || typeof key !== 'string') return 'none';
-  if (key.length <= 10) return '***';
-  return `${key.slice(0, 8)}...${key.slice(-6)}`;
-}
-
-export class GeminiModelAdapter extends ModelAdapter {
-  constructor(apiKeyGetter, baseUrlGetter) {
-    super('gemini');
-    this.apiKeyGetter = typeof apiKeyGetter === 'function' ? apiKeyGetter : () => getApiKey('GEMINI_API_KEY');
-    this.baseUrlGetter = typeof baseUrlGetter === 'function' ? baseUrlGetter : () => process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta';
-    this.currentKeyIndex = 0;
-    this.keyCooldowns = new Map(); // key -> cooldown expiry timestamp
-  }
-
-  getAllKeys() {
-    let keys = getGeminiApiKeys();
-    if (!keys || keys.length === 0) {
-      const fallback = typeof this.apiKeyGetter === 'function' ? this.apiKeyGetter() : null;
-      if (fallback) keys = [fallback];
-    }
-    return [...new Set((keys || []).filter(Boolean))];
-  }
-
-  isConfigured() {
-    return this.getAllKeys().length > 0;
-  }
-
-  getRotatedKeys() {
-    const keys = this.getAllKeys();
-    if (keys.length <= 1) return keys;
-
-    const now = Date.now();
-    const startIdx = this.currentKeyIndex % keys.length;
-    const rotated = [...keys.slice(startIdx), ...keys.slice(0, startIdx)];
-
-    // Separate active keys vs keys in temporary cooldown
-    const active = [];
-    const cooling = [];
-    for (const k of rotated) {
-      const cdUntil = this.keyCooldowns.get(k) || 0;
-      if (now >= cdUntil) {
-        active.push(k);
-      } else {
-        cooling.push(k);
-      }
-    }
-    // If all keys are cooling, still try them as last resort
-    return active.length > 0 ? [...active, ...cooling] : rotated;
-  }
-
-  markKeySuccess(key) {
-    this.keyCooldowns.delete(key);
-    const keys = this.getAllKeys();
-    const idx = keys.indexOf(key);
-    if (idx !== -1) {
-      this.currentKeyIndex = idx;
-    }
-  }
-
-  markKeyFailure(key, statusCode = 0, cooldownMs = 60000) {
-    this.keyCooldowns.set(key, Date.now() + cooldownMs);
-    const keys = this.getAllKeys();
-    if (keys.length > 1) {
-      this.currentKeyIndex = (this.currentKeyIndex + 1) % keys.length;
-    }
-  }
-
-  async streamTurn({
-    contents,
-    systemInstruction = '',
-    model = 'gemini-3.8-flash',
-    tools = null,
-    generationConfig = {},
-    callbacks = {}
-  }) {
-    const allKeys = this.getAllKeys();
-    if (!allKeys.length) {
-      throw new Error('GEMINI_API_KEY is not configured on server.');
-    }
-
-    const candidateModels = resolveGeminiModelCandidates(model);
-    const normalizedContents = normalizeGeminiContents(contents);
-    const baseUrl = this.baseUrlGetter();
-
-    for (const candModel of candidateModels) {
-      const rotatedKeys = this.getRotatedKeys();
-      const payload = {
-        contents: normalizedContents,
-        generationConfig: resolveGenerationConfig(candModel, generationConfig)
-      };
-
-      if (systemInstruction) {
-        payload.systemInstruction = { parts: [{ text: systemInstruction }] };
-      }
-      if (Array.isArray(tools) && tools.length > 0) {
-        payload.tools = [{ functionDeclarations: toGeminiFunctionDeclarations(tools) }];
-      }
-
-      let modelOverloaded = false;
-
-      for (let kIdx = 0; kIdx < rotatedKeys.length; kIdx++) {
-        if (modelOverloaded) break;
-        const apiKey = rotatedKeys[kIdx];
-        const masked = maskGeminiKey(apiKey);
-
-        try {
-          const url = `${baseUrl}/models/${candModel}:streamGenerateContent?alt=sse&key=${apiKey}`;
-          const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: AbortSignal.timeout(12000)
-          });
-
-          if (!response.ok) {
-            const errText = await response.text();
-            console.warn(`[Gemini Adapter HTTP ${response.status} - Key ${masked} - ${candModel}]:`, errText.slice(0, 300));
-
-            // Failover / Rotation handling based on error type
-            if (response.status === 429) {
-              console.warn(`[Gemini Adapter] Key ${masked} rate limited (HTTP 429). Rotating to next key...`);
-              this.markKeyFailure(apiKey, 429, 60000); // 60s cooldown
-              continue;
-            } else if (response.status === 403) {
-              console.warn(`[Gemini Adapter] Key ${masked} quota/permission error (HTTP 403). Rotating to next key...`);
-              this.markKeyFailure(apiKey, 403, 300000); // 5m cooldown
-              continue;
-            } else if (response.status === 400 && (errText.includes('API_KEY_INVALID') || errText.includes('API key not valid') || errText.includes('keyExpired'))) {
-              console.warn(`[Gemini Adapter] Key ${masked} is invalid or expired. Rotating to next key...`);
-              this.markKeyFailure(apiKey, 400, 3600000); // 1h cooldown
-              continue;
-            } else if (response.status === 503) {
-              // 503 means this specific model is overloaded on Google's side.
-              // Do not penalize healthy keys; immediately fail over to next candidate model!
-              console.warn(`[Gemini Adapter] Model ${candModel} returned 503 (High Demand). Immediately failing over to next candidate model...`);
-              modelOverloaded = true;
-              break;
-            } else if (response.status === 404) {
-              // Model not found on this endpoint/version, break to next candidate model
-              console.warn(`[Gemini Adapter] Model ${candModel} returned 404 Not Found. Failing over to next candidate model...`);
-              modelOverloaded = true;
-              break;
-            } else if (response.status >= 500) {
-              console.warn(`[Gemini Adapter] Server error (${response.status}) on ${candModel}. Failing over to next candidate model...`);
-              modelOverloaded = true;
-              break;
-            } else {
-              // Other errors (e.g. malformed or general), try other keys if available
-              this.markKeyFailure(apiKey, response.status, 30000);
-              continue;
-            }
-          }
-
-          // Request succeeded! Record this healthy key as current
-          this.markKeySuccess(apiKey);
-
-          let fullThought = '';
-          let fullText = '';
-          const functionCalls = [];
-          const rawModelParts = [];
-          let usageMetadata = null;
-          let buffer = '';
-
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder('utf-8');
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              const trimmed = line.trim();
-              if (trimmed.startsWith('data: ')) {
-                const jsonStr = trimmed.slice(6).trim();
-                if (jsonStr === '[DONE]') continue;
-                try {
-                  const data = JSON.parse(jsonStr);
-                  if (data.usageMetadata) {
-                    usageMetadata = data.usageMetadata;
-                  }
-                  const parts = data.candidates?.[0]?.content?.parts || [];
-                  for (const part of parts) {
-                    rawModelParts.push(part);
-                    if (part.thought && typeof part.text === 'string') {
-                      fullThought += part.text;
-                      if (callbacks.onThoughtChunk) callbacks.onThoughtChunk(part.text);
-                    } else if (part.functionCall) {
-                      functionCalls.push(part.functionCall);
-                      if (callbacks.onFunctionCall) callbacks.onFunctionCall(part.functionCall);
-                    } else if (typeof part.text === 'string' && part.text.length > 0) {
-                      fullText += part.text;
-                      if (callbacks.onResponseChunk) callbacks.onResponseChunk(part.text);
-                    }
-                  }
-                } catch (err) {}
-              }
-            }
-          }
-
-          const modelParts = consolidateGeminiParts(rawModelParts);
-
-          if (fullText || fullThought || functionCalls.length > 0 || modelParts.length > 0) {
-            return {
-              provider: 'gemini',
-              model: candModel,
-              thought: fullThought,
-              text: fullText,
-              functionCalls,
-              modelParts,
-              usageMetadata
-            };
-          }
-        } catch (e) {
-          console.warn(`[Gemini Adapter Request Error - Key ${masked} - ${candModel}]:`, e.message);
-          if (e.name === 'TimeoutError' || String(e.message).toLowerCase().includes('timeout') || String(e.message).toLowerCase().includes('aborted')) {
-            console.warn(`[Gemini Adapter] Model ${candModel} timed out. Immediately failing over to next candidate model...`);
-            modelOverloaded = true;
-            break;
-          }
-          this.markKeyFailure(apiKey, 0, 30000);
-          continue;
-        }
-      }
-    }
-
-    throw new Error(`Failed to generate content with candidate models: ${candidateModels.join(', ')}`);
-  }
-}
-
-export class OpenAiCompatibleModelAdapter extends ModelAdapter {
+export class MetaModelAdapter extends ModelAdapter {
   constructor({
-    providerName,
     apiKeyGetter,
     baseUrlGetter,
-    defaultModel = 'gpt-4o',
+    defaultModel = 'meta-models/Muse-Spark-Open-816B-A42B',
     modelResolver = (m) => m,
     authHeader = (key) => ({ Authorization: `Bearer ${key}` })
-  }) {
-    super(providerName);
-    this.apiKeyGetter = typeof apiKeyGetter === 'function' ? apiKeyGetter : () => null;
-    this.baseUrlGetter = typeof baseUrlGetter === 'function' ? baseUrlGetter : () => 'https://api.openai.com/v1';
+  } = {}) {
+    super('meta');
+    this.apiKeyGetter =
+      typeof apiKeyGetter === 'function'
+        ? apiKeyGetter
+        : () =>
+            process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
+              ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
+              : process.env.MODAL_API_KEY || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+    this.baseUrlGetter =
+      typeof baseUrlGetter === 'function'
+        ? baseUrlGetter
+        : () =>
+            process.env.MODAL_MUSE_SPARK_URL ||
+            'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1';
     this.defaultModel = defaultModel;
-    this.modelResolver = typeof modelResolver === 'function' ? modelResolver : (m) => m;
-    this.authHeader = typeof authHeader === 'function' ? authHeader : (k) => ({ Authorization: `Bearer ${k}` });
+    this.modelResolver =
+      typeof modelResolver === 'function'
+        ? modelResolver
+        : (m) =>
+            m && m.toLowerCase() === 'muse-spark-open'
+              ? 'meta-models/Muse-Spark-Open-816B-A42B'
+              : m && m.toLowerCase().startsWith('muse-')
+                ? m
+                : process.env.META_MUSE_MODEL || 'meta-models/Muse-Spark-Open-816B-A42B';
+    this.authHeader = authHeader;
   }
 
   isConfigured() {
-    return Boolean(this.apiKeyGetter());
+    const key = typeof this.apiKeyGetter === 'function' ? this.apiKeyGetter() : null;
+    return Boolean(key && key !== 'none');
   }
 
   async streamTurn({
     contents,
-    systemInstruction = '',
-    model,
-    tools = null,
+    systemInstruction,
+    model = this.defaultModel,
+    tools,
     generationConfig = {},
     callbacks = {}
   }) {
-    const apiKey = this.apiKeyGetter();
-    if (!apiKey) {
-      throw new Error(`[${this.providerName.toUpperCase()}] API key is not configured on server.`);
+    const key = this.apiKeyGetter();
+    if (!key || key === 'none') {
+      throw new Error(
+        `[MetaModelAdapter] Meta Muse model provider is not configured. Please ensure MODAL_API_KEY, MODAL_PROXY_TOKEN, or META_MUSE_API_KEY is configured in your environment.`
+      );
     }
 
+    const baseUrl = String(this.baseUrlGetter()).replace(/\/+$/, '');
     const wireModel = this.modelResolver(model) || this.defaultModel;
-    const baseUrl = (this.baseUrlGetter() || '').replace(/\/+$/, '');
-    const normalizedContents = normalizeGeminiContents(contents);
+    const messages = toStandardChatMessages(contents, systemInstruction);
+    const standardTools = toStandardChatTools(tools);
 
     const payload = {
       model: wireModel,
-      messages: toOpenAiMessages(normalizedContents, systemInstruction),
+      messages,
       stream: true,
-      stream_options: { include_usage: true }
+      ...(standardTools && standardTools.length > 0 ? { tools: standardTools } : {}),
+      ...(generationConfig.maxOutputTokens ? { max_tokens: generationConfig.maxOutputTokens } : {}),
+      ...(generationConfig.temperature !== undefined ? { temperature: generationConfig.temperature } : {})
     };
 
-    const oaiTools = toOpenAiTools(tools);
-    if (oaiTools) payload.tools = oaiTools;
-    if (generationConfig?.maxOutputTokens) payload.max_tokens = generationConfig.maxOutputTokens;
-    if (generationConfig?.effort) payload.reasoning_effort = String(generationConfig.effort).toLowerCase();
+    const headers = {
+      'Content-Type': 'application/json',
+      ...this.authHeader(key)
+    };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    const timeout = setTimeout(() => controller.abort(), 90000);
 
-    let response;
+    let res;
     try {
-      response = await fetch(`${baseUrl}/chat/completions`, {
+      res = await fetch(`${baseUrl}/chat/completions`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...this.authHeader(apiKey)
-        },
+        headers,
         body: JSON.stringify(payload),
         signal: controller.signal
       });
-    } catch (err) {
+    } catch (e) {
       clearTimeout(timeout);
-      throw new Error(`[${this.providerName}] Connection failed to ${baseUrl}: ${err.message}`);
+      throw new Error(`[MetaModelAdapter] Connection error to Meta inference endpoint (${baseUrl}): ${e.message}`);
     }
 
-    if (!response.ok) {
+    if (!res.ok) {
       clearTimeout(timeout);
-      const errBody = await response.text().catch(() => '');
-      throw new Error(`[${this.providerName} HTTP ${response.status} - ${wireModel}]: ${errBody.slice(0, 600)}`);
+      const errText = await res.text().catch(() => '');
+      throw new Error(`[MetaModelAdapter] Inference error HTTP ${res.status}: ${errText}`);
     }
 
-    let fullText = '';
     let fullThought = '';
-    let isInsideThink = false;
-    let usage = null;
+    let fullText = '';
     const toolAcc = new Map();
+    let usage = null;
+    let isInsideThink = false;
 
     try {
-      const reader = response.body.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let buffer = '';
 
       while (true) {
-        const { done, value } = await reader.read();
+        const { value, done } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -451,44 +148,38 @@ export class OpenAiCompatibleModelAdapter extends ModelAdapter {
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith('data:')) continue;
-          const jsonStr = trimmed.slice(5).trim();
-          if (!jsonStr || jsonStr === '[DONE]') continue;
-          let data;
+          const dataStr = trimmed.slice(5).trim();
+          if (dataStr === '[DONE]') continue;
+
+          let json;
           try {
-            data = JSON.parse(jsonStr);
+            json = JSON.parse(dataStr);
           } catch {
             continue;
           }
-          if (data.usage) usage = data.usage;
-          const delta = data.choices?.[0]?.delta;
+
+          if (json.usage) usage = json.usage;
+
+          const choice = json.choices?.[0];
+          if (!choice) continue;
+          const delta = choice.delta;
           if (!delta) continue;
 
-          const reasoning =
-            delta.reasoning_content ??
-            delta.reasoning ??
-            delta.thought ??
-            delta.thinking ??
-            delta.thought_content ??
-            delta.reasoning_text ??
-            data.choices?.[0]?.message?.reasoning ??
-            data.choices?.[0]?.message?.thought ??
-            data.choices?.[0]?.message?.reasoning_content;
-
-          if (typeof reasoning === 'string' && reasoning) {
-            fullThought += reasoning;
-            callbacks.onThoughtChunk?.(reasoning);
+          if (delta.reasoning_content) {
+            fullThought += delta.reasoning_content;
+            callbacks.onThoughtChunk?.(delta.reasoning_content);
           }
 
-          if (typeof delta.content === 'string' && delta.content) {
+          if (delta.content) {
             let textChunk = delta.content;
             while (textChunk.length > 0) {
               if (!isInsideThink) {
                 const startIdx = textChunk.indexOf('<think>');
                 if (startIdx !== -1) {
-                  const pre = textChunk.slice(0, startIdx);
-                  if (pre) {
-                    fullText += pre;
-                    callbacks.onResponseChunk?.(pre);
+                  const visiblePart = textChunk.slice(0, startIdx);
+                  if (visiblePart) {
+                    fullText += visiblePart;
+                    callbacks.onResponseChunk?.(visiblePart);
                   }
                   isInsideThink = true;
                   textChunk = textChunk.slice(startIdx + 7);
@@ -529,7 +220,7 @@ export class OpenAiCompatibleModelAdapter extends ModelAdapter {
         }
       }
     } catch (e) {
-      throw new Error(`[${this.providerName}] Stream error: ${e.message}`);
+      throw new Error(`[MetaModelAdapter] Stream error: ${e.message}`);
     } finally {
       clearTimeout(timeout);
     }
@@ -563,11 +254,11 @@ export class OpenAiCompatibleModelAdapter extends ModelAdapter {
     }
 
     if (!fullText && !fullThought && functionCalls.length === 0) {
-      throw new Error(`[${this.providerName}] (${wireModel}) returned an empty response.`);
+      throw new Error(`[MetaModelAdapter] (${wireModel}) returned an empty response.`);
     }
 
     return {
-      provider: this.providerName,
+      provider: 'meta',
       model: wireModel,
       thought: fullThought,
       text: fullText,
@@ -584,302 +275,11 @@ export class OpenAiCompatibleModelAdapter extends ModelAdapter {
   }
 }
 
-export class AnthropicModelAdapter extends ModelAdapter {
-  constructor({
-    apiKeyGetter,
-    baseUrlGetter,
-    defaultModel = 'claude-3-5-sonnet-20241022',
-    modelResolver = (m) => m
-  } = {}) {
-    super('anthropic');
-    this.apiKeyGetter = typeof apiKeyGetter === 'function' ? apiKeyGetter : () => getApiKey('ANTHROPIC_API_KEY');
-    this.baseUrlGetter = typeof baseUrlGetter === 'function' ? baseUrlGetter : () => process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1';
-    this.defaultModel = defaultModel;
-    this.modelResolver = typeof modelResolver === 'function' ? modelResolver : (m) => m;
-  }
+let sharedMetaAdapter = null;
 
-  isConfigured() {
-    return Boolean(this.apiKeyGetter());
-  }
-
-  async streamTurn({
-    contents,
-    systemInstruction = '',
-    model,
-    tools = null,
-    generationConfig = {},
-    callbacks = {}
-  }) {
-    const apiKey = this.apiKeyGetter();
-    if (!apiKey) {
-      throw new Error('[ANTHROPIC] ANTHROPIC_API_KEY is not configured on server.');
-    }
-
-    const wireModel = this.modelResolver(model) || this.defaultModel;
-    const baseUrl = (this.baseUrlGetter() || '').replace(/\/+$/, '');
-    const normalizedContents = normalizeGeminiContents(contents);
-
-    const messages = [];
-    let pendingToolUses = [];
-
-    for (const item of normalizedContents) {
-      const parts = Array.isArray(item.parts) ? item.parts : [];
-      if (item.role === 'model' || item.role === 'assistant') {
-        if (pendingToolUses.length > 0) {
-          messages.push({
-            role: 'user',
-            content: pendingToolUses.map((tc) => ({
-              type: 'tool_result',
-              tool_use_id: tc.id,
-              content: JSON.stringify({ status: 'acknowledged', output: `Acknowledged ${tc.name || 'tool'}` })
-            }))
-          });
-          pendingToolUses = [];
-        }
-
-        const content = [];
-        for (const p of parts) {
-          if (!p.thought && typeof p.text === 'string' && p.text) {
-            content.push({ type: 'text', text: p.text });
-          }
-          if (p.functionCall) {
-            const id = p.functionCall.id || `toolu_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-            pendingToolUses.push({ id, name: p.functionCall.name });
-            content.push({
-              type: 'tool_use',
-              id,
-              name: p.functionCall.name,
-              input: p.functionCall.args || {}
-            });
-          }
-        }
-        if (content.length > 0) messages.push({ role: 'assistant', content });
-        continue;
-      }
-
-      const content = [];
-      for (const p of parts) {
-        if (p.functionResponse) {
-          const name = p.functionResponse.name;
-          let matchedIdx = -1;
-          if (p.functionResponse.id) {
-            matchedIdx = pendingToolUses.findIndex((tc) => tc.id === p.functionResponse.id);
-          }
-          if (matchedIdx === -1 && name) {
-            matchedIdx = pendingToolUses.findIndex((tc) => tc.name === name);
-          }
-
-          let id = p.functionResponse.id;
-          if (matchedIdx !== -1) {
-            id = pendingToolUses[matchedIdx].id;
-            pendingToolUses.splice(matchedIdx, 1);
-          } else if (!id) {
-            id = `toolu_${Date.now().toString(36)}`;
-          }
-
-          content.push({
-            type: 'tool_result',
-            tool_use_id: id,
-            content: typeof p.functionResponse.response === 'string'
-              ? p.functionResponse.response
-              : JSON.stringify(p.functionResponse.response ?? {})
-          });
-        }
-      }
-
-      while (pendingToolUses.length > 0) {
-        const missing = pendingToolUses.shift();
-        content.push({
-          type: 'tool_result',
-          tool_use_id: missing.id,
-          content: JSON.stringify({ status: 'acknowledged', output: `Acknowledged ${missing.name || 'tool'}` })
-        });
-      }
-
-      for (const p of parts) {
-        if (!p.thought && typeof p.text === 'string' && p.text) {
-          content.push({ type: 'text', text: p.text });
-        }
-      }
-      if (content.length > 0) messages.push({ role: 'user', content });
-    }
-
-    if (pendingToolUses.length > 0) {
-      messages.push({
-        role: 'user',
-        content: pendingToolUses.map((tc) => ({
-          type: 'tool_result',
-          tool_use_id: tc.id,
-          content: JSON.stringify({ status: 'acknowledged', output: `Acknowledged ${tc.name || 'tool'}` })
-        }))
-      });
-      pendingToolUses = [];
-    }
-
-    const payload = {
-      model: wireModel,
-      max_tokens: generationConfig?.maxOutputTokens || 8192,
-      messages,
-      stream: true
-    };
-
-    if (systemInstruction) payload.system = systemInstruction;
-
-    if (Array.isArray(tools) && tools.length > 0) {
-      payload.tools = tools.map((t) => ({
-        name: t.name,
-        description: t.description || '',
-        input_schema: t.parameters || { type: 'object', properties: {} }
-      }));
-    }
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
-
-    let response;
-    try {
-      response = await fetch(`${baseUrl}/messages`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-    } catch (err) {
-      clearTimeout(timeout);
-      throw new Error(`[anthropic] Connection failed to ${baseUrl}: ${err.message}`);
-    }
-
-    if (!response.ok) {
-      clearTimeout(timeout);
-      const errBody = await response.text().catch(() => '');
-      throw new Error(`[anthropic HTTP ${response.status} - ${wireModel}]: ${errBody.slice(0, 600)}`);
-    }
-
-    let fullText = '';
-    let fullThought = '';
-    const toolBlocks = new Map();
-    let usage = null;
-
-    try {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith('data:')) continue;
-          const jsonStr = trimmed.slice(5).trim();
-          if (!jsonStr) continue;
-          let evt;
-          try {
-            evt = JSON.parse(jsonStr);
-          } catch {
-            continue;
-          }
-
-          if (evt.type === 'message_start' && evt.message?.usage) {
-            usage = evt.message.usage;
-          } else if (evt.type === 'message_delta' && evt.usage) {
-            usage = { ...(usage || {}), ...evt.usage };
-          } else if (evt.type === 'content_block_start') {
-            const idx = evt.index;
-            if (evt.content_block?.type === 'tool_use') {
-              toolBlocks.set(idx, {
-                id: evt.content_block.id,
-                name: evt.content_block.name,
-                json: ''
-              });
-            }
-          } else if (evt.type === 'content_block_delta') {
-            const idx = evt.index;
-            const delta = evt.delta;
-            if (delta?.type === 'text_delta' && delta.text) {
-              fullText += delta.text;
-              callbacks.onResponseChunk?.(delta.text);
-            } else if (delta?.type === 'thinking_delta' && delta.thinking) {
-              fullThought += delta.thinking;
-              callbacks.onThoughtChunk?.(delta.thinking);
-            } else if (delta?.type === 'input_json_delta' && delta.partial_json) {
-              const blk = toolBlocks.get(idx);
-              if (blk) blk.json += delta.partial_json;
-            }
-          }
-        }
-      }
-    } catch (e) {
-      throw new Error(`[anthropic] Stream error: ${e.message}`);
-    } finally {
-      clearTimeout(timeout);
-    }
-
-    const functionCalls = [];
-    const modelParts = [];
-    if (fullThought) modelParts.push({ text: fullThought, thought: true });
-    if (fullText) modelParts.push({ text: fullText });
-
-    for (const [, blk] of toolBlocks.entries()) {
-      let args = {};
-      try {
-        args = blk.json ? JSON.parse(blk.json) : {};
-      } catch {
-        args = {};
-      }
-      const fc = { name: blk.name, args, ...(blk.id ? { id: blk.id } : {}) };
-      functionCalls.push(fc);
-      modelParts.push({ functionCall: fc });
-      callbacks.onFunctionCall?.(fc);
-    }
-
-    return {
-      provider: 'anthropic',
-      model: wireModel,
-      thought: fullThought,
-      text: fullText,
-      functionCalls,
-      modelParts,
-      usageMetadata: usage
-        ? {
-            promptTokenCount: usage.input_tokens || 0,
-            candidatesTokenCount: usage.output_tokens || 0,
-            totalTokenCount: (usage.input_tokens || 0) + (usage.output_tokens || 0)
-          }
-        : null
-    };
-  }
-}
-
-const adapterRegistry = new Map();
-
-export function registerModelAdapter(providerName, adapter) {
-  adapterRegistry.set(providerName.toLowerCase(), adapter);
-}
-
-export function getModelAdapter(providerName = 'gemini') {
-  const key = String(providerName).toLowerCase();
-  if (adapterRegistry.has(key)) {
-    return adapterRegistry.get(key);
-  }
-
-  if (key === 'gemini' || key === 'google') {
-    const adapter = new GeminiModelAdapter();
-    adapterRegistry.set(key, adapter);
-    return adapter;
-  }
-
-  if (key === 'muse' || key === 'meta' || key === 'modal') {
-    const adapter = new OpenAiCompatibleModelAdapter({
-      providerName: 'meta',
+export function getModelAdapter(providerName = 'meta') {
+  if (!sharedMetaAdapter) {
+    sharedMetaAdapter = new MetaModelAdapter({
       apiKeyGetter: () =>
         process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
           ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
@@ -903,93 +303,24 @@ export function getModelAdapter(providerName = 'gemini') {
         return headers;
       }
     });
-    adapterRegistry.set('muse', adapter);
-    adapterRegistry.set('meta', adapter);
-    adapterRegistry.set('modal', adapter);
-    return adapter;
   }
-
-  if (key === 'openai') {
-    const adapter = new OpenAiCompatibleModelAdapter({
-      providerName: 'openai',
-      apiKeyGetter: () => getApiKey('OPENAI_API_KEY'),
-      baseUrlGetter: () => process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-      defaultModel: 'gpt-4o',
-      modelResolver: (m) => m || 'gpt-4o'
-    });
-    adapterRegistry.set('openai', adapter);
-    return adapter;
-  }
-
-  if (key === 'kimi' || key === 'moonshot') {
-    const adapter = new OpenAiCompatibleModelAdapter({
-      providerName: 'kimi',
-      apiKeyGetter: () => getApiKey('KIMI_API_KEY') || getApiKey('MOONSHOT_API_KEY'),
-      baseUrlGetter: () => process.env.KIMI_BASE_URL || 'https://api.moonshot.cn/v1',
-      defaultModel: 'moonshot-v1-auto',
-      modelResolver: (m) => m || 'moonshot-v1-auto'
-    });
-    adapterRegistry.set(key, adapter);
-    return adapter;
-  }
-
-  if (key === 'anthropic' || key === 'spark') {
-    const adapter = new AnthropicModelAdapter({
-      apiKeyGetter: () => getApiKey('ANTHROPIC_API_KEY'),
-      baseUrlGetter: () => process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1',
-      defaultModel: 'claude-3-5-sonnet-20241022',
-      modelResolver: (m) => m || 'claude-3-5-sonnet-20241022'
-    });
-    adapterRegistry.set(key, adapter);
-    return adapter;
-  }
-
-  if (key === 'deepseek') {
-    const adapter = new OpenAiCompatibleModelAdapter({
-      providerName: 'deepseek',
-      apiKeyGetter: () => getApiKey('DEEPSEEK_API_KEY') || getApiKey('OPENAI_API_KEY'),
-      baseUrlGetter: () => process.env.DEEPSEEK_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.deepseek.com/v1',
-      defaultModel: 'deepseek-chat',
-      modelResolver: (m) => m || 'deepseek-chat'
-    });
-    adapterRegistry.set(key, adapter);
-    return adapter;
-  }
-
-  const adapter = new OpenAiCompatibleModelAdapter({
-    providerName: key,
-    apiKeyGetter: () => getApiKey('OPENAI_API_KEY') || getApiKey('API_KEY') || 'none',
-    baseUrlGetter: () => process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-    defaultModel: process.env.DEFAULT_MODEL || 'gpt-4o'
-  });
-  adapterRegistry.set(key, adapter);
-  return adapter;
+  return sharedMetaAdapter;
 }
 
 export function resolveProviderForModel(modelId = '') {
   const m = String(modelId || '').trim().toLowerCase();
   if (
-    m.startsWith('meta-muse') ||
-    m.startsWith('muse-') ||
+    !m ||
     m.startsWith('meta-') ||
-    m.startsWith('sam-')
+    m.startsWith('muse-') ||
+    m.startsWith('sam-') ||
+    m.includes('spark') ||
+    m.includes('wonder')
   ) {
-    return 'muse';
+    return 'meta';
   }
-  if (m.startsWith('claude-') || m.startsWith('sonnet-') || m.startsWith('opus-') || m.startsWith('haiku-') || m.startsWith('fable-') || m.startsWith('spark-')) return 'anthropic';
-  if (m.startsWith('gpt-') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4') || m.startsWith('chatgpt-')) return 'openai';
-  if (m.startsWith('deepseek')) return 'deepseek';
-  if (m.startsWith('kimi-') || m.startsWith('moonshot-')) return 'kimi';
-  if (m.startsWith('gemini-')) return 'gemini';
-
-  if (getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY')) return 'muse';
-  if (getApiKey('OPENAI_API_KEY') || process.env.OPENAI_BASE_URL) return 'openai';
-  if (getApiKey('ANTHROPIC_API_KEY')) return 'anthropic';
-  if (getApiKey('DEEPSEEK_API_KEY')) return 'deepseek';
-  if (getApiKey('KIMI_API_KEY') || getApiKey('MOONSHOT_API_KEY')) return 'kimi';
-  if (getApiKey('GEMINI_API_KEY')) return 'gemini';
-
-  return 'muse';
+  // All models in Dotta are strictly Meta models
+  return 'meta';
 }
 
 export async function streamModelTurn({
@@ -1004,7 +335,9 @@ export async function streamModelTurn({
   const adapter = getModelAdapter(provider);
 
   if (!adapter.isConfigured()) {
-    throw new Error(`[ModelAdapter] Model "${model}" belongs to provider "${provider}", but its API key is not configured.`);
+    throw new Error(
+      `[ModelAdapter] Meta Muse model provider is not configured. Please ensure MODAL_API_KEY, MODAL_PROXY_TOKEN, or META_MUSE_API_KEY is configured in your environment.`
+    );
   }
 
   return await adapter.streamTurn({

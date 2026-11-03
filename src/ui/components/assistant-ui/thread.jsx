@@ -343,38 +343,38 @@ function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-s
                     <span className="text-[10px] text-sky-400 font-mono">default</span>
                   </div>
 
-                  {/* Gemini 3.8 Flash */}
+                  {/* Muse Wonder 1.0 */}
                   <div
                     onClick={() => {
-                      onSelectModel?.('gemini-3.8-flash');
+                      onSelectModel?.('muse-wonder-1.0');
                       setModelMenuOpen(false);
                     }}
                     className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
-                      selectedModel === 'gemini-3.8-flash' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                      selectedModel === 'muse-wonder-1.0' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <Zap size={14} className="text-amber-400" />
-                      <span className="text-[13px]">gemini-3.8-flash</span>
+                      <span className="text-[13px]">muse-wonder-1.0</span>
                     </div>
-                    <span className="text-[10px] text-amber-400 font-mono">fast</span>
+                    <span className="text-[10px] text-amber-400 font-mono">frontier</span>
                   </div>
 
-                  {/* Gemini 3.1 Pro Preview */}
+                  {/* Muse Spark 1.3 */}
                   <div
                     onClick={() => {
-                      onSelectModel?.('gemini-3.1-pro-preview');
+                      onSelectModel?.('muse-spark-1.3');
                       setModelMenuOpen(false);
                     }}
                     className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
-                      selectedModel === 'gemini-3.1-pro-preview' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                      selectedModel === 'muse-spark-1.3' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <Sparkles size={14} className="text-indigo-400" />
-                      <span className="text-[13px]">gemini-3.1-pro</span>
+                      <span className="text-[13px]">muse-spark-1.3</span>
                     </div>
-                    <span className="text-[10px] text-indigo-400 font-mono">deep</span>
+                    <span className="text-[10px] text-indigo-400 font-mono">meta api</span>
                   </div>
                 </div>
               </div>
@@ -509,11 +509,6 @@ export function formatDisplayModelName(modelId) {
   if (clean === 'muse-spark-1.3') return 'Muse Spark 1.3';
   if (clean === 'muse-spark-1.2') return 'Muse Spark 1.2';
   if (clean === 'muse-spark-1.1') return 'Muse Spark 1.1';
-  if (clean === 'gemini-3.8-flash' || clean.includes('3.8-flash') || clean.includes('3.8')) return 'Gemini 3.8 Flash';
-  if (clean === 'gemini-2.5-flash' || clean.includes('2.5-flash') || clean.includes('2.5')) return 'Gemini 2.5 Flash';
-  if (clean === 'gpt-56-terra' || clean.includes('gpt-4o') || clean.includes('terra')) return 'GPT-5.6 Terra';
-  if (clean === 'gpt-56-sol' || clean.includes('gpt-4o-mini') || clean.includes('sol')) return 'GPT-5.6 Sol';
-  if (clean.includes('kimi')) return 'Kimi K2';
   return String(modelId);
 }
 

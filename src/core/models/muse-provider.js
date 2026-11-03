@@ -1,10 +1,10 @@
 /**
  * muse-provider.js
  *
- * Real Meta Muse Spark provider. Talks to Meta's OpenAI-compatible
- * Chat Completions endpoint (POST {base}/chat/completions, Bearer auth) and
- * returns the SAME turn shape as callModelStream so the agent loop
- * (tools, budgets, interrupts, persistence) works unchanged.
+ * Real Meta Muse Spark provider. Talks to Meta's Chat Completions endpoint
+ * (POST {base}/chat/completions, Bearer auth) and returns the SAME turn shape
+ * as callModelStream so the agent loop (tools, budgets, interrupts, persistence)
+ * works unchanged.
  */
 
 import { getApiKey } from '../env.js';
@@ -36,7 +36,7 @@ export function resolveMuseWireModel(requestedModel) {
   return process.env.META_MUSE_MODEL || process.env.MODEL_ID || 'muse-spark-open';
 }
 
-/** Internal schema types are UPPERCASE; OpenAI JSON Schema needs lowercase. */
+/** Internal schema types are UPPERCASE; JSON Schema needs lowercase. */
 function toJsonSchema(schema) {
   if (Array.isArray(schema)) return schema.map(toJsonSchema);
   if (!schema || typeof schema !== 'object') return schema;
@@ -49,7 +49,7 @@ function toJsonSchema(schema) {
   return out;
 }
 
-export function toOpenAiTools(tools) {
+export function toStandardChatTools(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
   return tools.map((t) => ({
     type: 'function',
@@ -61,8 +61,8 @@ export function toOpenAiTools(tools) {
   }));
 }
 
-/** Internal turn contents -> OpenAI chat messages. */
-export function toOpenAiMessages(contents, systemInstruction) {
+/** Internal turn contents -> chat messages. */
+export function toStandardChatMessages(contents, systemInstruction) {
   const messages = [];
   if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
 
@@ -250,16 +250,16 @@ export async function callMuseStream({
 
   const payload = {
     model,
-    messages: toOpenAiMessages(contents, systemInstruction),
+    messages: toStandardChatMessages(contents, systemInstruction),
     stream: true,
     stream_options: { include_usage: true },
     temperature: generationConfig?.temperature ?? 0.3,
     top_p: generationConfig?.topP ?? 0.95,
     reasoning_effort: String(generationConfig?.reasoningEffort || generationConfig?.effort || 'medium').toLowerCase()
   };
-  const oaiTools = toOpenAiTools(tools);
-  if (oaiTools) {
-    payload.tools = oaiTools;
+  const standardTools = toStandardChatTools(tools);
+  if (standardTools) {
+    payload.tools = standardTools;
     payload.tool_choice = 'auto';
   }
   if (generationConfig?.maxOutputTokens) payload.max_tokens = generationConfig.maxOutputTokens;

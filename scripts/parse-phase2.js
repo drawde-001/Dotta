@@ -31,8 +31,14 @@ function extractFromLog(logPath) {
   return result;
 }
 
-const res1 = extractFromLog('C:\\Users\\USER\\.gemini\\antigravity\\brain\\180726b3-799f-46ed-a248-d1a4395d6319\\.system_generated\\tasks\\task-2769.log');
-const res2 = extractFromLog('C:\\Users\\USER\\.gemini\\antigravity\\brain\\180726b3-799f-46ed-a248-d1a4395d6319\\.system_generated\\tasks\\task-2787.log');
+const logPath1 = process.argv[2] || '';
+const logPath2 = process.argv[3] || '';
+if (!logPath1) {
+  console.log('Usage: node parse-phase2.js <logPath1> [logPath2]');
+  process.exit(0);
+}
+const res1 = extractFromLog(logPath1);
+const res2 = logPath2 ? extractFromLog(logPath2) : {};
 
 const combined = { ...res1, ...res2 };
 fs.writeFileSync('scripts/phase2-specs.json', JSON.stringify(combined, null, 2));

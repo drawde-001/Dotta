@@ -159,25 +159,50 @@ nano .env
 
 Set your production keys:
 ```env
-# Primary Model Provider (Meta Muse default)
-DEFAULT_MODEL=meta-muse-spark
+# Primary Model Provider (Meta Muse Spark Open on Modal)
+DEFAULT_MODEL=muse-spark-open
+MODAL_MUSE_SPARK_URL=https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1
+MODAL_PROXY_TOKEN_ID=your_modal_proxy_token_id
+MODAL_PROXY_TOKEN_SECRET=your_modal_proxy_token_secret
+MODAL_API_KEY=your_modal_api_key
+
+# Meta Model API (Fallback & Multimodal Tools)
 META_MUSE_API_KEY=your_actual_meta_muse_api_key_here
 META_MUSE_BASE_URL=https://api.meta.ai/v1
-META_MUSE_MODEL=muse-spark-1.3
+MODEL_API_KEY=your_model_api_key
 
 # Server Settings
 PORT=3001
 NODE_ENV=production
-PUBLIC_DOMAIN=yourdomain.com
+PUBLIC_DOMAIN=dotta.duckdns.org
 
 # Supabase Database Configuration
-SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_URL=https://vjuoutdhpnnmasstfiwo.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 
-# Tool Execution
+# Tool Execution & Sandbox
 DOTTA_SANDBOX_DISTRO=dotta-sandbox
 ```
+
+### Supabase Database Initialization
+Apply the database schema directly to your Supabase project using the Supabase CLI:
+```bash
+# 1. Install & login to Supabase CLI
+npm install -g supabase
+supabase login
+
+# 2. Link your local repo to the remote project
+supabase link --project-ref vjuoutdhpnnmasstfiwo
+
+# 3. Apply the Dotta schema
+supabase db push
+# Or execute supabase/schema.sql in the Supabase SQL Editor
+```
+
+Pre-seeded accounts are immediately available upon database sync:
+* **Master Admin**: `eddy@dotta.ai` / `Dotta2026!`
+* **Judges Review**: `judges@dotta.ai` / `DottaJudges2026!`
 
 ---
 
@@ -292,7 +317,7 @@ chmod +x deploy.sh
 1. **Verify Backend Health:**
    ```bash
    curl -i http://localhost:3001/api/health
-   # Returns: {"status":"healthy","defaultModel":"meta-muse-spark", ...}
+   # Returns: {"status":"healthy","defaultModel":"muse-spark-open", ...}
    ```
 2. **Verify Public HTTPS:**
    Open `https://dotta.duckdns.org` in your browser.

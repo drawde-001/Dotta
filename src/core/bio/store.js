@@ -7,6 +7,7 @@ import {
   getUserWorkspaceRoot,
   validateAndResolvePath
 } from '../execution/workspace.js';
+import { findUserById } from '../auth/user-store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -90,14 +91,14 @@ function emptyFields() {
     city: '',
     state: '',
     zipCode: '',
-    country: 'United States',
+    country: '',
     email: '',
     phone: '',
-    gender: 'Female',
-    ethnicAppearance: 'White',
-    unionStatus: 'Non-Union',
-    languages: 'English',
-    dialects: 'General American, Standard British',
+    gender: '',
+    ethnicAppearance: '',
+    unionStatus: '',
+    languages: '',
+    dialects: '',
     headline: '',
     role: '',
     residence: '',
@@ -113,6 +114,53 @@ function emptyFields() {
     hobbyProjects: '',
     ideas: '',
     notes: []
+  };
+}
+
+export function isDemoSeedUser(userId) {
+  if (!userId) return false;
+  const safe = String(userId).trim();
+  if (safe === 'user-judges-review') return true;
+  if (
+    safe === 'user-alice-001' ||
+    safe === 'user-bob-002' ||
+    safe.startsWith('user-seed-') ||
+    safe.startsWith('test-') ||
+    safe.startsWith('user-test-')
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function createEmptyUserProfile(userId) {
+  let user = null;
+  try {
+    user = findUserById(userId);
+  } catch {
+    user = null;
+  }
+  const id = `profile-${crypto.randomUUID().slice(0, 8)}`;
+  const fullName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || '';
+  const firstName = user?.firstName || '';
+  const lastName = user?.lastName || '';
+  const email = user?.email || '';
+
+  return {
+    id,
+    name: fullName ? `${fullName} (Default)` : 'Default Profile',
+    isActive: true,
+    grants: { read: false, write: false },
+    fields: {
+      ...emptyFields(),
+      fullName,
+      firstName,
+      lastName,
+      email
+    },
+    entries: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
   };
 }
 
@@ -160,7 +208,7 @@ function seedProfile() {
         'Alex Morgan is a systems engineer and software architect with a decade of experience designing scalable distributed runtimes, AI tool execution frameworks, and security-hardened agent platforms. Known for balancing rapid prototyping with strict fail-closed sandboxing, Alex has led platform infrastructure initiatives that bridge low-level execution with intuitive human-in-the-loop interfaces.',
       interests: ['Autonomous Agents', 'Distributed Systems', 'React 19 & Next.js', 'Compiler Design'],
       workHistory: [
-        { period: '2024 to now', title: 'Staff AI Engineer', meta: 'Anthropic Ecosystem · Remote' },
+        { period: '2024 to now', title: 'Staff AI Engineer', meta: 'Meta Ecosystem · Remote' },
         { period: '2021 to 2024', title: 'Senior Systems Architect', meta: 'Cloud Infrastructure · San Francisco' },
         { period: '2019 to 2021', title: 'Distributed Systems Engineer', meta: 'Lumen Systems · Seattle' }
       ],
@@ -308,10 +356,13 @@ export function loadUserBio(userId) {
       doc = null;
     }
   }
-  if (!doc || !Array.isArray(doc.profiles)) {
+
+  const isDemo = isDemoSeedUser(userId);
+
+  if (!doc || !Array.isArray(doc.profiles) || doc.profiles.length === 0) {
     doc = {
       userId: sanitizeUserId(userId),
-      profiles: [seedProfile()],
+      profiles: [isDemo ? seedProfile() : createEmptyUserProfile(userId)],
       proposals: [],
       answers: [],
       createdAt: Date.now(),
@@ -341,23 +392,64 @@ export function loadUserBio(userId) {
   };
 
   let repaired = false;
-  for (const profile of doc.profiles) {
-    if (!profile.fields) profile.fields = emptyFields();
-    for (const [key, val] of Object.entries(DEFAULT_CONTACT_AND_ABOUT)) {
-      if (profile.fields[key] === undefined || profile.fields[key] === null || profile.fields[key] === '') {
-        profile.fields[key] = val;
+
+  if (isDemo) {
+    for (const profile of doc.profiles) {
+      if (!profile.fields) profile.fields = emptyFields();
+      for (const [key, val] of Object.entries(DEFAULT_CONTACT_AND_ABOUT)) {
+        if (profile.fields[key] === undefined || profile.fields[key] === null || profile.fields[key] === '') {
+          profile.fields[key] = val;
+          repaired = true;
+        }
+      }
+      if (!profile.fields.socialLinks) {
+        profile.fields.socialLinks = { facebook: 'https://facebook.com', github: 'https://github.com', linkedin: 'https://linkedin.com', x: 'https://twitter.com', instagram: 'https://instagram.com' };
+        repaired = true;
+      } else if (profile.fields.socialLinks.facebook === undefined) {
+        profile.fields.socialLinks = { facebook: 'https://facebook.com', ...profile.fields.socialLinks };
+        repaired = true;
+      }
+      if (materializeProfileFiles(userId, profile)) repaired = true;
+    }
+  } else {
+    // For regular users, ensure clean schema integrity and ensure Alex Morgan data/files are not forced
+    for (const profile of doc.profiles) {
+      if (!profile.fields) {
+        profile.fields = emptyFields();
+        repaired = true;
+      }
+      // If a non-demo user was previously infected with the Alex Morgan defaults from the old bug, clean it up
+      if (profile.fields.email === 'alex.morgan@example.com' || profile.name === 'Alex Morgan (Default)') {
+        let realUser = null;
+        try {
+          realUser = findUserById(userId);
+        } catch {}
+        profile.name = realUser?.name ? `${realUser.name} (Default)` : 'Default Profile';
+        profile.fields.fullName = realUser?.name || [realUser?.firstName, realUser?.lastName].filter(Boolean).join(' ') || '';
+        profile.fields.firstName = realUser?.firstName || '';
+        profile.fields.lastName = realUser?.lastName || '';
+        profile.fields.email = realUser?.email || '';
+        profile.fields.address = '';
+        profile.fields.city = '';
+        profile.fields.state = '';
+        profile.fields.zipCode = '';
+        profile.fields.phone = '';
+        profile.fields.photo = '';
+        profile.fields.cv = null;
+        profile.entries = (profile.entries || []).filter((e) => !e.file?.path?.includes('seed-'));
+        repaired = true;
+      }
+      if (!profile.fields.socialLinks) {
+        profile.fields.socialLinks = { facebook: '', github: '', linkedin: '', x: '', instagram: '' };
+        repaired = true;
+      }
+      if (!Array.isArray(profile.entries)) {
+        profile.entries = [];
         repaired = true;
       }
     }
-    if (!profile.fields.socialLinks) {
-      profile.fields.socialLinks = { facebook: 'https://facebook.com', github: 'https://github.com', linkedin: 'https://linkedin.com', x: 'https://twitter.com', instagram: 'https://instagram.com' };
-      repaired = true;
-    } else if (profile.fields.socialLinks.facebook === undefined) {
-      profile.fields.socialLinks = { facebook: 'https://facebook.com', ...profile.fields.socialLinks };
-      repaired = true;
-    }
-    if (materializeProfileFiles(userId, profile)) repaired = true;
   }
+
   if (repaired || !fs.existsSync(filePath)) {
     atomicWriteJson(filePath, doc);
   }

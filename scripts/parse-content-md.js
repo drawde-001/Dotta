@@ -1,6 +1,10 @@
 import fs from 'fs';
 
-const filePath = process.argv[2] || 'C:/Users/USER/.gemini/antigravity/brain/180726b3-799f-46ed-a248-d1a4395d6319/.system_generated/steps/2954/content.md';
+const filePath = process.argv[2] || '';
+if (!filePath) {
+  console.log('Usage: node parse-content-md.js <path>');
+  process.exit(0);
+}
 const html = fs.readFileSync(filePath, 'utf8');
 const docIdx = html.indexOf('rounded-document');
 console.log('docIdx:', docIdx);

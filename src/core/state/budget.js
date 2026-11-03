@@ -37,26 +37,20 @@ export function calculateTurnCost(usageMetadata = {}, model = process.env.DEFAUL
   const thoughtTokens =
     usageMetadata.total_thought_tokens ?? usageMetadata.totalThoughtTokens ?? usageMetadata.thoughtTokens ?? 0;
 
-  // Multi-provider pricing calculation (Meta Muse, Anthropic Claude, OpenAI, DeepSeek, Google Gemini)
+  // Meta Muse model pricing calculation (Meta Muse Spark Open, Muse Wonder, Muse Spark API)
   const m = String(model || '').toLowerCase();
   let inputRate = 0.00000015;
   let outputRate = 0.00000060;
 
-  if (m.includes('opus')) {
-    inputRate = 0.000015;
-    outputRate = 0.000075;
-  } else if (m.includes('sonnet') || m.includes('claude-3-5') || m.includes('claude-3.5') || m.includes('fable')) {
+  if (m.includes('wonder')) {
     inputRate = 0.000003;
     outputRate = 0.000015;
-  } else if (m.includes('haiku') || m.includes('gpt-4o-mini') || m.includes('sol') || m.includes('lite')) {
-    inputRate = 0.00000015;
-    outputRate = 0.00000060;
-  } else if (m.includes('gpt-4o') || m.includes('terra') || m.includes('deepseek-chat')) {
-    inputRate = 0.0000025;
-    outputRate = 0.000010;
-  } else if (m.includes('pro')) {
+  } else if (m.includes('spark-1.3') || m.includes('spark-1.2')) {
     inputRate = 0.00000125;
     outputRate = 0.0000050;
+  } else if (m.includes('open') || m.includes('spark-open') || m.includes('816b')) {
+    inputRate = 0.00000015;
+    outputRate = 0.00000060;
   }
 
   const costUsd = Number(

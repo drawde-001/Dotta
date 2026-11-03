@@ -21,7 +21,7 @@ import { ComposerVoiceDictation } from './assistant-ui/elements/composer-voice.a
 
 export type ComposerMode = 'Plan' | 'Ask' | 'Build';
 export type EffortLevel = 'Low' | 'Medium' | 'High';
-export type ProviderType = 'muse' | 'google' | 'kimi' | 'openai' | 'spark';
+export type ProviderType = 'muse';
 export type ModelFilterTab = 'fav' | 'all';
 
 export interface ModelOption {
@@ -112,105 +112,6 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     efforts: ['Low', 'Medium', 'High'],
     badge: 'Meta Muse',
     desc: 'Baseline Muse Spark agent model',
-    hasRealApi: true,
-  },
-  {
-    id: 'gpt-56-terra',
-    name: 'GPT-5.6 Terra (GPT-4o)',
-    effort: 'High',
-    provider: 'openai',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'OpenAI API',
-    desc: 'Flagship OpenAI reasoning and autonomous execution',
-    hasRealApi: true,
-  },
-  {
-    id: 'gpt-56-sol',
-    name: 'GPT-5.6 Sol (Mini)',
-    effort: 'Medium',
-    provider: 'openai',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Fast Code',
-    desc: 'High-throughput, low-latency OpenAI code engine',
-    hasRealApi: true,
-  },
-  {
-    id: 'sonnet-5',
-    name: 'Claude 3.5 Sonnet',
-    effort: 'High',
-    provider: 'spark',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Anthropic',
-    desc: 'Frontier Claude agentic reasoning and tool execution',
-    hasRealApi: true,
-  },
-  {
-    id: 'opus-48',
-    name: 'Claude 3 Opus',
-    effort: 'High',
-    provider: 'spark',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Deep Arch',
-    desc: 'Deep architecture, complex coding, and strategic planning',
-    hasRealApi: true,
-  },
-  {
-    id: 'fable-5',
-    name: 'Fable 5 (Claude)',
-    effort: 'High',
-    provider: 'spark',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Agentic',
-    desc: 'Autonomous multi-step tool agent engine',
-    hasRealApi: true,
-  },
-  {
-    id: 'openai-compatible',
-    name: 'OpenAI Compatible Endpoint',
-    effort: 'High',
-    provider: 'openai',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Universal',
-    desc: 'Compatible with any OpenAI endpoint (Ollama, vLLM, DeepSeek, Groq, OpenRouter)',
-    hasRealApi: true,
-  },
-  {
-    id: 'kimi-k3',
-    name: 'Kimi K3 (Moonshot)',
-    effort: 'High',
-    provider: 'kimi',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Moonshot',
-    desc: 'Ultra-long context reasoning and document synthesis',
-    hasRealApi: true,
-  },
-  {
-    id: 'gemini-3.8-flash',
-    name: 'Gemini 3.8 Flash',
-    effort: 'High',
-    provider: 'google',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Google API',
-    desc: 'Fast multimodal Google flagship model',
-    hasRealApi: true,
-  },
-  {
-    id: 'gemini-3.1-pro-preview',
-    name: 'Gemini 3.1 Pro',
-    effort: 'High',
-    provider: 'google',
-    isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
-    badge: 'Deep Thinking',
-    desc: 'Frontier Gemini 3.1 Pro deep reasoning and code architecture',
     hasRealApi: true,
   },
 ];
@@ -353,118 +254,13 @@ function MetaLogo({ size = 15 }: { size?: number }) {
   );
 }
 
-function GeminiLogo({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      className="flex-shrink-0"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <title>Gemini</title>
-      <path
-        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-        fill="#3186FF"
-      />
-      <path
-        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-        fill="url(#gemini-grad-0)"
-      />
-      <path
-        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-        fill="url(#gemini-grad-1)"
-      />
-      <path
-        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
-        fill="url(#gemini-grad-2)"
-      />
-      <defs>
-        <linearGradient id="gemini-grad-0" x1="7" x2="11" y1="15.5" y2="12" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#08B962" />
-          <stop offset="1" stopColor="#08B962" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="gemini-grad-1" x1="8" x2="11.5" y1="5.5" y2="11" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#F94543" />
-          <stop offset="1" stopColor="#F94543" stopOpacity="0" />
-        </linearGradient>
-        <linearGradient id="gemini-grad-2" x1="3.5" x2="17.5" y1="13.5" y2="12" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#FABC12" />
-          <stop offset=".46" stopColor="#FABC12" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function OpenAiLogo({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="#10A37F"
-      fillRule="evenodd"
-      className="flex-shrink-0"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <title>OpenAI</title>
-      <path d="M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z" />
-    </svg>
-  );
-}
-
-function ClaudeLogo({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="#D97757"
-      className="flex-shrink-0"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <title>Claude</title>
-      <path
-        d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z"
-        fill="#D97757"
-        fillRule="nonzero"
-      />
-    </svg>
-  );
-}
-
-function MoonshotLogo({ size = 15 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="#4F8BFF"
-      fillRule="evenodd"
-      className="flex-shrink-0"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <title>Moonshot</title>
-      <path d="M1.052 16.916l9.539 2.552a21.007 21.007 0 00.06 2.033l5.956 1.593a11.997 11.997 0 01-5.586.865l-.18-.016-.044-.004-.084-.009-.094-.01a11.605 11.605 0 01-.157-.02l-.107-.014-.11-.016a11.962 11.962 0 01-.32-.051l-.042-.008-.075-.013-.107-.02-.07-.015-.093-.019-.075-.016-.095-.02-.097-.023-.094-.022-.068-.017-.088-.022-.09-.024-.095-.025-.082-.023-.109-.03-.062-.02-.084-.025-.093-.028-.105-.034-.058-.019-.08-.026-.09-.031-.066-.024a6.293 6.293 0 01-.044-.015l-.068-.025-.101-.037-.057-.022-.08-.03-.087-.035-.088-.035-.079-.032-.095-.04-.063-.028-.063-.027a5.655 5.655 0 01-.041-.018l-.066-.03-.103-.047-.052-.024-.096-.046-.062-.03-.084-.04-.086-.044-.093-.047-.052-.027-.103-.055-.057-.03-.058-.032a6.49 6.49 0 01-.046-.026l-.094-.053-.06-.034-.051-.03-.072-.041-.082-.05-.093-.056-.052-.032-.084-.053-.061-.039-.079-.05-.07-.047-.053-.035a7.785 7.785 0 01-.054-.036l-.044-.03-.044-.03a6.066 6.066 0 01-.04-.028l-.057-.04-.076-.054-.069-.05-.074-.054-.056-.042-.076-.057-.076-.059-.086-.067-.045-.035-.064-.052-.074-.06-.089-.073-.046-.039-.046-.039a7.516 7.516 0 01-.043-.037l-.045-.04-.061-.053-.07-.062-.068-.06-.062-.058-.067-.062-.053-.05-.088-.084a13.28 13.28 0 01-.099-.097l-.029-.028-.041-.042-.069-.07-.05-.051-.05-.053a6.457 6.457 0 01-.168-.179l-.08-.088-.062-.07-.071-.08-.042-.049-.053-.062-.058-.068-.046-.056a7.175 7.175 0 01-.027-.033l-.045-.055-.066-.082-.041-.052-.05-.064-.02-.025a11.99 11.99 0 01-1.44-2.402zm-1.02-5.794l11.353 3.037a20.468 20.468 0 00-.469 2.011l10.817 2.894a12.076 12.076 0 01-1.845 2.005L.657 15.923l-.016-.046-.035-.104a11.965 11.965 0 01-.05-.153l-.007-.023a11.896 11.896 0 01-.207-.741l-.03-.126-.018-.08-.021-.097-.018-.081-.018-.09-.017-.084-.018-.094c-.026-.141-.05-.283-.071-.426l-.017-.118-.011-.083-.013-.102a12.01 12.01 0 01-.019-.161l-.005-.047a12.12 12.12 0 01-.034-2.145zm1.593-5.15l11.948 3.196c-.368.605-.705 1.231-1.01 1.875l11.295 3.022c-.142.82-.368 1.612-.668 2.365l-11.55-3.09L.124 10.26l.015-.1.008-.049.01-.067.015-.087.018-.098c.026-.148.056-.295.088-.442l.028-.124.02-.085.024-.097c.022-.09.045-.18.07-.268l.028-.102.023-.083.03-.1.025-.082.03-.096.026-.082.031-.095a11.896 11.896 0 011.01-2.232zm4.442-4.4L17.352 4.59a20.77 20.77 0 00-1.688 1.721l7.823 2.093c.267.852.442 1.744.513 2.665L2.106 5.213l.045-.065.027-.04.04-.055.046-.065.055-.076.054-.072.064-.086.05-.065.057-.073.055-.07.06-.074.055-.069.065-.077.054-.066.066-.077.053-.06.072-.082.053-.06.067-.074.054-.058.073-.078.058-.06.063-.067.168-.17.1-.098.059-.056.076-.071a12.084 12.084 0 012.272-1.677zM12.017 0h.097l.082.001.069.001.054.002.068.002.046.001.076.003.047.002.06.003.054.002.087.005.105.007.144.011.088.007.044.004.077.008.082.008.047.005.102.012.05.006.108.014.081.01.042.006.065.01.207.032.07.012.065.011.14.026.092.018.11.022.046.01.075.016.041.01L14.7.3l.042.01.065.015.049.012.071.017.096.024.112.03.113.03.113.032.05.015.07.02.078.024.073.023.05.016.05.016.076.025.099.033.102.036.048.017.064.023.093.034.11.041.116.045.1.04.047.02.06.024.041.018.063.026.04.018.057.025.11.048.1.046.074.035.075.036.06.028.092.046.091.045.102.052.053.028.049.026.046.024.06.033.041.022.052.029.088.05.106.06.087.051.057.034.053.032.096.059.088.055.098.062.036.024.064.041.084.056.04.027.062.042.062.043.023.017c.054.037.108.075.161.114l.083.06.065.048.056.043.086.065.082.064.04.03.05.041.086.069.079.065.085.071c.712.6 1.353 1.283 1.909 2.031L7.222.994l.062-.027.065-.028.081-.034.086-.035c.113-.045.227-.09.341-.131l.096-.035.093-.033.084-.03.096-.031c.087-.03.176-.058.264-.085l.091-.027.086-.025.102-.03.085-.023.1-.026L9.04.37l.09-.023.091-.022.095-.022.09-.02.098-.021.091-.02.095-.018.092-.018.1-.018.091-.016.098-.017.092-.014.097-.015.092-.013.102-.013.091-.012.105-.012.09-.01.105-.01c.093-.01.186-.018.28-.024l.106-.008.09-.005.11-.006.093-.004.1-.004.097-.002.099-.002.197-.002z" />
-    </svg>
-  );
-}
-
 function ProviderBadgeIcon({
-  provider,
   size = 15,
 }: {
-  provider: ProviderType;
+  provider?: ProviderType;
   size?: number;
 }) {
-  if (provider === 'muse') return <MetaLogo size={size} />;
-  if (provider === 'google') return <GeminiLogo size={size} />;
-  if (provider === 'openai') return <OpenAiLogo size={size} />;
-  if (provider === 'spark') return <ClaudeLogo size={size} />;
-  if (provider === 'kimi') return <MoonshotLogo size={size} />;
-  return null;
+  return <MetaLogo size={size} />;
 }
 
 function CheckmarkIcon() {
@@ -612,14 +408,6 @@ export const InputDock: React.FC<InputDockProps> = ({
             let isConfigured = false;
             if (m.provider === 'muse') {
               isConfigured = Boolean(providers.muse?.configured ?? data.museConfigured);
-            } else if (m.provider === 'google') {
-              isConfigured = Boolean(providers.google?.configured ?? providers.gemini?.configured ?? data.geminiConfigured);
-            } else if (m.provider === 'openai') {
-              isConfigured = Boolean(providers.openai?.configured);
-            } else if (m.provider === 'spark') {
-              isConfigured = Boolean(providers.spark?.configured ?? providers.anthropic?.configured);
-            } else if (m.provider === 'kimi') {
-              isConfigured = Boolean(providers.kimi?.configured);
             }
 
             return {
@@ -2384,9 +2172,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                         const isSelected = !autoMode && m.id === activeModelId;
                         const isHovered =
                           m.id === hoveredModelId && searchQuery.trim().length === 0;
-                        const isSelectable =
-                          m.provider === 'muse' || m.provider === 'google' || m.id.startsWith('gemini');
-                        const isAvailable = isSelectable && m.hasRealApi !== false;
+                        const isAvailable = m.hasRealApi !== false;
 
                         return (
                           <div
@@ -2417,18 +2203,14 @@ export const InputDock: React.FC<InputDockProps> = ({
                               scheduleHideEffortSubmenu();
                             }}
                             className={`aic-model-row ${isHovered ? 'active-hover' : ''} ${
-                              !isSelectable
-                                ? 'opacity-30 grayscale cursor-not-allowed select-none pointer-events-none'
-                                : !isAvailable
-                                  ? 'opacity-40 cursor-not-allowed select-none'
-                                  : ''
+                              !isAvailable
+                                ? 'opacity-40 cursor-not-allowed select-none'
+                                : ''
                             }`}
                             title={
-                              !isSelectable
-                                ? `${m.name} (Disabled)`
-                                : !isAvailable
-                                  ? `${m.name} (API endpoint not configured)`
-                                  : m.desc || m.name
+                              !isAvailable
+                                ? `${m.name} (API endpoint not configured)`
+                                : m.desc || m.name
                             }
                           >
                             <div className="flex items-center gap-2 min-w-0 pr-1">
@@ -2442,14 +2224,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                                 >
                                   {m.name}
                                 </span>
-                                {!isSelectable ? (
-                                  <span
-                                    className="text-[10px] ml-1.5 px-1.5 py-0.5 rounded bg-white/5 font-mono"
-                                    style={{ color: 'var(--text-muted)' }}
-                                  >
-                                    Disabled
-                                  </span>
-                                ) : isAvailable ? (
+                                {isAvailable ? (
                                   <span
                                     className="font-normal ml-1"
                                     style={{ color: 'var(--text-secondary)' }}
@@ -2465,18 +2240,17 @@ export const InputDock: React.FC<InputDockProps> = ({
                                   </span>
                                 )}
                               </span>
-                              {isSelectable && m.provider === 'muse' && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => handleToggleFavStar(e, m.id)}
-                                  className={`aic-fav-star-btn ${m.isFav ? 'starred' : ''}`}
-                                  title={
-                                    m.isFav
-                                      ? 'Remove from favourites'
-                                      : 'Add to favourites'
-                                  }
-                                  aria-label={`Toggle favourite for ${m.name}`}
-                                >
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleFavStar(e, m.id)}
+                                className={`aic-fav-star-btn ${m.isFav ? 'starred' : ''}`}
+                                title={
+                                  m.isFav
+                                    ? 'Remove from favourites'
+                                    : 'Add to favourites'
+                                }
+                                aria-label={`Toggle favourite for ${m.name}`}
+                              >
                                   {m.isFav ? (
                                     <svg
                                       width="13.5"
@@ -2503,7 +2277,6 @@ export const InputDock: React.FC<InputDockProps> = ({
                                     </svg>
                                   )}
                                 </button>
-                              )}
                             </div>
                             {isSelected && <CheckmarkIcon />}
                           </div>

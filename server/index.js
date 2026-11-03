@@ -66,8 +66,10 @@ import {
   createUser,
   findUserById,
   sanitizeUserOutput,
-  DEFAULT_CREDENTIALS
+  DEFAULT_CREDENTIALS,
+  JUDGES_CREDENTIALS
 } from '../src/core/auth/user-store.js';
+import { logDbUserSession, logDbAudit } from '../src/core/db/supabase.js';
 
 dotenv.config();
 
@@ -1005,18 +1007,12 @@ app.get('/health', handleHealth);
 app.get('/api/health', handleHealth);
 app.get('/api/status', (req, res) => {
   const providers = {
-    muse: { configured: Boolean(process.env.MODAL_API_KEY || process.env.META_MUSE_API_KEY) },
-    google: { configured: Boolean(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEYS) },
-    gemini: { configured: Boolean(process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEYS) },
-    openai: { configured: Boolean(process.env.OPENAI_API_KEY) },
-    spark: { configured: Boolean(process.env.ANTHROPIC_API_KEY) },
-    kimi: { configured: Boolean(process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY) }
+    muse: { configured: Boolean(process.env.MODAL_API_KEY || process.env.META_MUSE_API_KEY || process.env.MODAL_PROXY_TOKEN_A || process.env.MODAL_MUSE_SPARK_URL) }
   };
   res.json({
     status: 'healthy',
     providers,
-    museConfigured: providers.muse.configured,
-    geminiConfigured: providers.google.configured
+    museConfigured: providers.muse.configured
   });
 });
 
@@ -1040,6 +1036,20 @@ app.post('/api/auth/login', (req, res) => {
     maxAge: 1000 * 60 * 60 * 24 * 365
   });
 
+  // Log session & audit to Supabase database
+  logDbUserSession({
+    sessionId: sessionVal,
+    userId: user.id,
+    userAgent: req.headers['user-agent'],
+    ipAddress: req.ip || req.headers['x-forwarded-for']
+  });
+  logDbAudit({
+    userId: user.id,
+    action: 'USER_LOGIN',
+    details: { email: user.email, role: user.role },
+    ipAddress: req.ip || req.headers['x-forwarded-for']
+  });
+
   return res.json({ ok: true, user });
 });
 
@@ -1054,6 +1064,21 @@ app.post('/api/auth/signup', (req, res) => {
       path: '/',
       maxAge: 1000 * 60 * 60 * 24 * 365
     });
+
+    // Log session & audit to Supabase database
+    logDbUserSession({
+      sessionId: sessionVal,
+      userId: user.id,
+      userAgent: req.headers['user-agent'],
+      ipAddress: req.ip || req.headers['x-forwarded-for']
+    });
+    logDbAudit({
+      userId: user.id,
+      action: 'USER_SIGNUP',
+      details: { email: user.email, name: user.name },
+      ipAddress: req.ip || req.headers['x-forwarded-for']
+    });
+
     return res.json({ ok: true, user });
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });

@@ -108,8 +108,8 @@ console.log('✓ Sequential chunk transcription and gathering verified.');
 console.log('\n[Test 5] Verifying Meta Same-Family Hierarchy & Candidate Ordering...');
 assert.strictEqual(isMetaFamilyModel('muse-spark-open'), true);
 assert.strictEqual(isMetaFamilyModel('meta-models/Muse-Spark-Open-816B-A42B'), true);
-assert.strictEqual(isMetaFamilyModel('gemini-3.8-flash'), false);
-assert.strictEqual(isMetaFamilyModel('claude-3-5-sonnet'), false);
+assert.strictEqual(isMetaFamilyModel('generic-text-model'), false);
+assert.strictEqual(isMetaFamilyModel('external-custom-70b'), false);
 
 const metaCandidates = getSameFamilyModelCandidates('muse-spark-open');
 assert.strictEqual(metaCandidates.family, 'meta');

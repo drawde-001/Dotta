@@ -116,11 +116,10 @@ try {
 
 // 6. Model Provider Resolution
 console.log('[Test 6] Verifying Model Provider Resolution...');
-assert.strictEqual(resolveProviderForModel('gemini-3.8-flash'), 'gemini');
-assert.strictEqual(resolveProviderForModel('meta-muse-spark'), 'muse');
-assert.strictEqual(resolveProviderForModel('claude-3-5-sonnet-20241022'), 'anthropic');
-assert.strictEqual(resolveProviderForModel('gpt-4o'), 'openai');
-assert.strictEqual(resolveProviderForModel('deepseek-chat'), 'deepseek');
+assert.strictEqual(resolveProviderForModel('meta-muse-spark'), 'meta');
+assert.strictEqual(resolveProviderForModel('muse-spark-open'), 'meta');
+assert.strictEqual(resolveProviderForModel('muse-wonder-1.0'), 'meta');
+assert.strictEqual(resolveProviderForModel('sam-3.1'), 'meta');
 console.log('✓ Model Provider Resolution verified.\n');
 
 // 7. DottaEngine Initialization

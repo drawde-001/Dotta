@@ -17,13 +17,7 @@ export function getApiKeys(keyName) {
     `${baseName}_LIST`
   ];
 
-  if (baseName === 'GEMINI_API_KEY') {
-    candidateNames.push('GEMINI_API_KEYS', 'GOOGLE_API_KEY', 'GOOGLE_API_KEYS');
-  } else if (baseName === 'GOOGLE_API_KEY') {
-    candidateNames.push('GOOGLE_API_KEYS', 'GEMINI_API_KEY', 'GEMINI_API_KEYS');
-  }
-
-  // Check process.env for candidates and numbered keys (e.g. GEMINI_API_KEY_1)
+  // Check process.env for candidates and numbered keys (e.g. META_MUSE_API_KEY_1)
   for (const name of candidateNames) {
     if (process.env[name] && String(process.env[name]).trim()) {
       rawValues.push(String(process.env[name]));
@@ -94,10 +88,4 @@ export function getApiKey(keyName) {
   return keys.length > 0 ? keys[0] : null;
 }
 
-/**
- * Helper to get all configured Gemini API keys
- */
-export function getGeminiApiKeys() {
-  return getApiKeys('GEMINI_API_KEY');
-}
 

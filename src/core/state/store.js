@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sanitizeUserId } from '../execution/workspace.js';
+import { saveDbConversation, deleteDbConversation } from '../db/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -174,6 +175,13 @@ export function saveUserThread(userId, threadId, patch = {}) {
     }
   }
 
+  // Asynchronously synchronize thread to Supabase database
+  if (userId) {
+    saveDbConversation(userId, threadId, updated).catch((err) => {
+      console.warn(`[AgentStore] Supabase conversation sync error for ${threadId}:`, err.message);
+    });
+  }
+
   return updated;
 }
 
@@ -209,6 +217,7 @@ export function deleteUserThread(userId, threadId) {
     try {
       const list = listUserThreads(userId).filter((t) => t.id !== threadId);
       atomicWriteJson(getUserIndexPath(userId), list);
+      deleteDbConversation(userId, threadId).catch(() => {});
     } catch {}
   }
   return deleted;

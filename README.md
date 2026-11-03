@@ -1,13 +1,15 @@
 # Dotta
 
-[![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge&logo=googlechrome&logoColor=white)](https://dotta.duckdns.org)
+[![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge)](https://dotta.duckdns.org)
 [![Model](https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
 [![Inference Partner](https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white)](https://modal.com)
 [![Repository](https://img.shields.io/badge/GitHub-drawde--001%2FDotta-black?style=for-the-badge&logo=github)](https://github.com/drawde-001/Dotta)
 
 🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)
 
-Dotta is an autonomous web task automation AI agent powered by **Meta Muse** (Meta Muse Spark Open 816B MoE on Modal), featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
+Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box.
+
+Dotta is an autonomous web task automation AI agent featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
 
 ---
 
@@ -194,7 +196,7 @@ Dotta features an autonomous, model-driven browser and form-filling architecture
 - **Submit Gates**:
   - `Turbo`: Automatically submits clean forms only when authorized by user intent; pauses if the user specified "do not submit" or "fill only".
   - `Default` & `Review`: Always requires explicit user confirmation before final submission.
-- **Untrusted Page Isolation**: Page text and third-party DOM labels are treated as untrusted data. Prompt injection patterns and exfiltration scripts are quarantined. Risky actions trigger an isolated Reviewer call that evaluates only the user request, profile, and proposed action.
+- **Untrusted Page Isolation**: Page text and untrusted web DOM labels are treated as untrusted data. Prompt injection patterns and exfiltration scripts are quarantined. Risky actions trigger an isolated Reviewer call that evaluates only the user request, profile, and proposed action.
 
 ---
 
@@ -219,8 +221,10 @@ Built natively for the Meta Global AI Developer Hackathon, Dotta leverages Meta'
 * **Models:** Meta Muse Vision, SAM 3.1, and Muse Image adapters.
 * **Role:** Inspects non-standard interactive widgets, verifies uploaded image aspect ratios and dimensions, and visually grounds DOM elements before executing high-risk browser clicks.
 
-### 4. Alternative Model Support
-* Seamless fallback to Meta Model API (`muse-spark-1.3`, `muse-wonder-1.0`), alongside unified fallback adapters for Google Gemini, Anthropic Claude, and OpenAI in `src/core/models/`.
+### 4. 100% Meta Runtime Architecture
+* **Strict Intra-Family Execution:** Every model invoked across perception, planning, tool execution, and voice is strictly a Meta model.
+* **Intra-Family Fallback:** If primary serverless inference on Modal encounters cold starts or rate limits, the engine gracefully transitions to Meta Model API endpoints (`muse-spark-1.3`, `muse-wonder-1.0`), maintaining strict intra-family privacy and data sovereignty.
+* **Honest Error Handling:** If all Meta endpoints are unreachable, Dotta halts honestly with an explicit service notification and never routes user requests outside the Meta ecosystem.
 
 ---
 
@@ -232,6 +236,8 @@ dotta/
 ├── setup.md                  # Complete VM setup & production deployment guide
 ├── vite.config.js            # Frontend build & API proxy setup
 ├── index.html                # Assistant-UI HTML shell
+├── supabase/
+│   └── schema.sql            # Authoritative Supabase PostgreSQL schema
 ├── server/
 │   ├── index.js              # Express server & API endpoints
 │   ├── ag-ui-bridge.js       # AG-UI 1.0 Server-Sent Events bridge
@@ -241,7 +247,8 @@ dotta/
 │   ├── core/                 # Autonomous Engine Core
 │   │   ├── orchestrator.js   # DottaEngine execution loop (Powered by Meta Muse)
 │   │   ├── env.js            # Environment key retriever
-│   │   ├── models/           # Multi-provider model adapters (Meta Muse, Anthropic, Gemini, OpenAI)
+│   │   ├── db/               # Supabase database client & synchronizer (users, profiles, conversations)
+│   │   ├── models/           # Meta Muse model adapter & content protocol (Muse Spark Open, Wonder, Voice, SAM)
 │   │   ├── bio/              # BIO Digital Identity Engine (store, executors, staging, processors)
 │   │   ├── levels/           # Verification engine, reviewer, sandbox tools, DOM extractor
 │   │   ├── media/            # Multimodal media processor (audio, image, vision)
@@ -259,6 +266,47 @@ dotta/
     ├── bio.test.js           # BIO Digital Identity comprehensive test suite (45/45 passed)
     └── phase1-sandbox.test.js# Sandbox isolation & security test suite
 ```
+
+---
+
+## Supabase Database Integration & Multi-User Architecture
+
+Dotta is connected to **Supabase** (`vjuoutdhpnnmasstfiwo`) for persistent multi-tenant session storage, user credential mapping, conversation history, and security audit logs:
+
+### 1. Database Schema (`supabase/schema.sql`)
+The PostgreSQL database is organized into six synchronized tables:
+* **`public.users`**: Unique user identifiers, normalized emails, cryptographic password hashes (`scrypt`), and creation timestamps.
+* **`public.user_profiles`**: Display names, roles (`admin`, `judge`, `user`), and bio identity preferences.
+* **`public.user_settings`**: Default model preferences (`muse-spark-open`), thinking budgets, and auto-save toggles.
+* **`public.user_sessions`**: Authenticated sessions with IP addresses, user-agent metadata, and expiration windows.
+* **`public.conversations`**: Multi-turn conversation threads, AG-UI streaming message turns, and run metadata indexed strictly per `user_id`.
+* **`public.user_audit_logs`**: Immutable audit logs capturing every tool execution, BIO access request, and permission grant.
+
+### 2. Built-in Accounts for Hackathon Judges & Administrators
+Dotta comes with pre-configured, database-synchronized accounts:
+* **Master Admin (Eddy)**: `eddy@dotta.ai` / `Dotta2026!`
+* **Official Hackathon Judges & Reviewers**: `judges@dotta.ai` / `DottaJudges2026!`
+
+### 3. Dynamic User Onboarding
+When any new user creates an account via the UI (`/api/auth/signup`), Dotta automatically:
+1. Generates an isolated user ID (`user-<timestamp>-<hash>`).
+2. Creates an isolated sandbox filesystem directory (`src/workspaces/<userId>`).
+3. Writes and synchronizes the user record and profile directly to Supabase (`syncUserToDb`).
+4. Binds all subsequent conversations, BIO digital identity entries, and audit traces strictly to that user ID.
+
+### 4. Supabase Setup & CLI Configuration
+To inspect or manage the database directly:
+```bash
+# Link local environment to Supabase project
+supabase login
+supabase link --project-ref vjuoutdhpnnmasstfiwo
+
+# Push schema changes
+supabase db push
+```
+
+* **Project URL:** `https://vjuoutdhpnnmasstfiwo.supabase.co`
+* **Direct Connection String:** `postgresql://postgres:[YOUR-PASSWORD]@db.vjuoutdhpnnmasstfiwo.supabase.co:5432/postgres`
 
 ---
 

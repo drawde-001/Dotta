@@ -16,7 +16,7 @@
  */
 
 import { IMAGE_INPUT_LIMITS, AUDIO_INPUT_LIMITS } from '../models/model-registry.js';
-import { getApiKey, getGeminiApiKeys } from '../env.js';
+import { getApiKey } from '../env.js';
 
 export const MAX_IMAGE_SIZE_BYTES = IMAGE_INPUT_LIMITS.maxInlineFileSizeBytes; // 50 MB
 export const SUPPORTED_IMAGE_MIMES = new Set(IMAGE_INPUT_LIMITS.supportedMimeTypes);
@@ -441,100 +441,14 @@ export async function callModalMuseSparkAudio({
 }
 
 /**
- * Helper: Call Google Gemini Multimodal Audio across Gemini endpoints/models.
- * Uses candidate model cascade (gemini-3.8-flash -> gemini-3.6-flash -> gemini-2.5-flash -> gemini-3-flash-preview -> gemini-3.5-flash-lite)
- * with multi-key rotation and failover.
- */
-export async function callGeminiAudioTranscribe({
-  base64,
-  rawMime = 'audio/wav',
-  preferredModel = 'gemini-3.8-flash',
-  timeoutMs = 25000
-} = {}) {
-  const geminiKeys = getGeminiApiKeys();
-  if (!geminiKeys.length || !base64) return null;
-
-  const geminiBaseUrl = (
-    process.env.GEMINI_API_BASE_URL ||
-    'https://generativelanguage.googleapis.com/v1beta'
-  ).replace(/\/$/, '');
-
-  const candidateModels = [
-    preferredModel,
-    'gemini-3.8-flash',
-    'gemini-3.6-flash',
-    'gemini-2.5-flash',
-    'gemini-3-flash-preview',
-    'gemini-3.5-flash-lite'
-  ].filter((m) => m && /gemini/i.test(m));
-  const uniqueModels = [...new Set(candidateModels)];
-
-  for (const geminiKey of geminiKeys) {
-    for (const gModel of uniqueModels) {
-      try {
-        const res = await fetch(
-          `${geminiBaseUrl}/models/${gModel}:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { inlineData: { mimeType: rawMime, data: base64 } },
-                    {
-                      text: 'Transcribe this audio verbatim. Output only the spoken words, nothing else.'
-                    }
-                  ]
-                }
-              ]
-            }),
-            signal: AbortSignal.timeout(timeoutMs)
-          }
-        );
-
-        if (res.ok) {
-          const json = await res.json();
-          const candidateText = json.candidates?.[0]?.content?.parts
-            ?.filter((p) => !p.thought && typeof p.text === 'string')
-            .map((p) => p.text)
-            .join('')
-            .trim();
-          if (candidateText) {
-            return {
-              ok: true,
-              text: candidateText,
-              source: `gemini_audio:${gModel}`,
-              data: json
-            };
-          }
-        } else if (res.status === 429 || res.status === 403 || res.status === 400) {
-          // Key rate-limited or invalid, try next key
-          break;
-        }
-      } catch (err) {
-        // Continue to next candidate model
-      }
-    }
-  }
-  return null;
-}
-
-/**
- * Transcribe an audio chunk routed by the selected model category:
- * - When Gemini is selected: Route to Gemini Multimodal Audio FIRST, fallback to Meta / Whisper.
- * - When Meta is selected: Route to Meta Muse Voice Transcribe FIRST, fallback to Whisper / Gemini.
- * - When OpenAI is selected: Route to Whisper FIRST.
+ * Transcribe an audio chunk using Meta Voice Transcribe and Meta models.
+ * Exclusively queries Meta models (Meta Voice Transcribe and Muse Spark Open on Modal vLLM).
+ * If all Meta models are unreachable or fail, returns an honest error.
  */
 export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   const rawMime = (audioPayload.mimeType || 'audio/wav').split(';')[0].trim();
   const defaultExt = rawMime.includes('wav') ? 'wav' : rawMime.includes('mp3') ? 'mp3' : 'webm';
   const filename = audioPayload.filename || `audio.${defaultExt}`;
-  const preferredModel = options.preferredModel || audioPayload.preferredModel || '';
-  const isGeminiCategory = /gemini/i.test(preferredModel);
-  const isOpenAiCategory = /whisper|openai|gpt/i.test(preferredModel);
-  const isAnthropicCategory = /claude|sonnet|opus|haiku/i.test(preferredModel);
-  const isMetaCategory = isMetaFamilyModel(preferredModel) || (!isGeminiCategory && !isOpenAiCategory && !isAnthropicCategory);
 
   // Resolve the audio blob/buffer and base64
   let blob;
@@ -555,74 +469,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     base64 = Buffer.from(bytes).toString('base64');
   }
 
-  // 1. If Gemini is selected: Route ONLY within Gemini model family (NO cross-family fallback)
-  if (isGeminiCategory) {
-    if (base64) {
-      const geminiRes = await callGeminiAudioTranscribe({
-        base64,
-        rawMime,
-        preferredModel,
-        timeoutMs: 25000
-      });
-      if (geminiRes && geminiRes.ok && geminiRes.text) {
-        return geminiRes;
-      }
-    }
-    return {
-      ok: true,
-      text: options.mockText || '',
-      source: 'gemini_audio:offline_fallback',
-      modelFamily: 'gemini'
-    };
-  }
-
-  // 2. If OpenAI is selected: Route ONLY within OpenAI model family (NO cross-family fallback)
-  if (isOpenAiCategory) {
-    const openaiKey = getApiKey('OPENAI_API_KEY');
-    if (openaiKey) {
-      try {
-        const formData = new FormData();
-        formData.append('file', blob, filename);
-        formData.append('model', 'whisper-1');
-        formData.append('response_format', 'text');
-
-        const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${openaiKey}` },
-          body: formData,
-          signal: AbortSignal.timeout(25000)
-        });
-
-        if (res.ok) {
-          const text = (await res.text()).trim();
-          if (text) {
-            return { ok: true, text, source: 'openai_whisper', modelFamily: 'openai' };
-          }
-        }
-      } catch (err) {
-        console.warn('[MediaProcessor] Whisper error:', err.message);
-      }
-    }
-    return {
-      ok: true,
-      text: options.mockText || '',
-      source: 'openai_whisper:offline_fallback',
-      modelFamily: 'openai'
-    };
-  }
-
-  // 3. If Anthropic is selected: In-family offline fallback (Anthropic has no native audio endpoint)
-  if (isAnthropicCategory) {
-    return {
-      ok: true,
-      text: options.mockText || '',
-      source: 'anthropic:offline_fallback',
-      modelFamily: 'anthropic'
-    };
-  }
-
-  // 4. Meta Family (Default): Route strictly within Meta models across serving endpoints
-  // Primary 1 (First): Meta Voice Transcribe (muse-voice-transcribe-1.0 across Meta / Fireworks / Llama / Modal endpoints)
+  // Primary 1: Meta Voice Transcribe (muse-voice-transcribe-1.0 across Meta / Modal endpoints)
   const museVoiceRes = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -637,7 +484,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     return museVoiceRes;
   }
 
-  // Primary 2 (Second): Sister Meta models in same family (Muse Spark Open via Modal vLLM)
+  // Primary 2: Sister Meta model (Muse Spark Open via Modal vLLM)
   if (base64) {
     const modalRes = await callModalMuseSparkAudio({
       base64,
@@ -649,7 +496,7 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     }
   }
 
-  // Primary 3 (Third): Final Meta family handover across all Meta provider endpoints
+  // Primary 3: Final Meta family retry across all Meta provider endpoints
   const finalMetaRes = await callMetaMuseVoiceTranscribe({
     blob,
     base64,
@@ -664,29 +511,20 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
     return finalMetaRes;
   }
 
-  // ONLY WHEN ALL SAME-FAMILY META MODELS & ENDPOINTS FAIL:
-  // Fall back to another family model (Gemini Multimodal Audio in this case, or Whisper if configured)
-  if (base64) {
-    const geminiFallback = await callGeminiAudioTranscribe({
-      base64,
-      rawMime,
-      preferredModel: 'gemini-3.8-flash',
-      timeoutMs: 25000
-    });
-    if (geminiFallback && geminiFallback.ok && geminiFallback.text) {
-      return {
-        ...geminiFallback,
-        source: `meta_fallback:${geminiFallback.source}`
-      };
-    }
+  if (options.mockText) {
+    return {
+      ok: true,
+      text: options.mockText,
+      source: 'muse-voice-transcribe-1.0:test_mock',
+      modelFamily: 'meta'
+    };
   }
 
-
-  // Final in-family fallback for Meta
+  // Honest error when all Meta models fail
   return {
-    ok: true,
-    text: options.mockText || '',
-    source: 'muse-voice-transcribe-1.0:offline_fallback',
+    ok: false,
+    error: 'Audio transcription is currently unavailable. All Meta model endpoints (Meta Voice Transcribe and Muse Spark Open) are unreachable.',
+    source: 'meta:unavailable',
     modelFamily: 'meta'
   };
 }
@@ -696,11 +534,8 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
  */
 export function isMetaFamilyModel(model = '') {
   const m = String(model || '').trim().toLowerCase();
-  if (!m) return true; // Default model in Dotta is muse-spark-open (Meta family)
-  if (/gemini|gpt-|o1|o3|o4|claude-|sonnet-|opus-|haiku-|deepseek|kimi|moonshot/i.test(m)) {
-    return false;
-  }
-  return /muse|meta|spark|llama|sam-|modal|fable|sol|terra/i.test(m);
+  if (!m) return true;
+  return m.startsWith('meta-') || m.startsWith('muse-') || m.startsWith('sam-') || m.includes('spark') || m.includes('wonder');
 }
 
 /**
@@ -710,60 +545,36 @@ export function isMetaFamilyModel(model = '') {
  */
 export function getSameFamilyModelCandidates(selectedModel = 'muse-spark-open') {
   const req = String(selectedModel || 'muse-spark-open').trim();
-  if (isMetaFamilyModel(req)) {
-    const models = Array.from(
-      new Set([
-        'muse-voice-transcribe-1.0',
-        req,
-        req.toLowerCase() === 'muse-spark-open' ? 'meta-models/Muse-Spark-Open-816B-A42B' : req,
-        'muse-spark-open',
-        'meta-models/Muse-Spark-Open-816B-A42B',
-        'muse-wonder-1.0',
-        'muse-spark-1.3',
-        'muse-spark-1.2',
-        'muse-spark-1.1'
-      ])
-    );
-    const endpoints = Array.from(
-      new Set(
-        [
-          process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
-          process.env.MUSE_VOICE_URL,
-          process.env.META_VOICE_URL,
-          process.env.MUSE_ASR_URL,
-          process.env.FIREWORKS_API_URL,
-          process.env.TOGETHER_API_URL,
-          process.env.MODEL_API_BASE_URL,
-          process.env.META_MUSE_BASE_URL,
-          process.env.FIREWORKS_API_KEY ? 'https://api.fireworks.ai/inference/v1' : null,
-          process.env.TOGETHER_API_KEY ? 'https://api.together.xyz/v1' : null
-        ].filter(Boolean)
-      )
-    );
-    return { family: 'meta', selectedModel: req, models, endpoints };
-  }
-  if (/gemini/i.test(req)) {
-    return {
-      family: 'gemini',
-      selectedModel: req,
-      models: Array.from(new Set([req, 'gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'])),
-      endpoints: [process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta']
-    };
-  }
-  if (/claude|sonnet|opus|haiku/i.test(req)) {
-    return {
-      family: 'anthropic',
-      selectedModel: req,
-      models: Array.from(new Set([req, 'claude-3-5-sonnet-20241022'])),
-      endpoints: [process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com/v1']
-    };
-  }
-  return {
-    family: 'openai',
-    selectedModel: req,
-    models: Array.from(new Set([req, 'gpt-4o'])),
-    endpoints: [process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1']
-  };
+  const models = Array.from(
+    new Set([
+      'muse-voice-transcribe-1.0',
+      req,
+      req.toLowerCase() === 'muse-spark-open' ? 'meta-models/Muse-Spark-Open-816B-A42B' : req,
+      'muse-spark-open',
+      'meta-models/Muse-Spark-Open-816B-A42B',
+      'muse-wonder-1.0',
+      'muse-spark-1.3',
+      'muse-spark-1.2',
+      'muse-spark-1.1'
+    ])
+  );
+  const endpoints = Array.from(
+    new Set(
+      [
+        process.env.MODAL_MUSE_SPARK_URL || 'https://edelobi--ep-muse-spark-open-816b-a42b-server.us-west.modal.direct/v1',
+        process.env.MUSE_VOICE_URL,
+        process.env.META_VOICE_URL,
+        process.env.MUSE_ASR_URL,
+        process.env.FIREWORKS_API_URL,
+        process.env.TOGETHER_API_URL,
+        process.env.MODEL_API_BASE_URL,
+        process.env.META_MUSE_BASE_URL,
+        process.env.FIREWORKS_API_KEY ? 'https://api.fireworks.ai/inference/v1' : null,
+        process.env.TOGETHER_API_KEY ? 'https://api.together.xyz/v1' : null
+      ].filter(Boolean)
+    )
+  );
+  return { family: 'meta', selectedModel: req, models, endpoints };
 }
 
 /**
@@ -775,32 +586,7 @@ export function formatMediaForSelectedModel({ buffer, mimeType, filename, select
   const cleanMime = String(mimeType || 'application/octet-stream').split(';')[0].trim().toLowerCase();
   const { family, models, endpoints } = getSameFamilyModelCandidates(selectedModel);
 
-  if (family === 'gemini') {
-    return {
-      family,
-      selectedModel,
-      candidateModels: models,
-      candidateEndpoints: endpoints,
-      providerFormat: 'gemini_inline_data',
-      part: { inlineData: { mimeType: cleanMime, data: base64 } }
-    };
-  }
-
-  if (family === 'anthropic') {
-    return {
-      family,
-      selectedModel,
-      candidateModels: models,
-      candidateEndpoints: endpoints,
-      providerFormat: 'anthropic_base64_source',
-      part: {
-        type: cleanMime.startsWith('image/') ? 'image' : 'document',
-        source: { type: 'base64', media_type: cleanMime, data: base64 }
-      }
-    };
-  }
-
-  // Meta / OpenAI compatible multimodal format
+  // Meta multimodal format
   if (cleanMime.startsWith('image/')) {
     const validation = validateImageMetadata({ size: buf.length, mimeType: cleanMime, name: filename });
     const targetMime = validation.targetMime || cleanMime || 'image/png';
@@ -809,7 +595,7 @@ export function formatMediaForSelectedModel({ buffer, mimeType, filename, select
       selectedModel,
       candidateModels: models,
       candidateEndpoints: endpoints,
-      providerFormat: 'openai_image_url',
+      providerFormat: 'meta_image_url',
       part: {
         type: 'image_url',
         image_url: { url: `data:${targetMime};base64,${base64}` }
@@ -825,7 +611,7 @@ export function formatMediaForSelectedModel({ buffer, mimeType, filename, select
       selectedModel,
       candidateModels: models,
       candidateEndpoints: endpoints,
-      providerFormat: 'openai_input_audio',
+      providerFormat: 'meta_input_audio',
       part: {
         type: 'input_audio',
         input_audio: { data: base64, format }
@@ -839,7 +625,7 @@ export function formatMediaForSelectedModel({ buffer, mimeType, filename, select
     selectedModel,
     candidateModels: models,
     candidateEndpoints: endpoints,
-    providerFormat: 'openai_input_file',
+    providerFormat: 'meta_input_file',
     part: {
       type: 'file',
       file: { filename: filename || 'document.pdf', file_data: `data:${cleanMime};base64,${base64}` }
@@ -901,11 +687,7 @@ export async function transcribeAudioSequentially(segments, audioSource, options
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
-    const providerLabel = /gemini/i.test(options.preferredModel || '')
-      ? 'Gemini'
-      : /whisper|openai/i.test(options.preferredModel || '')
-      ? 'Whisper'
-      : 'muse-voice-transcribe-1.0';
+    const providerLabel = 'muse-voice-transcribe-1.0';
     onProgress({
       currentSegment: i + 1,
       totalSegments: segments.length,
@@ -930,7 +712,6 @@ export async function transcribeAudioSequentially(segments, audioSource, options
 
     let res = await transcribeSingleAudioChunk(chunkPayload, options);
     if (!res.ok || !res.text) {
-      const preferredModel = options.preferredModel || '';
       const rawMime = (chunkPayload.mimeType || 'audio/wav').split(';')[0].trim();
       const defaultExt = rawMime.includes('wav') ? 'wav' : 'mp3';
       const fallbackBuf = segmentBuffer
@@ -939,42 +720,19 @@ export async function transcribeAudioSequentially(segments, audioSource, options
           : Buffer.from(segmentBuffer)
         : Buffer.alloc(0);
 
-      if (isMetaFamilyModel(preferredModel)) {
-        // Meta family handover
-        const finalHandover = await callMetaMuseVoiceTranscribe({
-          blob: new Blob([fallbackBuf], { type: rawMime }),
-          base64: fallbackBuf.toString('base64'),
-          rawMime,
-          defaultExt,
-          filename: chunkPayload.filename,
-          options,
-          timeoutMs: 45000,
-          isFinalFallback: true
-        });
-        if (finalHandover && finalHandover.text && !isAudioTranscriptionRefusal(finalHandover.text)) {
-          res = finalHandover;
-        } else if (fallbackBuf.length > 0) {
-          const geminiHandover = await callGeminiAudioTranscribe({
-            base64: fallbackBuf.toString('base64'),
-            rawMime,
-            preferredModel: 'gemini-3.8-flash',
-            timeoutMs: 35000
-          });
-          if (geminiHandover && geminiHandover.text) {
-            res = geminiHandover;
-          }
-        }
-      } else if (/gemini/i.test(preferredModel)) {
-        // Gemini family handover
-        const geminiHandover = await callGeminiAudioTranscribe({
-          base64: fallbackBuf.toString('base64'),
-          rawMime,
-          preferredModel: 'gemini-2.5-flash',
-          timeoutMs: 35000
-        });
-        if (geminiHandover && geminiHandover.text) {
-          res = geminiHandover;
-        }
+      // Meta family handover to Meta Voice Transcribe
+      const finalHandover = await callMetaMuseVoiceTranscribe({
+        blob: new Blob([fallbackBuf], { type: rawMime }),
+        base64: fallbackBuf.toString('base64'),
+        rawMime,
+        defaultExt,
+        filename: chunkPayload.filename,
+        options,
+        timeoutMs: 45000,
+        isFinalFallback: true
+      });
+      if (finalHandover && finalHandover.text && !isAudioTranscriptionRefusal(finalHandover.text)) {
+        res = finalHandover;
       }
     }
     results.push(res.text || '');

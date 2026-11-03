@@ -191,7 +191,6 @@ async function runPhase1Tests() {
   // PROOF 3: Attempt to leak host/workspace env vars from inside a run -> MUST FAIL
   // ---------------------------------------------------------------------------
   console.log('[Proof 3] Attempting to leak host/workspace env vars from inside a run...');
-  process.env.GEMINI_API_KEY = 'test-secret-gemini-key-DO-NOT-LEAK';
   process.env.META_MUSE_API_KEY = 'test-secret-muse-key-DO-NOT-LEAK';
   process.env.SESSION_SECRET = 'test-secret-session-key-DO-NOT-LEAK';
   process.env.DOTTA_WORKSPACE_SECRET = 'test-workspace-secret-DO-NOT-LEAK';
@@ -207,14 +206,11 @@ async function runPhase1Tests() {
     assert.strictEqual(envDumpRes.exitCode, 0, 'Env inspection command inside sandbox should run');
     const childEnv = JSON.parse(envDumpRes.stdout.trim());
     const leakedKeys = [
-      'GEMINI_API_KEY',
       'META_MUSE_API_KEY',
       'SESSION_SECRET',
       'DOTTA_WORKSPACE_SECRET',
       'MODAL_KEY',
-      'MODAL_SECRET',
-      'OPENAI_API_KEY',
-      'ANTHROPIC_API_KEY'
+      'MODAL_SECRET'
     ].filter((k) => childEnv[k] !== undefined);
 
     console.log('  -> Sandbox visible env keys:', Object.keys(childEnv));

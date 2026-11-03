@@ -151,7 +151,7 @@ export { GenerativeUI, styledGenerativeUILibrary } from './generative-ui.tsx';
 
 // === Category: Primitives (3) ===
 export { TooltipIconButton } from './tooltip-icon-button.jsx';
-export { ClaudeLogo, OpenAILogo, GeminiLogo } from './logos.tsx';
+export { MetaLogo } from './logos.tsx';
 export { HeatGraph } from './heat-graph.tsx';
 
 // === Category: Generative (22) ===

@@ -1,27 +1,23 @@
 /**
- * gemini-protocol.js
+ * content-protocol.js
  *
- * Implements Gemini 3 multi-turn stateless function-calling and thought-signature
- * protocol handling according to official Google Gemini specifications:
- * - https://ai.google.dev/gemini-api/docs/thinking#signatures
- * - https://ai.google.dev/gemini-api/docs/function-calling
+ * Implements multi-turn agent message, part, and tool-call normalization
+ * for Meta Muse and multimodal agent runs.
  *
  * Preserves structured functionCall, functionResponse, thought blocks ({ thought: true }),
- * and thoughtSignature metadata without flattening to text strings.
+ * and media parts (inlineData) without flattening to text strings.
  */
 
 /**
- * Consolidates streamed SSE parts or raw candidate parts into valid Gemini Parts,
- * merging contiguous thought/text chunks while preserving all thoughtSignature
- * metadata, structured functionCall parts, and structured functionResponse parts.
+ * Consolidates streamed message parts, merging contiguous thought/text chunks
+ * while preserving structured functionCall and functionResponse parts.
  */
-export function consolidateGeminiParts(rawParts) {
+export function consolidateMessageParts(rawParts) {
   if (!Array.isArray(rawParts)) return [];
   const consolidated = [];
 
   for (const part of rawParts) {
     if (!part || typeof part !== 'object') continue;
-    const sig = part.thoughtSignature || part.thought_signature;
 
     // 1. Thought part (or thought delta)
     if (part.thought === true) {
@@ -31,20 +27,14 @@ export function consolidateGeminiParts(rawParts) {
         prev &&
         prev.thought === true &&
         !prev.functionCall &&
-        !prev.functionResponse &&
-        (!prev.thoughtSignature || !sig || prev.thoughtSignature === sig)
+        !prev.functionResponse
       ) {
         prev.text = (prev.text || '') + textVal;
-        if (sig) prev.thoughtSignature = sig;
-        if (part.thought_signature) prev.thought_signature = part.thought_signature;
       } else {
-        const thoughtPart = {
+        consolidated.push({
           text: textVal,
           thought: true
-        };
-        if (sig) thoughtPart.thoughtSignature = sig;
-        if (part.thought_signature) thoughtPart.thought_signature = part.thought_signature;
-        consolidated.push(thoughtPart);
+        });
       }
       continue;
     }
@@ -61,8 +51,6 @@ export function consolidateGeminiParts(rawParts) {
           ...(part.functionCall.id ? { id: part.functionCall.id } : {})
         }
       };
-      if (sig) fcPart.thoughtSignature = sig;
-      if (part.thought_signature) fcPart.thought_signature = part.thought_signature;
       consolidated.push(fcPart);
       continue;
     }
@@ -79,8 +67,6 @@ export function consolidateGeminiParts(rawParts) {
           ...(part.functionResponse.id ? { id: part.functionResponse.id } : {})
         }
       };
-      if (sig) frPart.thoughtSignature = sig;
-      if (part.thought_signature) frPart.thought_signature = part.thought_signature;
       consolidated.push(frPart);
       continue;
     }
@@ -93,22 +79,16 @@ export function consolidateGeminiParts(rawParts) {
         !prev.thought &&
         typeof prev.text === 'string' &&
         !prev.functionCall &&
-        !prev.functionResponse &&
-        (!prev.thoughtSignature || !sig || prev.thoughtSignature === sig)
+        !prev.functionResponse
       ) {
         prev.text += part.text;
-        if (sig) prev.thoughtSignature = sig;
-        if (part.thought_signature) prev.thought_signature = part.thought_signature;
       } else {
-        const textPart = { text: part.text };
-        if (sig) textPart.thoughtSignature = sig;
-        if (part.thought_signature) textPart.thought_signature = part.thought_signature;
-        consolidated.push(textPart);
+        consolidated.push({ text: part.text });
       }
       continue;
     }
 
-    // 5. Standalone signature part or other valid Gemini part (inlineData, etc.)
+    // 5. Standalone media or inlineData parts
     consolidated.push({ ...part });
   }
 
@@ -116,10 +96,10 @@ export function consolidateGeminiParts(rawParts) {
 }
 
 /**
- * Normalizes user messages or full Gemini multi-turn contents, preserving
- * thought blocks, thoughtSignatures, and structured function calls/responses.
+ * Normalizes user messages or full multi-turn contents, preserving
+ * thought blocks, attachments, and structured function calls/responses.
  */
-export function normalizeGeminiContents(promptOrContents) {
+export function normalizeThreadContents(promptOrContents) {
   if (!Array.isArray(promptOrContents)) {
     return [{ role: 'user', parts: [{ text: String(promptOrContents || '') }] }];
   }
@@ -175,12 +155,12 @@ export function normalizeGeminiContents(promptOrContents) {
       }
     }
 
-    const cleanParts = consolidateGeminiParts(rawParts);
+    const cleanParts = consolidateMessageParts(rawParts);
     if (cleanParts.length === 0) continue;
 
     const prev = normalized[normalized.length - 1];
     if (prev && prev.role === role) {
-      prev.parts = consolidateGeminiParts([...prev.parts, ...cleanParts]);
+      prev.parts = consolidateMessageParts([...prev.parts, ...cleanParts]);
     } else {
       normalized.push({
         role,
@@ -192,7 +172,6 @@ export function normalizeGeminiContents(promptOrContents) {
   if (normalized.length === 0) {
     return [{ role: 'user', parts: [{ text: 'Hello' }] }];
   }
-  return normalized;
 }
 
 /**
@@ -209,47 +188,5 @@ export function buildFunctionResponseParts(toolResults) {
           ? tr.response
           : { result: tr.result ?? tr.output ?? tr.content ?? '' }
     }
-  }));
-}
-
-/**
- * Recursively cleans schema objects for Google Gemini API:
- * - Ensures any schema with type "ARRAY" or "array" specifies valid "items"
- * - Strips disallowed internal schema keys
- */
-function sanitizeGeminiSchema(schema) {
-  if (!schema || typeof schema !== 'object') return schema;
-  const clone = { ...schema };
-  const typeStr = String(clone.type || '').toUpperCase();
-
-  if (typeStr === 'ARRAY' && !clone.items) {
-    clone.items = { type: 'STRING' };
-  }
-
-  if (clone.properties && typeof clone.properties === 'object') {
-    const nextProps = {};
-    for (const [k, v] of Object.entries(clone.properties)) {
-      nextProps[k] = sanitizeGeminiSchema(v);
-    }
-    clone.properties = nextProps;
-  }
-
-  if (clone.items && typeof clone.items === 'object') {
-    clone.items = sanitizeGeminiSchema(clone.items);
-  }
-
-  return clone;
-}
-
-/**
- * Converts internal tool definitions to strict Gemini functionDeclarations,
- * stripping internal properties like `readOnly` that trigger Google API 400 Bad Request.
- */
-export function toGeminiFunctionDeclarations(tools) {
-  if (!Array.isArray(tools)) return [];
-  return tools.map((t) => ({
-    name: t.name,
-    description: t.description || '',
-    parameters: sanitizeGeminiSchema(t.parameters || { type: 'OBJECT', properties: {} })
   }));
 }

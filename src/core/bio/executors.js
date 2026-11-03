@@ -17,12 +17,12 @@ import { stageBioFile } from './staging.js';
 import { wrapUntrustedContent } from '../tools/untrusted.js';
 
 /**
- * Models that accept documents/audio/video natively as inline media in this
- * runtime (Gemini family). For them the SELECTED MODEL does the processing;
- * server-side extraction/transcription is only a fallback for other models.
+ * Models that accept media natively in this runtime (Meta Muse family).
+ * For them the SELECTED MODEL does the processing;
+ * server-side extraction/transcription is only a fallback when needed.
  */
 export function isNativeMediaModel(model) {
-  return /gemini/i.test(String(model || ''));
+  return /muse/i.test(String(model || ''));
 }
 
 function hasValue(v) {
@@ -298,8 +298,8 @@ export async function executeBioGet({ userId, fieldIds = [], profileId = null, m
 
 /**
  * Collect media parts so the SELECTED MODEL does the processing natively:
- * images for every vision model; documents (PDF), audio and video inline for
- * models that accept them natively (Gemini family). For other models the
+ * images for vision models; documents and media inline for
+ * models that accept them natively (Meta Muse family). For other models the
  * callers fall back to extraction (documents) and Meta transcription (audio).
  * Caps follow the model registry input limits.
  */

@@ -924,11 +924,6 @@ const formatDisplayModelName = (modelId?: string) => {
   if (clean === 'muse-spark-1.3') return 'Muse Spark 1.3';
   if (clean === 'muse-spark-1.2') return 'Muse Spark 1.2';
   if (clean === 'muse-spark-1.1') return 'Muse Spark 1.1';
-  if (clean === 'gemini-3.8-flash' || clean.includes('3.8-flash') || clean.includes('3.8')) return 'Gemini 3.8 Flash';
-  if (clean === 'gemini-2.5-flash' || clean.includes('2.5-flash') || clean.includes('2.5')) return 'Gemini 2.5 Flash';
-  if (clean === 'gpt-56-terra' || clean.includes('gpt-4o') || clean.includes('terra')) return 'GPT-5.6 Terra';
-  if (clean === 'gpt-56-sol' || clean.includes('gpt-4o-mini') || clean.includes('sol')) return 'GPT-5.6 Sol';
-  if (clean.includes('kimi')) return 'Kimi K2';
   return String(modelId);
 };
 

@@ -178,17 +178,17 @@ check(
 );
 
 // Model-native delivery routing (selected model does the processing)
-const geminiParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'gemini-3.1-pro' });
+const museNativeParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'muse-spark-open' });
 check(
-  'gemini gets document natively',
-  geminiParts.some((p) => p.inlineData?.mimeType === 'application/pdf')
+  'muse gets document natively',
+  museNativeParts.some((p) => p.inlineData?.mimeType === 'application/pdf')
 );
-const museParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'muse-spark-1.3' });
-check('muse gets no pdf inline (extraction fallback)', museParts.length === 0);
-const nativeCv = JSON.parse(await executeBioGet({ userId: A, fieldIds: ['cv'], model: 'gemini-3.1-pro' }));
-check('gemini cv marked native processing', String(nativeCv.values.cv.text).includes('processed natively'));
-const nativeDoc = await processDocument({ userId: A, ref: 'cv', model: 'gemini-3.1-pro' });
-check('process_document routes native for gemini', nativeDoc.includes('processed natively'));
+const genericParts = await collectBioMediaParts({ userId: A, fieldIds: ['cv'], model: 'standard-text-model' });
+check('generic gets no pdf inline (extraction fallback)', genericParts.length === 0);
+const nativeCv = JSON.parse(await executeBioGet({ userId: A, fieldIds: ['cv'], model: 'muse-spark-open' }));
+check('muse cv marked native processing', String(nativeCv.values.cv.text).includes('processed natively'));
+const nativeDoc = await processDocument({ userId: A, ref: 'cv', model: 'muse-spark-open' });
+check('process_document routes native for muse', nativeDoc.includes('processed natively'));
 
 // Fresh users get REAL seed files (never metadata phantoms), and a dashboard
 // change is served back to the agent (dashboard -> database -> BIO tool)

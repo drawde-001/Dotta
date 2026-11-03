@@ -56,7 +56,7 @@ import {
 } from './media/media-processor.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools, getScopedToolsForIntent } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
-import { buildFunctionResponseParts, normalizeGeminiContents } from './models/gemini-protocol.js';
+import { buildFunctionResponseParts, normalizeThreadContents } from './models/content-protocol.js';
 import {
   workspaceFileRead,
   workspaceFileList,
@@ -138,13 +138,12 @@ You possess direct, real-world execution tools to fulfill user instructions:
 2. Image Generation & Vision (Meta Muse Image 1.0 & SAM 3.1):
 - "generate_image": Generate high-resolution images, portraits, photos, illustrations, or artwork using Meta Muse Image 1.0 ("muse-image-1.0"). ALWAYS call "generate_image" immediately whenever the user asks to generate, create, draw, paint, or render an image. NEVER write SVG files or run shell/Python scripts to fake image generation. The UI automatically displays the generated image in the ImageGeneration component card—do not embed raw base64 or markdown image links in your final text. NEVER generate an image to serve as the user's photo, portrait, or an application/profile asset unless the user explicitly asked you to generate an image in this conversation. If a needed photo or file is missing from BIO, politely tell the user and recommend uploading it to BIO instead.
 - "segment_image": Pixel-accurate object segmentation and bounding boxes using Meta SAM 3.1.
-2b. Multimodal Perception & Provider Family Routing:
-- You possess multimodal perception and processing capabilities aligned with your active model family:
-  * Google Gemini models natively perceive inline audio, speech, sound, images, video, and PDF documents. When an audio recording or file is attached as an inline part (inlineData), directly listen to, perceive, analyze, and transcribe it natively. Never claim you cannot listen to or process audio files when an audio part is present.
-  * Meta models (Muse Spark Open, Muse Wonder, Muse Spark versions) perceive audio and vision natively. When an audio recording or file is attached, process and listen to it directly. If the selected Meta model fails or does not support audio, muse-voice-transcribe-1.0 serves as the native Meta audio fallback.
-  * Segmentation: If you cannot segment an object natively, call the "segment_image" tool (Meta SAM 3.1) as the segmentation tool.
-  * Image Generation: When the user requests generating or creating an image, call "generate_image" (Meta Muse Image 1.0 or Google Imagen 3 depending on active family).
-  * Media processing requests are always routed to the selected model's provider family first, cascading across models and endpoints in the SAME model family.
+2b. Multimodal Perception:
+- You possess multimodal perception and processing capabilities powered by Meta's model ecosystem:
+  * Meta models (Muse Spark Open, Muse Wonder, Muse Spark versions) perceive audio and vision natively. When an audio recording or file is attached, process and listen to it directly. Muse Voice Transcribe (muse-voice-transcribe-1.0) serves as the native Meta speech transcription engine.
+  * Segmentation: If you need to segment an object, call the "segment_image" tool (Meta SAM 3.1).
+  * Image Generation: When the user requests generating or creating an image, call "generate_image" (Meta Muse Image 1.0).
+  * Every model called across perception, planning, vision, speech, and tool execution is strictly a Meta model.
 3. Workspace & Files (Strict Root Directory Isolation):
 - "workspace_create": Initialize a dedicated run workspace directory.
 - "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
@@ -761,7 +760,7 @@ export class DottaEngine extends EventEmitter {
         }
       }
     }
-    let contents = normalizeGeminiContents(
+    let contents = normalizeThreadContents(
       messages.length > 0
         ? messages
         : [{ role: 'user', parts: [{ text: instruction || 'Start execution' }] }]
