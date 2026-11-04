@@ -81,7 +81,6 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
       }
     }
 
-    const body = req.body || {};
     let threadId = body.threadId;
 
     if (threadId) {
