@@ -91,7 +91,7 @@ export function AgentChatCard({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-white/[0.06] p-3">{composer}</div>
+      <div className={`shrink-0 p-2.5 sm:p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] ${isMobileSheet ? 'border-t-0' : 'border-t border-white/[0.06]'}`}>{composer}</div>
     </aside>
   );
 }

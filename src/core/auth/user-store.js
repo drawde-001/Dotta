@@ -182,26 +182,31 @@ export function createUser({ email, password, firstName, lastName, name }) {
  * backend environment variables (never committed to git or stored in code).
  */
 export async function seedOperatorIntegrations() {
-  const seeds = [
-    {
-      id: 'user-admin',
-      email: 'eddy@dotta.ai',
-      metaKey:
-        process.env.EDDY_META_API_KEY ||
-        process.env.ADMIN_META_API_KEY ||
-        process.env.META_MUSE_API_KEY ||
-        process.env.MODEL_API_KEY
-    },
-    {
-      id: 'user-reviewer',
-      email: 'judges@dotta.ai',
-      metaKey:
-        process.env.JUDGES_META_API_KEY ||
-        process.env.REVIEWER_META_API_KEY ||
-        process.env.META_MUSE_API_KEY ||
-        process.env.MODEL_API_KEY
+  const seeds = [];
+  const adminEmail = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const reviewerEmail = String(process.env.REVIEWER_EMAIL || '').trim().toLowerCase();
+
+  if (adminEmail) {
+    const adminUser = findUserByEmail(adminEmail);
+    const adminKey =
+      process.env.ADMIN_META_API_KEY ||
+      process.env.META_MUSE_API_KEY ||
+      process.env.MODEL_API_KEY;
+    if (adminUser && adminKey) {
+      seeds.push({ id: adminUser.id, email: adminEmail, metaKey: adminKey });
     }
-  ];
+  }
+
+  if (reviewerEmail) {
+    const reviewerUser = findUserByEmail(reviewerEmail);
+    const reviewerKey =
+      process.env.REVIEWER_META_API_KEY ||
+      process.env.META_MUSE_API_KEY ||
+      process.env.MODEL_API_KEY;
+    if (reviewerUser && reviewerKey) {
+      seeds.push({ id: reviewerUser.id, email: reviewerEmail, metaKey: reviewerKey });
+    }
+  }
 
   for (const s of seeds) {
     if (!s.metaKey || !String(s.metaKey).trim()) continue;

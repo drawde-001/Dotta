@@ -79,6 +79,10 @@ export default function App() {
   const [mobileBioChatOpen, setMobileBioChatOpen] = useState(false);
   const [drawerSearch, setDrawerSearch] = useState('');
   const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
+  const [bioMessages, setBioMessages] = useState([]);
+  const [isBioRunning, setIsBioRunning] = useState(false);
+  const [bioActiveInterrupt, setBioActiveInterrupt] = useState(null);
+  const bioAbortControllerRef = useRef(null);
 
   // Check authenticated session on mount (Zero-Flash Route Guard)
   useEffect(() => {
@@ -172,6 +176,7 @@ export default function App() {
     clearCurrentUser();
     setLocalCurrentUser(null);
     setMessages([]);
+    setBioMessages([]);
     setThreads([]);
     threadMessagesMapRef.current = {};
     setOpenFiles([]);
@@ -1380,6 +1385,325 @@ export default function App() {
     }
   };
 
+  const handleCancelBio = () => {
+    if (bioAbortControllerRef.current) {
+      bioAbortControllerRef.current.abort();
+      setIsBioRunning(false);
+    }
+  };
+
+  const handleResolveBioInterrupt = async (interrupt, payload) => {
+    setBioActiveInterrupt(null);
+    if (!interrupt) return;
+
+    const answerText = payload?.answer || (payload?.approved ? 'Approved' : 'Denied');
+    const questionsAndAnswers = payload?.questionsAndAnswers || [
+      {
+        question: interrupt.message || 'Question',
+        answer: answerText
+      }
+    ];
+
+    const qaPart = {
+      type: 'data-submitted-ask-user',
+      id: `submitted-qa-${Date.now()}`,
+      data: { questions: questionsAndAnswers },
+      questions: questionsAndAnswers
+    };
+
+    let hasAssistant = false;
+    const nextMessages = bioMessages.map((m, idx) => {
+      if (idx === bioMessages.length - 1 && m.role === 'assistant') {
+        hasAssistant = true;
+        const existingParts = Array.isArray(m.content) ? [...m.content] : [];
+        return {
+          ...m,
+          content: [...existingParts, qaPart],
+          runStatus: 'running'
+        };
+      }
+      return m;
+    });
+
+    if (!hasAssistant) {
+      nextMessages.push({
+        id: `bio-asst-${Date.now()}`,
+        role: 'assistant',
+        content: [qaPart],
+        runStartedAt: Date.now(),
+        runCompletedAt: null,
+        runStatus: 'running'
+      });
+    }
+
+    setBioMessages(nextMessages);
+
+    await handleSendBioMessage(answerText, {
+      isResume: true,
+      baseMessages: nextMessages,
+      resume: {
+        toolName: interrupt.metadata?.toolName,
+        args: interrupt.metadata?.toolArgs,
+        approved: payload?.approved,
+        answer: payload?.answer,
+        customText: payload?.customText,
+        chosenOptions: payload?.chosenOptions,
+        questionsAndAnswers
+      }
+    });
+  };
+
+  const handleSendBioMessage = async (userMessage, options = {}) => {
+    let userText = '';
+    if (typeof userMessage === 'string') {
+      userText = userMessage;
+    } else if (Array.isArray(userMessage?.content)) {
+      userText = userMessage.content
+        .filter((c) => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+    } else if (typeof userMessage?.content === 'string') {
+      userText = userMessage.content;
+    }
+
+    const rawAttachments = options.attachments || [];
+    const orderedAttachments = rawAttachments.map((att, idx) => ({
+      ...att,
+      order: att.order || idx + 1
+    }));
+
+    if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && isBioRunning)) return;
+
+    const now = Date.now();
+    const userMsgId = `bio-user-${now}`;
+    const assistantMsgId = `bio-asst-${now}`;
+
+    let newMessages;
+    if (options.baseMessages) {
+      newMessages = options.baseMessages;
+    } else if (options.isResume) {
+      newMessages = bioMessages.map((m, idx) => {
+        if (idx === bioMessages.length - 1 && m.role === 'assistant') {
+          return {
+            ...m,
+            runStatus: 'running'
+          };
+        }
+        return m;
+      });
+    } else {
+      newMessages = [
+        ...bioMessages,
+        {
+          id: userMsgId,
+          role: 'user',
+          parentId: bioMessages.length > 0 ? bioMessages[bioMessages.length - 1].id : null,
+          content: [{ type: 'text', text: userText || (orderedAttachments.length ? `[${orderedAttachments.length} attachments]` : '') }],
+          attachments: orderedAttachments,
+          createdAt: now,
+          model: selectedModel,
+          metadata: {
+            custom: {
+              createdAt: now,
+              model: selectedModel,
+              attachments: orderedAttachments
+            }
+          }
+        },
+        {
+          id: assistantMsgId,
+          role: 'assistant',
+          parentId: userMsgId,
+          content: [],
+          runStartedAt: now,
+          runCompletedAt: null,
+          runStatus: 'running'
+        }
+      ];
+    }
+
+    setBioMessages(newMessages);
+    setIsBioRunning(true);
+
+    const controller = new AbortController();
+    bioAbortControllerRef.current = controller;
+
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          threadId: `bio-${getUserId() || 'session'}`,
+          userId: getUserId(),
+          instruction: userText,
+          attachments: orderedAttachments.map((a) => ({
+            name: a.name,
+            type: a.type,
+            size: a.size,
+            dataUrl: a.dataUrl
+          })),
+          messages: newMessages
+            .filter(
+              (m) =>
+                m.role === 'user' ||
+                (m.role === 'assistant' &&
+                  (m.content || []).some(
+                    (c) =>
+                      (c.type === 'text' && c.text) ||
+                      c.type === 'data-submitted-ask-user' ||
+                      c.type === 'submitted-ask-user'
+                  ))
+            )
+            .map((m) => {
+              const textParts = (m.content || [])
+                .filter((c) => c.type === 'text')
+                .map((c) => c.text);
+              const qaParts = (m.content || [])
+                .filter(
+                  (c) =>
+                    c.type === 'data-submitted-ask-user' ||
+                    c.type === 'submitted-ask-user'
+                )
+                .map((c) => {
+                  const list = c.questions || c.data?.questions || [];
+                  return list
+                    .map((qa) => `[Confirmed Answer]: ${qa.question} -> ${qa.answer}`)
+                    .join('\n');
+                });
+              const combinedText = [...textParts, ...qaParts].filter(Boolean).join('\n');
+              return {
+                role: m.role,
+                content: combinedText,
+                attachments: m.attachments?.map((a) => ({
+                  name: a.name,
+                  type: a.type,
+                  size: a.size,
+                  dataUrl: a.dataUrl
+                }))
+              };
+            }),
+          model: selectedModel,
+          mode: agentMode,
+          effort: (options.effort || 'medium').toLowerCase(),
+          resume: options.resume || null
+        }),
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        let errData = null;
+        try {
+          errData = await response.json();
+        } catch {}
+        const errMsg = errData?.error || `Server returned HTTP ${response.status}`;
+        throw new Error(errMsg);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith('data:')) continue;
+          const jsonStr = trimmed.slice(5).trim();
+          if (!jsonStr) continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+
+            if (event.type === 'INTERRUPT') {
+              setBioActiveInterrupt({
+                id: event.id || `interrupt-${Date.now()}`,
+                reason: event.reason || 'user_question',
+                message: event.question || event.message || 'Input requested',
+                metadata: {
+                  toolName: event.tool || event.pendingTool,
+                  toolArgs: event.args || {}
+                }
+              });
+              setBioMessages((prev) => {
+                const updated = [...prev];
+                const last = { ...updated[updated.length - 1] };
+                if (last && last.role === 'assistant') {
+                  last.runStatus = 'requires-action';
+                  updated[updated.length - 1] = last;
+                }
+                return updated;
+              });
+              continue;
+            }
+
+            if (event.type === 'TEXT_CHUNK' && event.chunk) {
+              setBioMessages((prev) => {
+                const updated = [...prev];
+                const last = { ...updated[updated.length - 1] };
+                if (last && last.role === 'assistant') {
+                  const contentParts = [...(last.content || [])];
+                  const lastPart = contentParts[contentParts.length - 1];
+                  if (lastPart && lastPart.type === 'text') {
+                    const rawText = (lastPart.rawText ?? lastPart.text) + event.chunk;
+                    contentParts[contentParts.length - 1] = {
+                      ...lastPart,
+                      rawText,
+                      text: sanitizeChatText(rawText)
+                    };
+                  } else {
+                    contentParts.push({
+                      type: 'text',
+                      id: `text-${contentParts.length}`,
+                      rawText: event.chunk,
+                      text: sanitizeChatText(event.chunk)
+                    });
+                  }
+                  last.content = contentParts;
+                  updated[updated.length - 1] = last;
+                }
+                return updated;
+              });
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.warn('[BioChat] Error:', err);
+        setBioMessages((prev) => {
+          const updated = [...prev];
+          const last = { ...updated[updated.length - 1] };
+          if (last && last.role === 'assistant') {
+            last.runStatus = 'error';
+            last.error = err.message || 'BIO Assist request failed';
+            updated[updated.length - 1] = last;
+          }
+          return updated;
+        });
+      }
+    } finally {
+      setIsBioRunning(false);
+      setBioMessages((prev) => {
+        const updated = [...prev];
+        const last = { ...updated[updated.length - 1] };
+        if (last && last.role === 'assistant') {
+          last.runCompletedAt = last.runCompletedAt || Date.now();
+          if (last.runStatus === 'running') {
+            last.runStatus = 'complete';
+          }
+          updated[updated.length - 1] = last;
+        }
+        return updated;
+      });
+    }
+  };
+
   const threadMessages = useExternalMessageConverter({
     messages,
     isRunning,
@@ -1647,21 +1971,21 @@ export default function App() {
                     {/* Desktop Agent Chat Card (hidden on mobile/tablet) */}
                     <AgentChatCard
                       className="hidden lg:flex"
-                      messages={messages}
-                      isWorking={isRunning}
+                      messages={bioMessages}
+                      isWorking={isBioRunning}
                       composer={
                         <InputDock
                           heroMode={false}
                           maxWidth="100%"
-                          onSendMessage={handleSendMessage}
-                          isWorking={isRunning}
-                          onStopWorking={handleCancel}
+                          onSendMessage={handleSendBioMessage}
+                          isWorking={isBioRunning}
+                          onStopWorking={handleCancelBio}
                           selectedModel={selectedModel}
                           onSelectModel={setSelectedModel}
                           mode={agentMode}
                           onChangeMode={setAgentMode}
-                          activeInterrupt={activeInterrupt}
-                          onResolveInterrupt={handleResolveInterrupt}
+                          activeInterrupt={bioActiveInterrupt}
+                          onResolveInterrupt={handleResolveBioInterrupt}
                         />
                       }
                     />
@@ -1669,14 +1993,14 @@ export default function App() {
                 ) : (
                   <>
                     {/* Center: Chat Panel (Hero or Message Thread) */}
-                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative w-full">
+                    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden relative w-full">
                       {messages.length === 0 ? (
                         /* Centered Hero View (Matching Prototype Image 4 on mobile, untouched on desktop) */
-                        <div className="flex-1 flex flex-col justify-between lg:justify-center items-center p-4 lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full h-full">
+                        <div className="flex-1 flex flex-col justify-between lg:justify-center items-center px-4 pt-2 sm:pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full min-h-full">
                           {/* Center Content */}
                           <div className="flex-1 lg:flex-initial flex flex-col items-center justify-center text-center my-auto px-2 w-full">
                             {/* Authentic Dotta Orb Logo (Ref prompt 8 & Image 4) */}
-                            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-xl">
+                            <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center mb-2.5 sm:mb-4 shadow-xl shrink-0">
                               <svg viewBox="0 0 128 128" className="w-full h-full">
                                 <defs>
                                   <radialGradient id="heroOrbGrad" cx="35%" cy="30%" r="75%">
@@ -1695,10 +2019,10 @@ export default function App() {
                               </svg>
                             </div>
 
-                            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
+                            <h1 className="text-2xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-white mb-1.5 lg:mb-2 text-center">
                               Dotta
                             </h1>
-                            <p className="text-xs sm:text-base text-zinc-400 max-w-xs sm:max-w-lg mb-6 sm:mb-8 text-center">
+                            <p className="text-xs sm:text-base text-zinc-400 max-w-xs sm:max-w-lg mb-3 sm:mb-8 text-center line-clamp-2 sm:line-clamp-none">
                               {heroSubtitles[subtitleIndex]}
                             </p>
 
@@ -1720,13 +2044,13 @@ export default function App() {
                             </div>
 
                             {/* Curated Suggestion Chips */}
-                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2 lg:mt-4 max-w-sm sm:max-w-xl">
+                            <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-1 sm:mt-2 lg:mt-4 max-w-sm sm:max-w-xl">
                               {activeQuickActions.map((chip, idx) => (
                                 <button
                                   key={idx}
                                   type="button"
                                   onClick={() => handleSendMessage(chip.label)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
+                                  className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full text-[11.5px] sm:text-xs font-medium border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
                                 >
                                   <span className="text-zinc-400">{chip.icon}</span>
                                   <span>{chip.label}</span>
@@ -1735,7 +2059,7 @@ export default function App() {
                               <button
                                 type="button"
                                 onClick={handleShuffleQuickActions}
-                                className="p-1.5 rounded-full border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
+                                className="p-1 sm:p-1.5 rounded-full border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
                                 title="Shuffle suggestions"
                               >
                                 <Shuffle size={13} />
@@ -1743,7 +2067,7 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Mobile only: Composer anchored at bottom of screen (Matching Image 4) */}
+                          {/* Mobile only: Composer anchored at bottom of screen with safe area (Matching Image 4) */}
                           <div className="lg:hidden w-full shrink-0 pt-2 pb-1">
                             <InputDock
                               heroMode={true}
@@ -1761,9 +2085,9 @@ export default function App() {
                           </div>
                         </div>
                       ) : (
-                        /* Active Message Thread with Bottom Docked InputDock */
+                        /* Active Message Thread with Floating Composer on Mobile/Tablet */
                         <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative w-full">
-                          <div className="flex-1 min-h-0">
+                          <div className="flex-1 min-h-0 flex flex-col h-full">
                             <Thread
                               activeInterrupt={activeInterrupt}
                               onResolveInterrupt={handleResolveInterrupt}
@@ -1773,21 +2097,29 @@ export default function App() {
                             />
                           </div>
 
-                          {/* Bottom Docked Composer */}
-                          <div className="shrink-0 p-2 sm:p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
-                            <InputDock
-                              heroMode={false}
-                              maxWidth="100%"
-                              onSendMessage={handleSendMessage}
-                              isWorking={isRunning}
-                              onStopWorking={handleCancel}
-                              selectedModel={selectedModel}
-                              onSelectModel={setSelectedModel}
-                              mode={agentMode}
-                              onChangeMode={setAgentMode}
-                              activeInterrupt={activeInterrupt}
-                              onResolveInterrupt={handleResolveInterrupt}
-                            />
+                          {/* Mobile/Tablet Soft Dark Gradient Fade (Layer 2) */}
+                          <div
+                            className="pointer-events-none absolute bottom-0 left-0 right-0 h-44 sm:h-48 z-10 lg:hidden bg-gradient-to-t from-[#101013] via-[#101013]/85 to-transparent"
+                            aria-hidden="true"
+                          />
+
+                          {/* Composer Container: Floating on Mobile/Tablet (Layer 3), Docked on Desktop */}
+                          <div className="absolute lg:static bottom-0 left-0 right-0 z-20 pointer-events-none lg:pointer-events-auto px-3 sm:px-4 pb-[max(0.85rem,calc(env(safe-area-inset-bottom)+0.35rem))] lg:p-3 lg:pb-6 lg:bg-[#101013] lg:border-t lg:border-white/[0.06] border-t-0">
+                            <div className="max-w-3xl w-full mx-auto pointer-events-auto">
+                              <InputDock
+                                heroMode={false}
+                                maxWidth="100%"
+                                onSendMessage={handleSendMessage}
+                                isWorking={isRunning}
+                                onStopWorking={handleCancel}
+                                selectedModel={selectedModel}
+                                onSelectModel={setSelectedModel}
+                                mode={agentMode}
+                                onChangeMode={setAgentMode}
+                                activeInterrupt={activeInterrupt}
+                                onResolveInterrupt={handleResolveInterrupt}
+                              />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -2038,25 +2370,25 @@ export default function App() {
                 onClick={() => setMobileBioChatOpen(false)}
                 aria-label="Close BIO Assist"
               />
-              <div className="relative z-10 w-full h-[88vh] bg-[#121216] border-t border-white/[0.1] rounded-t-[28px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+              <div className="relative z-10 w-full h-[88vh] h-[88dvh] max-h-[90dvh] bg-[#121216] border-t border-white/[0.1] rounded-t-[28px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
                 <AgentChatCard
-                  messages={messages}
-                  isWorking={isRunning}
+                  messages={bioMessages}
+                  isWorking={isBioRunning}
                   isMobileSheet={true}
                   onClose={() => setMobileBioChatOpen(false)}
                   composer={
                     <InputDock
                       heroMode={false}
                       maxWidth="100%"
-                      onSendMessage={handleSendMessage}
-                      isWorking={isRunning}
-                      onStopWorking={handleCancel}
+                      onSendMessage={handleSendBioMessage}
+                      isWorking={isBioRunning}
+                      onStopWorking={handleCancelBio}
                       selectedModel={selectedModel}
                       onSelectModel={setSelectedModel}
                       mode={agentMode}
                       onChangeMode={setAgentMode}
-                      activeInterrupt={activeInterrupt}
-                      onResolveInterrupt={handleResolveInterrupt}
+                      activeInterrupt={bioActiveInterrupt}
+                      onResolveInterrupt={handleResolveBioInterrupt}
                     />
                   }
                 />

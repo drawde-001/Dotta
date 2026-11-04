@@ -7,17 +7,18 @@ import {
   getUserWorkspaceRoot,
   validateAndResolvePath
 } from '../execution/workspace.js';
-import { findUserById } from '../auth/user-store.js';
+import {
+  saveDbBioVault,
+  getDbBioVault
+} from '../db/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
  * BIO data layer (per-user profile store).
  *
- * Storage: one JSON document per user at src/data/bio/<userId>.json, written
- * atomically. The shape is deliberately relational (profiles -> fields,
- * entries, grants, proposals, answers) so it can move to SQL/Supabase tables
- * later without changing callers. Supabase is NOT wired in this repo today.
+ * Backed authoritatively by Supabase public.user_bio_vaults with local
+ * atomic caching for low-latency sandboxed execution.
  */
 
 export const BIO_FIELDS = [
@@ -120,7 +121,6 @@ function emptyFields() {
 export function isDemoSeedUser(userId) {
   if (!userId) return false;
   const safe = String(userId).trim();
-  if (safe === 'user-judges-review') return true;
   if (
     safe === 'user-alice-001' ||
     safe === 'user-bob-002' ||
@@ -133,31 +133,14 @@ export function isDemoSeedUser(userId) {
   return false;
 }
 
-export function createEmptyUserProfile(userId) {
-  let user = null;
-  try {
-    user = findUserById(userId);
-  } catch {
-    user = null;
-  }
+export function createEmptyUserProfile() {
   const id = `profile-${crypto.randomUUID().slice(0, 8)}`;
-  const fullName = user?.name || [user?.firstName, user?.lastName].filter(Boolean).join(' ') || '';
-  const firstName = user?.firstName || '';
-  const lastName = user?.lastName || '';
-  const email = user?.email || '';
-
   return {
     id,
-    name: fullName ? `${fullName} (Default)` : 'Default Profile',
-    isActive: true,
+    name: 'New Profile',
+    isActive: false,
     grants: { read: false, write: false },
-    fields: {
-      ...emptyFields(),
-      fullName,
-      firstName,
-      lastName,
-      email
-    },
+    fields: emptyFields(),
     entries: [],
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -373,54 +356,89 @@ export function loadUserBio(userId) {
   const canonical = seedProfile();
   let repaired = false;
 
-  // Every user gets a full copy of the canonical Alex profile
-  for (const profile of doc.profiles) {
-    if (!profile.fields) {
-      profile.fields = emptyFields();
+  // The first profile is strictly the canonical Alex profile for every user
+  const defaultProfile = doc.profiles[0];
+  if (defaultProfile) {
+    if (!defaultProfile.fields) {
+      defaultProfile.fields = emptyFields();
       repaired = true;
     }
 
     // Populate missing or empty core fields from canonical Alex profile
     for (const [key, val] of Object.entries(canonical.fields)) {
       if (
-        profile.fields[key] === undefined ||
-        profile.fields[key] === null ||
-        profile.fields[key] === '' ||
-        (Array.isArray(profile.fields[key]) && profile.fields[key].length === 0) ||
-        (typeof profile.fields[key] === 'object' && Object.keys(profile.fields[key] || {}).length === 0)
+        defaultProfile.fields[key] === undefined ||
+        defaultProfile.fields[key] === null ||
+        defaultProfile.fields[key] === '' ||
+        (Array.isArray(defaultProfile.fields[key]) && defaultProfile.fields[key].length === 0) ||
+        (typeof defaultProfile.fields[key] === 'object' && Object.keys(defaultProfile.fields[key] || {}).length === 0)
       ) {
-        profile.fields[key] = val;
+        defaultProfile.fields[key] = val;
         repaired = true;
       }
     }
 
     // Ensure social links are populated
-    if (!profile.fields.socialLinks) {
-      profile.fields.socialLinks = { ...canonical.fields.socialLinks };
+    if (!defaultProfile.fields.socialLinks) {
+      defaultProfile.fields.socialLinks = { ...canonical.fields.socialLinks };
       repaired = true;
     }
 
     // Ensure entries exist
-    if (!Array.isArray(profile.entries) || profile.entries.length === 0) {
-      profile.entries = JSON.parse(JSON.stringify(canonical.entries));
+    if (!Array.isArray(defaultProfile.entries) || defaultProfile.entries.length === 0) {
+      defaultProfile.entries = JSON.parse(JSON.stringify(canonical.entries));
       repaired = true;
     }
 
     // Materialize real dummy files into this user's personal sandbox workspace
-    if (materializeProfileFiles(userId, profile)) {
+    if (materializeProfileFiles(userId, defaultProfile)) {
+      repaired = true;
+    }
+  }
+
+  // Any secondary profiles manually added by user retain their own distinct empty/custom fields
+  for (let i = 1; i < doc.profiles.length; i++) {
+    const profile = doc.profiles[i];
+    if (!profile.fields) {
+      profile.fields = emptyFields();
+      repaired = true;
+    }
+    if (!Array.isArray(profile.entries)) {
+      profile.entries = [];
       repaired = true;
     }
   }
 
   if (repaired || !fs.existsSync(filePath)) {
     atomicWriteJson(filePath, doc);
+    if (userId) {
+      saveDbBioVault(userId, doc).catch(() => {});
+    }
   }
   return doc;
+}
+
+/**
+ * Hydrate user BIO vault from Supabase database into local cache
+ */
+export async function syncBioFromDb(userId) {
+  if (!userId) return null;
+  const dbDoc = await getDbBioVault(userId);
+  if (dbDoc && Array.isArray(dbDoc.profiles) && dbDoc.profiles.length > 0) {
+    atomicWriteJson(bioFilePath(userId), dbDoc);
+    return dbDoc;
+  }
+  return null;
 }
 
 export function saveUserBio(userId, doc) {
   doc.updatedAt = Date.now();
   atomicWriteJson(bioFilePath(userId), doc);
+  if (userId) {
+    saveDbBioVault(userId, doc).catch((err) => {
+      console.warn(`[BioStore] Supabase vault sync error for ${userId}:`, err.message);
+    });
+  }
   return doc;
 }
 

@@ -31,6 +31,7 @@ import {
 } from '../src/core/tools/injection-scan.js';
 import {
   loadUserBio,
+  syncBioFromDb,
   createProfile as bioCreateProfile,
   setActiveProfile as bioSetActiveProfile,
   updateProfile as bioUpdateProfile,
@@ -82,6 +83,10 @@ import {
   listDbUserUploads,
   listDbConversations,
   getDbConversation,
+  saveDbConversation,
+  deleteDbConversation,
+  saveDbBioVault,
+  getDbBioVault,
   getUserIntegration,
   listUserIntegrations,
   saveUserCredentialsSecret,
@@ -1394,7 +1399,7 @@ app.get('/api/threads/:threadId', async (req, res) => {
   }
 });
 
-app.post('/api/threads', (req, res) => {
+app.post('/api/threads', async (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
@@ -1405,6 +1410,7 @@ app.post('/api/threads', (req, res) => {
       id: threadId,
       threadId
     });
+    await saveDbConversation(userId, threadId, thread);
     res.json({ ok: true, thread });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1421,6 +1427,7 @@ app.patch('/api/threads/:threadId', async (req, res) => {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
     }
     const thread = saveUserThread(userId, req.params.threadId, req.body || {});
+    await saveDbConversation(userId, req.params.threadId, thread);
     res.json({ ok: true, thread });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1437,6 +1444,7 @@ app.delete('/api/threads/:threadId', async (req, res) => {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
     }
     const deleted = deleteUserThread(userId, req.params.threadId);
+    await deleteDbConversation(userId, req.params.threadId);
     res.json({ ok: true, deleted });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1878,10 +1886,14 @@ function bioFail(res, err) {
   res.status(400).json({ ok: false, error: err.message || 'BIO request failed' });
 }
 
-app.get('/api/bio', (req, res) => {
+app.get('/api/bio', async (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   try {
+    const bioFile = path.resolve(__dirname, `../src/data/bio/${userId}.json`);
+    if (!fs.existsSync(bioFile)) {
+      await syncBioFromDb(userId);
+    }
     const doc = loadUserBio(userId);
     res.json({
       ok: true,
@@ -2016,6 +2028,14 @@ app.post('/api/bio/entries', async (req, res) => {
       if (type === 'document' && (mime.startsWith('text/') || /\.(txt|md|json|csv)$/i.test(file.name || ''))) {
         textContent = buffer.toString('utf8').slice(0, 20000);
       }
+      recordDbUserUpload({
+        userId,
+        name: String(file.name || 'file'),
+        size: buffer.length,
+        type: mime,
+        workspacePath: rel,
+        metadata: { category: 'bio_entry', entryType: type, profileId }
+      }).catch(() => {});
     }
     const entry = bioAddEntry(userId, String(profileId || ''), {
       name,
@@ -2082,6 +2102,14 @@ app.post('/api/bio/photo', async (req, res) => {
     }
     const buffer = decodeBioUpload(file, 5 * 1024 * 1024, 'Photo');
     const rel = writeSandboxUpload(userId, file, buffer);
+    recordDbUserUpload({
+      userId,
+      name: String(file.name || 'photo.jpg'),
+      size: buffer.length,
+      type: String(file.mime || 'image/jpeg'),
+      workspacePath: rel,
+      metadata: { category: 'bio_photo', profileId }
+    }).catch(() => {});
     const profile = bioSetField(userId, String(profileId || ''), 'photo', rel);
     res.json({ ok: true, path: rel, profile });
   } catch (err) {
@@ -2105,6 +2133,14 @@ app.post('/api/bio/cv', async (req, res) => {
     }
     const buffer = decodeBioUpload(file, 10 * 1024 * 1024, 'CV');
     const rel = writeSandboxUpload(userId, file, buffer);
+    recordDbUserUpload({
+      userId,
+      name: String(file.name || 'cv.pdf'),
+      size: buffer.length,
+      type: String(file.mime || 'application/pdf'),
+      workspacePath: rel,
+      metadata: { category: 'bio_cv', profileId }
+    }).catch(() => {});
     const cv = { name: String(file.name), size: buffer.length, mime: String(file.mime || ''), path: rel };
     const profile = bioSetField(userId, String(profileId || ''), 'cv', cv);
     res.json({ ok: true, cv, profile });

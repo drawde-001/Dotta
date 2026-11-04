@@ -113,7 +113,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
       >
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4 pt-4",
+            "mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4 pt-4 pb-36 sm:pb-40 lg:pb-6",
           )}
         >
 

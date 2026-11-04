@@ -21,9 +21,11 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 let supabaseInstance = null;
 
 export function getSupabaseClient() {
-  if (!supabaseInstance && SUPABASE_URL && SUPABASE_KEY) {
+  const url = process.env.SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  if (!supabaseInstance && url && key) {
     try {
-      supabaseInstance = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      supabaseInstance = createClient(url, key, {
         auth: {
           persistSession: false,
           autoRefreshToken: false
@@ -37,7 +39,9 @@ export function getSupabaseClient() {
 }
 
 export function isSupabaseConfigured() {
-  return Boolean(SUPABASE_URL && SUPABASE_KEY);
+  const url = process.env.SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+  return Boolean(url && key);
 }
 
 /**
@@ -834,5 +838,68 @@ export async function deleteUserCredentials(userId, provider) {
   }
 
   return true;
+}
+
+/**
+ * Persist user BIO vault (profiles, proposals, answers) to Supabase public.user_bio_vaults
+ */
+export async function saveDbBioVault(userId, bioDoc) {
+  const sb = getSupabaseClient();
+  if (!sb || !userId || !bioDoc) return null;
+
+  try {
+    const cleanUserId = String(userId);
+    await ensureDbUser(cleanUserId);
+
+    const now = new Date().toISOString();
+    const { error } = await sb.from('user_bio_vaults').upsert(
+      {
+        user_id: cleanUserId,
+        profiles: Array.isArray(bioDoc.profiles) ? bioDoc.profiles : [],
+        proposals: Array.isArray(bioDoc.proposals) ? bioDoc.proposals : [],
+        answers: Array.isArray(bioDoc.answers) ? bioDoc.answers : [],
+        updated_at: now
+      },
+      { onConflict: 'user_id' }
+    );
+
+    if (error) {
+      console.warn(`[Supabase] saveDbBioVault warning for ${cleanUserId}:`, error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('[Supabase] saveDbBioVault unexpected error:', err.message);
+    return false;
+  }
+}
+
+/**
+ * Fetch user BIO vault from Supabase public.user_bio_vaults
+ */
+export async function getDbBioVault(userId) {
+  const sb = getSupabaseClient();
+  if (!sb || !userId) return null;
+
+  try {
+    const cleanUserId = String(userId);
+    const { data, error } = await sb
+      .from('user_bio_vaults')
+      .select('*')
+      .eq('user_id', cleanUserId)
+      .maybeSingle();
+
+    if (error || !data) return null;
+    return {
+      userId: data.user_id,
+      profiles: Array.isArray(data.profiles) ? data.profiles : [],
+      proposals: Array.isArray(data.proposals) ? data.proposals : [],
+      answers: Array.isArray(data.answers) ? data.answers : [],
+      createdAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
+      updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : Date.now()
+    };
+  } catch {
+    return null;
+  }
 }
 
