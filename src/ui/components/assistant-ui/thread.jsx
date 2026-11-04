@@ -114,12 +114,8 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
         <div
           className={cn(
             "mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4 pt-4",
-            isEmpty && "justify-center",
           )}
         >
-          <AuiIf condition={(s) => s.thread.isEmpty}>
-            <ThreadWelcome />
-          </AuiIf>
 
           <div className="mb-6 flex flex-col gap-y-6 empty:hidden">
             <ThreadPrimitive.Messages
@@ -159,13 +155,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
 }
 
 function ThreadWelcome() {
-  return (
-    <div className="mb-6 flex flex-col px-2">
-      <p className="text-2xl font-medium tracking-tight fade-in slide-in-from-bottom-1 animate-in fill-mode-both duration-200">
-        How can I help you today?
-      </p>
-    </div>
-  );
+  return null;
 }
 
 function ThreadSuggestions() {
