@@ -35,6 +35,11 @@ export function sanitizeUserId(raw) {
   return /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id) ? id : null;
 }
 
+export function sanitizeThreadId(raw) {
+  const id = String(raw || '').trim();
+  return /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(id) ? id : null;
+}
+
 export function getUserWorkspaceRoot(userId) {
   const safe = sanitizeUserId(userId);
   if (!safe) {
@@ -47,8 +52,76 @@ export function getUserWorkspaceRoot(userId) {
   return root;
 }
 
-export function listUserWorkspaceFiles(userId) {
-  const root = getUserWorkspaceRoot(userId);
+export function getThreadWorkspaceRoot(userId, threadId) {
+  const safeUser = sanitizeUserId(userId);
+  if (!safeUser) {
+    throw new Error('Invalid user id');
+  }
+  const userRoot = getUserWorkspaceRoot(safeUser);
+  const safeThread = sanitizeThreadId(threadId);
+  if (!safeThread) {
+    return userRoot;
+  }
+  const threadRoot = path.resolve(userRoot, 'threads', safeThread);
+  if (!fs.existsSync(threadRoot)) {
+    fs.mkdirSync(threadRoot, { recursive: true });
+  }
+  return threadRoot;
+}
+
+export const MAX_WORKSPACE_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+export const MAX_WORKSPACE_TOTAL_BYTES = 50 * 1024 * 1024; // 50MB
+export const MAX_WORKSPACE_FILE_COUNT = 200;
+
+export function hasThreadWorkspace(userId, threadId) {
+  const safeUser = sanitizeUserId(userId);
+  const safeThread = sanitizeThreadId(threadId);
+  if (!safeUser || !safeThread) return false;
+  const threadRoot = path.resolve(getUserWorkspaceRoot(safeUser), 'threads', safeThread);
+  return fs.existsSync(threadRoot);
+}
+
+export function deleteThreadWorkspace(userId, threadId) {
+  const safeUser = sanitizeUserId(userId);
+  const safeThread = sanitizeThreadId(threadId);
+  if (!safeUser || !safeThread) return false;
+  const threadRoot = path.resolve(getUserWorkspaceRoot(safeUser), 'threads', safeThread);
+  if (fs.existsSync(threadRoot)) {
+    fs.rmSync(threadRoot, { recursive: true, force: true });
+    return true;
+  }
+  return false;
+}
+
+export function getWorkspaceStats(workspaceRoot) {
+  let totalBytes = 0;
+  let fileCount = 0;
+  if (!fs.existsSync(workspaceRoot)) return { totalBytes: 0, fileCount: 0 };
+  function walk(dir) {
+    let entries = [];
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const ent of entries) {
+      const full = path.join(dir, ent.name);
+      if (ent.isDirectory()) {
+        walk(full);
+      } else if (ent.isFile()) {
+        fileCount++;
+        try {
+          totalBytes += fs.statSync(full).size;
+        } catch {}
+      }
+    }
+  }
+  walk(workspaceRoot);
+  return { totalBytes, fileCount };
+}
+
+export function listUserWorkspaceFiles(userId, threadId = null) {
+  const root = threadId ? getThreadWorkspaceRoot(userId, threadId) : getUserWorkspaceRoot(userId);
   const results = [];
   const MAX_ENTRIES = 500;
   const MAX_DEPTH = 6;
@@ -84,8 +157,8 @@ export function listUserWorkspaceFiles(userId) {
   return results;
 }
 
-export function readUserWorkspaceFile(userId, relativePath) {
-  const root = getUserWorkspaceRoot(userId);
+export function readUserWorkspaceFile(userId, relativePath, threadId = null) {
+  const root = threadId ? getThreadWorkspaceRoot(userId, threadId) : getUserWorkspaceRoot(userId);
   const resolved = validateAndResolvePath(root, relativePath);
   const displayPath = sanitizeRelativeDisplayPath(relativePath, root);
 
@@ -166,25 +239,72 @@ export function redactRootPaths(text = '', effectiveRoot = '') {
   return out;
 }
 
-export function createWorkspace(runId, name = '') {
+export function getOrCreateThreadWorkspace(userId, threadId, name = '') {
+  const safeUser = sanitizeUserId(userId);
+  const safeThread = sanitizeThreadId(threadId);
+  if (!safeUser || !safeThread) {
+    throw new Error('Valid userId and threadId are required');
+  }
+  const root = getThreadWorkspaceRoot(safeUser, safeThread);
+  fs.mkdirSync(root, { recursive: true });
+  const metaPath = path.join(root, '.workspace.json');
+  const alreadyExists = fs.existsSync(metaPath);
+  if (!alreadyExists) {
+    const metadata = {
+      threadId: safeThread,
+      userId: safeUser,
+      name: name || `thread-${safeThread}`,
+      createdAt: Date.now()
+    };
+    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
+  }
+  return {
+    root,
+    workspaceRoot: root,
+    reused: alreadyExists,
+    created: !alreadyExists,
+    threadId: safeThread
+  };
+}
+
+export function createWorkspace(runIdOrOptions, name = '') {
+  const options = typeof runIdOrOptions === 'object' && runIdOrOptions !== null ? runIdOrOptions : { runId: runIdOrOptions, name };
+  const { userId, threadId } = options;
+  if (userId && threadId) {
+    const res = getOrCreateThreadWorkspace(userId, threadId, options.name || name);
+    return {
+      threadId: res.threadId,
+      workspaceRoot: res.workspaceRoot,
+      root: res.root,
+      name: options.name || name || res.threadId,
+      reused: res.reused,
+      created: res.created,
+      message: res.reused ? 'Reusing existing thread workspace.' : 'Created new thread workspace.'
+    };
+  }
+  const runId = options.runId || runIdOrOptions || 'default-run';
   const workspaceRoot = getWorkspaceRoot(runId);
   if (!fs.existsSync(workspaceRoot)) {
     fs.mkdirSync(workspaceRoot, { recursive: true });
   }
 
   const metaPath = path.join(workspaceRoot, '.workspace.json');
-  const metadata = {
-    runId,
-    name: name || runId,
-    createdAt: Date.now()
-  };
-  fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
+  const alreadyExists = fs.existsSync(metaPath);
+  if (!alreadyExists) {
+    const metadata = {
+      runId,
+      name: name || runId,
+      createdAt: Date.now()
+    };
+    fs.writeFileSync(metaPath, JSON.stringify(metadata, null, 2), 'utf8');
+  }
 
   // Never expose workspaceRoot location or root directory name
   return {
     runId,
-    name: metadata.name,
-    created: true
+    name: name || runId,
+    reused: alreadyExists,
+    created: !alreadyExists
   };
 }
 
@@ -310,29 +430,32 @@ export function getLatestFileArtifact(runId) {
   return list[list.length - 1];
 }
 
-function resolveEffectiveRoot({ workspaceRoot, runId }) {
-  // If an isolated RunSandbox is active for this runId, always confine agent file operations to it
+function resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId }) {
+  // 1. Thread workspace: if userId and threadId are provided, or workspaceRoot points to a thread folder
+  if (userId && threadId) {
+    return getThreadWorkspaceRoot(userId, threadId);
+  }
+  if (workspaceRoot && typeof workspaceRoot === 'string') {
+    const normWs = path.normalize(path.resolve(workspaceRoot)).toLowerCase();
+    const normProject = path.normalize(PROJECT_ROOT).toLowerCase();
+    // Never allow agent run tools to mount the host project root directly
+    if (normWs === normProject) {
+      return getWorkspaceRoot(runId || 'default-run');
+    }
+    return workspaceRoot;
+  }
+  // 2. If an isolated RunSandbox is active for this runId and no thread workspace specified
   if (runId) {
     const activeSandbox = getRunSandbox(runId);
     if (activeSandbox) {
       return activeSandbox.workDir;
     }
   }
-  if (workspaceRoot && typeof workspaceRoot === 'string') {
-    const normWs = path.normalize(path.resolve(workspaceRoot)).toLowerCase();
-    const normProject = path.normalize(PROJECT_ROOT).toLowerCase();
-    const normWorkspacesBase = path.normalize(getWorkspacesBaseDir()).toLowerCase();
-    // Never allow agent run tools to mount the project root or the BIO storage root directly
-    if (normWs === normProject || normWs.startsWith(normWorkspacesBase)) {
-      return getWorkspaceRoot(runId || 'default-run');
-    }
-    return workspaceRoot;
-  }
   return getWorkspaceRoot(runId || 'default-run');
 }
 
-export function workspaceFileRead({ path: relPath, runId, workspaceRoot, maxChars = 4000 }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileRead({ path: relPath, runId, workspaceRoot, maxChars = 4000, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
   const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
@@ -360,8 +483,8 @@ export function workspaceFileRead({ path: relPath, runId, workspaceRoot, maxChar
   return capToolOutput(redactedContent, maxChars);
 }
 
-export function workspaceFileList({ path: relPath = '.', recursive = false, workspaceRoot, runId, maxChars = 4000 }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileList({ path: relPath = '.', recursive = false, workspaceRoot, runId, maxChars = 4000, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   if (!fs.existsSync(effectiveRoot)) {
     fs.mkdirSync(effectiveRoot, { recursive: true });
   }
@@ -404,8 +527,8 @@ export function workspaceFileList({ path: relPath = '.', recursive = false, work
   return capToolOutput(items.join('\n'), maxChars);
 }
 
-export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoot, runId, maxChars = 4000 }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoot, runId, maxChars = 4000, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   if (!fs.existsSync(effectiveRoot)) {
     fs.mkdirSync(effectiveRoot, { recursive: true });
   }
@@ -455,8 +578,8 @@ export function workspaceFileSearch({ pattern, path: relPath = '.', workspaceRoo
   return capToolOutput(matches.join('\n'), maxChars);
 }
 
-export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runId }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runId, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   if (!fs.existsSync(effectiveRoot)) {
     fs.mkdirSync(effectiveRoot, { recursive: true });
   }
@@ -470,6 +593,24 @@ export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runI
 
   const data = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
   const redactedData = redactRootPaths(data, effectiveRoot);
+  const byteSize = Buffer.byteLength(redactedData, 'utf8');
+
+  if (byteSize > MAX_WORKSPACE_FILE_SIZE) {
+    throw new Error(`File size (${Math.round(byteSize / 1024)} KB) exceeds maximum allowed size of 10 MB.`);
+  }
+
+  const isExisting = fs.existsSync(resolved);
+  const stats = getWorkspaceStats(effectiveRoot);
+
+  if (!isExisting && stats.fileCount >= MAX_WORKSPACE_FILE_COUNT) {
+    throw new Error(`Workspace file limit reached (${MAX_WORKSPACE_FILE_COUNT} files). Cannot create new file.`);
+  }
+
+  const existingSize = isExisting ? (fs.statSync(resolved).size || 0) : 0;
+  if ((stats.totalBytes - existingSize + byteSize) > MAX_WORKSPACE_TOTAL_BYTES) {
+    throw new Error(`Workspace total size limit exceeded (maximum 50 MB allowed).`);
+  }
+
   const linesAdded = redactedData.split(/\r\n|\r|\n/).length;
   fs.writeFileSync(resolved, redactedData, 'utf8');
   recordFileRead(runId || 'default', resolved);
@@ -489,8 +630,8 @@ export function workspaceFileWrite({ path: relPath, content, workspaceRoot, runI
   return `Successfully wrote ${Buffer.byteLength(redactedData, 'utf8')} bytes (+${linesAdded} lines) to "${displayPath}".`;
 }
 
-export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, workspaceRoot }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, workspaceRoot, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
   const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 
@@ -550,8 +691,8 @@ export function workspaceFileEdit({ path: relPath, old_text, new_text, runId, wo
   return `Successfully edited "${displayPath}" (+${linesAdded} -${linesRemoved}): replaced 1 exact match.`;
 }
 
-export function workspaceFileDelete({ path: relPath, runId, workspaceRoot }) {
-  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId });
+export function workspaceFileDelete({ path: relPath, runId, workspaceRoot, threadId, userId }) {
+  const effectiveRoot = resolveEffectiveRoot({ workspaceRoot, runId, threadId, userId });
   const resolved = validateAndResolvePath(effectiveRoot, relPath);
   const displayPath = sanitizeRelativeDisplayPath(relPath, effectiveRoot);
 

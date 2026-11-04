@@ -228,27 +228,24 @@ export function getModelRegistry() {
     provider: 'modal',
   };
 
-  // Muse Glimmer: Only appears if custom endpoint configured in env
-  const glimmerEndpoint = process.env.MUSE_GLIMMER_ENDPOINT || process.env.GLIMMER_URL;
-  if (glimmerEndpoint) {
-    registry['muse-glimmer'] = {
-      id: 'muse-glimmer',
-      name: 'Muse Glimmer (Self-Hosted)',
-      provider: 'meta-self-hosted',
-      selectable: true,
-      endpoint: glimmerEndpoint,
-      capabilities: {
-        text: true,
-        tools: false,
-        vision: true,
-        imageGeneration: false,
-        speechToText: false,
-        segmentation: false
-      },
-      contextWindow: 131072,
-      description: 'Open-weight distilled multimodal model running on local/edge hardware.'
-    };
-  }
+  // Muse Glimmer: Served via NVIDIA NIM (BYOK)
+  registry['muse-glimmer'] = {
+    id: 'muse-glimmer',
+    name: 'Muse Glimmer',
+    provider: 'nvidia',
+    wireModel: 'meta/muse-glimmer-30b',
+    selectable: true,
+    capabilities: {
+      text: true,
+      tools: true,
+      vision: true,
+      imageGeneration: false,
+      speechToText: false,
+      segmentation: false
+    },
+    contextWindow: 131072,
+    description: '30B distilled open-weight multimodal model served via NVIDIA NIM inference microservice (BYOK).'
+  };
 
   return registry;
 }

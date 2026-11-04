@@ -117,6 +117,17 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     desc: 'Baseline Muse Spark agent model',
     hasRealApi: true,
   },
+  {
+    id: 'muse-glimmer',
+    name: 'Muse Glimmer',
+    effort: 'High',
+    provider: 'muse',
+    isFav: false,
+    efforts: ['Low', 'Medium', 'High'],
+    badge: 'NVIDIA NIM',
+    desc: '30B distilled open-weight multimodal model served via NVIDIA NIM inference microservice (BYOK)',
+    hasRealApi: true,
+  },
 ];
 
 const CONTEXT_OPTIONS: ContextTagOption[] = [

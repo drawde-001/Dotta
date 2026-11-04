@@ -7,31 +7,45 @@ This guide provides end-to-end instructions for deploying Dotta to a Linux virtu
 ## Architecture Flow
 
 ```
-[Internet User]
+[Internet User / Browser]
        │
        ▼  (HTTPS / 443)
-┌──────────────────────────────────────────────┐
-│  Virtual Machine (Public IP)                 │
-│                                              │
-│  ┌────────────────────────────────────────┐  │
-│  │ Caddy Reverse Proxy (Auto Let's Encrypt)│  │
-│  └──────────────────┬─────────────────────┘  │
-│                     │  (HTTP / 3001)         │
-│                     ▼                        │
-│  ┌────────────────────────────────────────┐  │
-│  │ Node.js Server (PM2)                   │  │
-│  │  - Static Assistant-UI (/dist)         │  │
-│  │  - AG-UI SSE Stream (/api/chat)        │  │
-│  │  - DottaEngine (Meta Muse Core)        │  │
-│  └──────────────────┬─────────────────────┘  │
-│                     │                        │
-│         ┌───────────┴───────────┐            │
-│         ▼                       ▼            │
-│  ┌──────────────┐       ┌──────────────┐     │
-│  │ Docker / WSL │       │   Supabase   │     │
-│  │ Tool Sandbox │       │ PostgreSQL DB│     │
-│  └──────────────┘       └──────────────┘     │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│  Virtual Machine (Public IP)                            │
+│                                                         │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │ Caddy Reverse Proxy (Auto Let's Encrypt SSL)      │  │
+│  └──────────────────────┬────────────────────────────┘  │
+│                         │  (HTTP / 3001)                │
+│                         ▼                               │
+│  ┌───────────────────────────────────────────────────┐  │
+│  │ Node.js Server (PM2 / Docker Container)           │  │
+│  │  - Assistant-UI Frontend Shell (/dist)            │  │
+│  │  - AG-UI SSE Stream & CDP Screencast              │  │
+│  │  - DottaEngine core                               │  │
+│  │    (Meta Models - Muse Spark Open by default)     │  │
+│  │  - Sandboxed Preview Server (/api/workspace/...)  │  │
+│  └──────┬───────────────────────┬────────────────────┘  │
+│         │                       │                       │
+│         ▼                       ▼                       │
+│  ┌─────────────────────┐ ┌───────────────────────────┐  │
+│  │ 1. Ephemeral Run    │ │ 2. Persistent Thread      │  │
+│  │    Sandbox (Docker) │ │    Workspace (Safe Files) │  │
+│  │  - Bash & scripts   │ │  - Per-thread storage     │  │
+│  │  - destroyRunSandbox│ │  - Directory organization │  │
+│  │  - Zero persistence │ │  - Live loopback preview  │  │
+│  └─────────────────────┘ └───────────────────────────┘  │
+│         │                       │                       │
+│         ▼                       ▼                       │
+│  ┌─────────────────────┐ ┌───────────────────────────┐  │
+│  │ BYOK Model Providers│ │ Supabase Cloud            │  │
+│  │  • Core: Muse Spark │ │  - PostgreSQL DB & RLS    │  │
+│  │    Open (Modal vLLM)│ │  - AES-256-GCM Secrets    │  │
+│  │  • Meta Model API   │ │  - User Sessions & BIO    │  │
+│  │  • Supporting: NIM  │ │                           │  │
+│  │    (Muse Glimmer)   │ │                           │  │
+│  └─────────────────────┘ └───────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -171,6 +185,10 @@ META_MUSE_API_KEY=your_actual_meta_muse_api_key_here
 META_MUSE_BASE_URL=https://api.meta.ai/v1
 MODEL_API_KEY=your_model_api_key
 
+# Optional Supporting Model: NVIDIA NIM Integration (for Muse Glimmer 30B)
+# Note: Users can also bring their own key directly in Settings -> API Keys & Compute
+NVIDIA_API_KEY=your_nvidia_api_key_here
+
 # Server Settings
 PORT=3001
 NODE_ENV=production
@@ -188,6 +206,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
 DOTTA_SANDBOX_DISTRO=dotta-sandbox
 ```
 
+> **100% Bring Your Own Key (BYOK)**: In production, users add their own API keys for Meta AI, Modal Compute, or NVIDIA NIM directly inside **Settings -> API Keys & Compute** in the web interface. All keys are encrypted at rest with application-level **AES-256-GCM** with zero exposure to client browsers.
+>
 > Keep your `.env` file private. It is git-ignored; never commit it or paste its contents anywhere public.
 
 ### Supabase Database Initialization
@@ -286,7 +306,7 @@ docker compose ps
 
 Persistent volumes automatically preserve your data across redeploys:
 - `bio_data`: User BIO profiles, sessions, and database backups (`/app/src/data`)
-- `workspaces_data`: User sandboxes, file uploads, and seeded assets (`/app/src/workspaces`)
+- `workspaces_data`: Persistent thread workspaces, created artifacts, web builds, and seeded assets (`/app/src/workspaces`)
 - `caddy_data`: Automated Let's Encrypt certificates (`/data`)
 
 To view live application logs:
@@ -353,20 +373,27 @@ Confirm your instance is running correctly:
    # Returns: {"status":"healthy","defaultModel":"muse-spark-open", ...}
    ```
 
-2. **Verify Public HTTPS:**
+2. **Verify Public HTTPS & User Onboarding:**
    Open `https://yourdomain.com/new` in your browser.
    - You will see the Assistant-UI chat shell connected to Dotta.
    - Register a personal account at `/login`.
    - Your account is automatically seeded with the canonical **Alex Morgan BIO profile** (`https://yourdomain.com/bio`).
-   - Open **Settings** -> **API Keys** (`https://yourdomain.com/settings/keys`) and configure your Meta API key.
+   - Open **Settings** -> **API Keys** (`https://yourdomain.com/settings/keys`) and configure your Meta API key (or Modal / NVIDIA NIM key).
    - Run a web navigation or form-filling task to verify real-time browser actions!
 
-3. **Run Core Security & Billing Test Suites:**
+3. **Verify Thread Workspaces & Local Web Previews:**
+   - Ask Dotta to create a website or document in your chat.
+   - The agent writes the files into the dedicated persistent thread workspace (`src/workspaces/<userId>/threads/<threadId>/<folder>/`).
+   - Open the **Workspace Panel** in the UI to inspect generated files.
+   - Click the live preview URL or open `https://yourdomain.com/api/workspace/preview/<threadId>/<folder>/` to see the site rendered inside the secured CSP sandbox.
+
+4. **Run Comprehensive Security, Isolation & Crypto Test Suites:**
    ```bash
    # Run in the repository directory (or inside container via docker exec)
    node tests/bio.test.js
    node tests/user-funded-billing.test.js
    node tests/credentials-crypto.test.js
    node tests/settings-verification.test.js
+   node tests/thread-workspace-preview.test.js
    ```
 

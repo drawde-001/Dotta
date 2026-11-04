@@ -280,3 +280,83 @@ export async function verifyModalCredentials({ endpointUrl, tokenId, tokenSecret
     };
   }
 }
+
+/**
+ * Live verification probe for NVIDIA NIM API key.
+ * Sends a tiny 1-token request (max_tokens: 1) to verify key validity against Muse Glimmer.
+ */
+export async function verifyNvidiaCredentials(apiKey) {
+  const cleanKey = String(apiKey || '').trim();
+  if (!cleanKey) {
+    return { ok: false, code: 'EMPTY_KEY', error: 'Please enter a valid NVIDIA API key.' };
+  }
+
+  const endpoint = 'https://integrate.api.nvidia.com/v1/chat/completions';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const probePayload = {
+      model: 'meta/muse-glimmer-30b',
+      messages: [{ role: 'user', content: 'probe' }],
+      max_tokens: 1,
+      temperature: 0.1
+    };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cleanKey}`
+      },
+      body: JSON.stringify(probePayload),
+      redirect: 'error',
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      return { ok: true };
+    }
+
+    const errText = await res.text().catch(() => '');
+    const lower = String(errText).toLowerCase();
+
+    if (res.status === 401 || res.status === 403 || lower.includes('unauthorized') || lower.includes('invalid api key')) {
+      return {
+        ok: false,
+        code: 'INVALID_KEY',
+        error: 'Invalid NVIDIA API key. Please verify your key in the NVIDIA NGC portal.'
+      };
+    }
+
+    if (res.status === 402 || lower.includes('quota') || lower.includes('credit')) {
+      return {
+        ok: false,
+        code: 'INSUFFICIENT_CREDITS',
+        error: 'Insufficient credits or quota on your NVIDIA account.'
+      };
+    }
+
+    if (res.status === 429 || lower.includes('rate limit')) {
+      return {
+        ok: false,
+        code: 'RATE_LIMITED',
+        error: 'NVIDIA NIM rate limit reached. Please try again in a few moments.'
+      };
+    }
+
+    return {
+      ok: false,
+      code: 'NVIDIA_ERROR',
+      error: `NVIDIA API returned HTTP ${res.status}: ${errText.slice(0, 100) || 'Unknown error'}`
+    };
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      return { ok: false, code: 'TIMEOUT', error: 'NVIDIA API verification timed out (15s).' };
+    }
+    return { ok: false, code: 'NETWORK_ERROR', error: `Could not reach NVIDIA API endpoint: ${err.message}` };
+  }
+}

@@ -37,30 +37,47 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     let userCredentials = null;
     const metaSecret = await getUserCredentialsSecret(userId, 'meta');
     const modalSecret = await getUserCredentialsSecret(userId, 'modal');
+    const nvidiaSecret = await getUserCredentialsSecret(userId, 'nvidia');
 
-    if (metaSecret || modalSecret) {
+    if (metaSecret || modalSecret || nvidiaSecret) {
       try {
         userCredentials = {
           metaKey: metaSecret ? decryptCredentialsPayload(metaSecret.encryptedPayload)?.apiKey : null,
-          modal: modalSecret ? decryptCredentialsPayload(modalSecret.encryptedPayload) : null
+          modal: modalSecret ? decryptCredentialsPayload(modalSecret.encryptedPayload) : null,
+          nvidiaKey: nvidiaSecret ? decryptCredentialsPayload(nvidiaSecret.encryptedPayload)?.apiKey : null
         };
       } catch (err) {
         console.warn(`[ag-ui-bridge] Failed to decrypt user credentials for ${userId}:`, err.message);
       }
     }
 
-    // No key, no charge hard gate: If no Meta key and no Modal credentials, block immediately with HTTP 403
-    if (!userCredentials?.metaKey && !userCredentials?.modal?.tokenId && !userCredentials?.modal?.apiKey) {
-      const isOperatorFallback = Boolean(
-        process.env.ALLOW_OPERATOR_KEY_FALLBACK === 'true' &&
-        (process.env.META_MUSE_API_KEY || process.env.MODEL_API_KEY)
-      );
-      if (!isOperatorFallback) {
+    const body = req.body || {};
+    const requestedModel = String(body.model || process.env.DEFAULT_MODEL || 'muse-spark-open').trim().toLowerCase();
+    const isGlimmer = requestedModel === 'muse-glimmer' || requestedModel === 'meta/muse-glimmer-30b' || requestedModel.includes('glimmer');
+
+    // Hard gate per model provider:
+    if (isGlimmer) {
+      if (!userCredentials?.nvidiaKey) {
         return res.status(403).json({
           ok: false,
           code: 'KEY_REQUIRED',
-          error: 'A Meta API key is required to use Dotta. Please add your Meta API key in Settings -> API Keys.'
+          error: 'An NVIDIA API key is required to use Muse Glimmer. Please add your NVIDIA API key in Settings -> API Keys.'
         });
+      }
+    } else {
+      // Standard models require Meta key or Modal credentials
+      if (!userCredentials?.metaKey && !userCredentials?.modal?.tokenId && !userCredentials?.modal?.apiKey) {
+        const isOperatorFallback = Boolean(
+          process.env.ALLOW_OPERATOR_KEY_FALLBACK === 'true' &&
+          (process.env.META_MUSE_API_KEY || process.env.MODEL_API_KEY)
+        );
+        if (!isOperatorFallback) {
+          return res.status(403).json({
+            ok: false,
+            code: 'KEY_REQUIRED',
+            error: 'A Meta API key is required to use Dotta. Please add your Meta API key in Settings -> API Keys.'
+          });
+        }
       }
     }
 

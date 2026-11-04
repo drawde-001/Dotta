@@ -18,11 +18,18 @@ import {
 import { createAgUiHandler } from './ag-ui-bridge.js';
 import {
   sanitizeUserId,
+  sanitizeThreadId,
   listUserWorkspaceFiles,
   readUserWorkspaceFile,
   getUserWorkspaceRoot,
+  getThreadWorkspaceRoot,
+  deleteThreadWorkspace,
   validateAndResolvePath
 } from '../src/core/execution/workspace.js';
+import {
+  previewServerManager,
+  serveWorkspaceFile
+} from '../src/core/execution/preview-server.js';
 import { wrapUntrustedContent } from '../src/core/tools/untrusted.js';
 import {
   scanForInjection,
@@ -101,7 +108,8 @@ import {
 } from '../src/core/auth/crypto.js';
 import {
   verifyMetaCredentials,
-  verifyModalCredentials
+  verifyModalCredentials,
+  verifyNvidiaCredentials
 } from '../src/core/auth/verify-provider.js';
 
 
@@ -1307,11 +1315,56 @@ app.post('/api/settings/integrations/modal', async (req, res) => {
   return res.json({ ok: true, status: 'connected', maskedHint: masked, endpointUrl: cleanUrl });
 });
 
+app.post('/api/settings/integrations/nvidia', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  if (!checkVerificationRateLimit(req.userId)) {
+    return res.status(429).json({ ok: false, error: 'Too many verification attempts. Please wait a minute.' });
+  }
+
+  const { apiKey } = req.body || {};
+  if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+    return res.status(400).json({ ok: false, error: 'NVIDIA API key is required.' });
+  }
+
+  const cleanKey = apiKey.trim();
+  const verifyRes = await verifyNvidiaCredentials(cleanKey);
+  if (!verifyRes.ok) {
+    await saveUserIntegration({
+      userId: req.userId,
+      provider: 'nvidia',
+      status: 'error',
+      maskedHint: null,
+      lastErrorCode: verifyRes.code
+    });
+    return res.status(400).json({ ok: false, code: verifyRes.code, error: verifyRes.error });
+  }
+
+  const encrypted = encryptCredentialsPayload({ apiKey: cleanKey, provider: 'nvidia' });
+  await saveUserCredentialsSecret({
+    userId: req.userId,
+    provider: 'nvidia',
+    encryptedPayload: encrypted,
+    keyVersion: 1
+  });
+
+  const masked = maskApiKey(cleanKey);
+  await saveUserIntegration({
+    userId: req.userId,
+    provider: 'nvidia',
+    status: 'connected',
+    maskedHint: masked,
+    verifiedAt: new Date().toISOString(),
+    lastErrorCode: null
+  });
+
+  return res.json({ ok: true, status: 'connected', maskedHint: masked });
+});
+
 app.delete('/api/settings/integrations/:provider', async (req, res) => {
   if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
   const provider = String(req.params.provider || '').toLowerCase().trim();
-  if (provider !== 'meta' && provider !== 'modal') {
-    return res.status(400).json({ ok: false, error: 'Invalid provider. Must be "meta" or "modal".' });
+  if (provider !== 'meta' && provider !== 'modal' && provider !== 'nvidia') {
+    return res.status(400).json({ ok: false, error: 'Invalid provider. Must be "meta", "modal", or "nvidia".' });
   }
 
   await deleteUserCredentials(req.userId, provider);
@@ -1445,6 +1498,12 @@ app.delete('/api/threads/:threadId', async (req, res) => {
     }
     const deleted = deleteUserThread(userId, req.params.threadId);
     await deleteDbConversation(userId, req.params.threadId);
+    try {
+      deleteThreadWorkspace(userId, req.params.threadId);
+      previewServerManager.stop(req.params.threadId);
+    } catch (wsErr) {
+      console.warn('[Workspace] Error cleaning thread workspace on delete:', wsErr.message);
+    }
     res.json({ ok: true, deleted });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
@@ -1760,11 +1819,19 @@ function requireSandboxUserId(req, res) {
   return userId;
 }
 
-app.get('/api/workspace/files', (req, res) => {
+app.get('/api/workspace/files', async (req, res) => {
+  const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
+  const threadId = sanitizeThreadId(req.query.threadId || req.get('x-thread-id'));
+  if (threadId) {
+    const isOwner = await assertResourceOwnership('thread', threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
+  }
   try {
-    res.json({ ok: true, files: listUserWorkspaceFiles(userId) });
+    res.json({ ok: true, files: listUserWorkspaceFiles(userId, threadId || null), threadId: threadId || null });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }
@@ -1774,13 +1841,21 @@ app.get('/api/workspace/file', async (req, res) => {
   const startMs = Date.now();
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
+  const threadId = sanitizeThreadId(req.query.threadId || req.get('x-thread-id'));
   const filePath = String(req.query.path || '');
-  try {
+  if (threadId) {
+    const isOwner = await assertResourceOwnership('thread', threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
+  } else {
     const isOwner = await assertResourceOwnership('workspace_file', filePath, userId);
     if (!isOwner) {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
     }
-    const file = readUserWorkspaceFile(userId, filePath);
+  }
+  try {
+    const file = readUserWorkspaceFile(userId, filePath, threadId || null);
     if (!file) {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
     }
@@ -1795,11 +1870,13 @@ app.get('/api/workspace/signed-url', (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   const filePath = String(req.query.path || '');
+  const threadId = sanitizeThreadId(req.query.threadId || req.get('x-thread-id'));
   if (!filePath) {
     return res.status(400).json({ ok: false, error: 'File path required' });
   }
   const { token, expires } = generateSignedDownloadToken(userId, filePath, SESSION_SECRET, 300);
-  const downloadUrl = `/api/workspace/download?path=${encodeURIComponent(filePath)}&token=${encodeURIComponent(token)}`;
+  const threadParam = threadId ? `&threadId=${encodeURIComponent(threadId)}` : '';
+  const downloadUrl = `/api/workspace/download?path=${encodeURIComponent(filePath)}&token=${encodeURIComponent(token)}${threadParam}`;
   res.json({ ok: true, downloadUrl, expires });
 });
 
@@ -1808,6 +1885,7 @@ app.get('/api/workspace/download', async (req, res) => {
   const startMs = Date.now();
   const filePath = String(req.query.path || '');
   const token = String(req.query.token || '');
+  const threadId = sanitizeThreadId(req.query.threadId || req.get('x-thread-id'));
   let verifiedUserId = sanitizeUserId(req.userId);
 
   if (token) {
@@ -1824,13 +1902,22 @@ app.get('/api/workspace/download', async (req, res) => {
     return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
   }
 
-  const isOwner = await assertResourceOwnership('workspace_file', filePath, verifiedUserId);
-  if (!isOwner) {
-    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+  if (threadId) {
+    const isOwner = await assertResourceOwnership('thread', threadId, verifiedUserId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
+  } else {
+    const isOwner = await assertResourceOwnership('workspace_file', filePath, verifiedUserId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+    }
   }
 
   try {
-    const root = getUserWorkspaceRoot(verifiedUserId);
+    const root = threadId
+      ? getThreadWorkspaceRoot(verifiedUserId, threadId)
+      : getUserWorkspaceRoot(verifiedUserId);
     const resolved = validateAndResolvePath(root, filePath);
     if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
@@ -1850,12 +1937,22 @@ app.get('/api/workspace/raw', async (req, res) => {
   const userId = requireSandboxUserId(req, res);
   if (!userId) return;
   const filePath = String(req.query.path || '');
-  try {
+  const threadId = sanitizeThreadId(req.query.threadId || req.get('x-thread-id'));
+
+  if (threadId) {
+    const isOwner = await assertResourceOwnership('thread', threadId, userId);
+    if (!isOwner) {
+      return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+    }
+  } else {
     const isOwner = await assertResourceOwnership('workspace_file', filePath, userId);
     if (!isOwner) {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
     }
-    const root = getUserWorkspaceRoot(userId);
+  }
+
+  try {
+    const root = threadId ? getThreadWorkspaceRoot(userId, threadId) : getUserWorkspaceRoot(userId);
     const resolved = validateAndResolvePath(root, filePath);
     if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
       return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
@@ -1876,6 +1973,62 @@ app.get('/api/workspace/raw', async (req, res) => {
     res.setHeader('Content-Type', mime);
     res.setHeader('Cache-Control', 'private, max-age=60');
     res.send(fs.readFileSync(resolved));
+  } catch (err) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
+  }
+});
+
+// Start or get live preview info for a thread's workspace
+app.post('/api/workspace/preview/:threadId/start', async (req, res) => {
+  const startMs = Date.now();
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  const threadId = sanitizeThreadId(req.params.threadId);
+  if (!threadId) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+  }
+
+  const isOwner = await assertResourceOwnership('thread', threadId, userId);
+  if (!isOwner) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+  }
+
+  try {
+    const instance = await previewServerManager.getOrStart(userId, threadId);
+    res.json({
+      ok: true,
+      threadId,
+      previewUrl: `/api/workspace/preview/${threadId}/`,
+      port: instance.port
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// Authenticated live preview route serving thread workspace files with strict security headers
+app.get(['/api/workspace/preview/:threadId', '/api/workspace/preview/:threadId/*'], async (req, res) => {
+  const startMs = Date.now();
+  const userId = requireSandboxUserId(req, res);
+  if (!userId) return;
+  const threadId = sanitizeThreadId(req.params.threadId);
+  if (!threadId) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+  }
+
+  const isOwner = await assertResourceOwnership('thread', threadId, userId);
+  if (!isOwner) {
+    return sendUniformNotFound(res, startMs, { req, resourceType: 'thread' });
+  }
+
+  try {
+    // Touch or ensure preview server instance exists
+    await previewServerManager.getOrStart(userId, threadId).catch(() => {});
+    previewServerManager.touch(threadId);
+
+    const subpath = req.params[0] || '';
+    const workspaceRoot = getThreadWorkspaceRoot(userId, threadId);
+    serveWorkspaceFile(workspaceRoot, subpath, res);
   } catch (err) {
     return sendUniformNotFound(res, startMs, { req, resourceType: 'workspace_file' });
   }

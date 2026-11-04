@@ -15,7 +15,8 @@ import {
   Shield,
   User,
   Mail,
-  Settings
+  Settings,
+  AlertTriangle
 } from 'lucide-react';
 
 export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialTab = 'keys', onTabChange }) {
@@ -32,8 +33,8 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
   }, [initialTab]);
 
   // Popups state
-  const [editingProvider, setEditingProvider] = useState(null); // 'meta' | 'modal' | null
-  const [menuOpenFor, setMenuOpenFor] = useState(null); // 'meta' | 'modal' | null
+  const [editingProvider, setEditingProvider] = useState(null); // 'meta' | 'modal' | 'nvidia' | null
+  const [menuOpenFor, setMenuOpenFor] = useState(null); // 'meta' | 'modal' | 'nvidia' | null
 
   // Meta Form Inputs
   const [metaApiKey, setMetaApiKey] = useState('');
@@ -46,6 +47,11 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
   const [modalTokenSecret, setModalTokenSecret] = useState('');
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState(null);
+
+  // NVIDIA Form Inputs
+  const [nvidiaApiKey, setNvidiaApiKey] = useState('');
+  const [nvidiaSaving, setNvidiaSaving] = useState(false);
+  const [nvidiaError, setNvidiaError] = useState(null);
 
   // Fetch integrations list from backend
   const loadIntegrations = async () => {
@@ -86,6 +92,44 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
     provider: 'modal',
     status: 'not_configured',
     maskedHint: null
+  };
+
+  const nvidiaIntegration = integrations.find((i) => i.provider === 'nvidia') || {
+    provider: 'nvidia',
+    status: 'not_configured',
+    maskedHint: null
+  };
+
+  // Save NVIDIA configuration
+  const handleSaveNvidia = async (e) => {
+    e.preventDefault();
+    if (!nvidiaApiKey.trim()) {
+      setNvidiaError('Please provide a valid NVIDIA API key.');
+      return;
+    }
+
+    setNvidiaSaving(true);
+    setNvidiaError(null);
+    try {
+      const res = await fetch('/api/settings/integrations/nvidia', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: nvidiaApiKey.trim() })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        setNvidiaApiKey('');
+        setEditingProvider(null);
+        await loadIntegrations();
+      } else {
+        setNvidiaError(data.error || 'Failed to verify NVIDIA API key.');
+      }
+    } catch (err) {
+      setNvidiaError(`Connection error: ${err.message}`);
+    } finally {
+      setNvidiaSaving(false);
+    }
   };
 
   // Save Meta configuration
@@ -525,6 +569,121 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
                       </div>
                     )}
                   </div>
+
+                  {/* CARD 3: NVIDIA NIM (Muse Glimmer) - Placed LAST just below Modal */}
+                  <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
+                          <Key size={16} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-white">NVIDIA NIM (Muse Glimmer)</span>
+                            {nvidiaIntegration.status === 'connected' ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                <CheckCircle2 size={11} /> Connected
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.05] text-zinc-400 border border-white/[0.06]">
+                                Not Configured
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-zinc-400">
+                            Bring-Your-Own-Key access for Muse Glimmer (30B) running via NVIDIA NIM.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Required Provider Audit Disclaimer */}
+                    <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-200/90">
+                      <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+                      <span>all your chats are logged by the provider for security audits/reasons.</span>
+                    </div>
+
+                    <div className="pt-1">
+                      {nvidiaIntegration.status === 'connected' ? (
+                        <div className="flex items-center justify-between p-2.5 bg-[#0B0B0E] border border-white/[0.06] rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-mono text-zinc-300 tracking-wider">
+                              {nvidiaIntegration.maskedHint || 'nvapi-...active'}
+                            </span>
+                            <span className="text-[11px] font-mono px-2 py-0.5 bg-white/[0.06] text-zinc-300 border border-white/[0.06] rounded">
+                              nvidia
+                            </span>
+                          </div>
+
+                          <div className="relative flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleCopyHint('nvidia', nvidiaIntegration.maskedHint)}
+                              title="Copy masked hint"
+                              className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
+                            >
+                              {copiedKey === 'nvidia' ? (
+                                <Check size={14} className="text-white" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMenuOpenFor(menuOpenFor === 'nvidia' ? null : 'nvidia');
+                              }}
+                              title="Options"
+                              className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+
+                            {menuOpenFor === 'nvidia' && (
+                              <div className="absolute right-0 top-8 z-30 w-36 bg-[#18181D] border border-white/[0.1] rounded-lg shadow-2xl py-1 text-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMenuOpenFor(null);
+                                    setEditingProvider('nvidia');
+                                    setNvidiaError(null);
+                                  }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-300 hover:bg-white/[0.08] hover:text-white cursor-pointer"
+                                >
+                                  <RefreshCw size={13} />
+                                  Replace Key
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDisconnect('nvidia')}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-400 hover:text-red-300 hover:bg-white/[0.04] cursor-pointer"
+                                >
+                                  <Trash2 size={13} />
+                                  Disconnect
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between pt-1">
+                          <span className="text-xs text-zinc-500">Add personal NVIDIA key to enable Muse Glimmer.</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingProvider('nvidia');
+                              setNvidiaError(null);
+                            }}
+                            className="px-3.5 py-1.5 text-xs font-medium text-zinc-200 bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] rounded-lg transition-colors cursor-pointer"
+                          >
+                            Configure NVIDIA
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -744,6 +903,79 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
                   >
                     {modalSaving && <Loader2 size={13} className="animate-spin text-black" />}
                     <span>{modalSaving ? 'Verifying...' : 'Save'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* POPUP 3: NVIDIA NIM Dialog */}
+        {editingProvider === 'nvidia' && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-md bg-[#121216] border border-white/[0.1] rounded-2xl shadow-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Key size={16} className="text-zinc-300" />
+                  <span>NVIDIA NIM Configuration</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setEditingProvider(null)}
+                  className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <p className="text-xs text-zinc-400">
+                Enter your personal NVIDIA API key for Muse Glimmer (30B). A 1-token test probe verifies your key before saving.
+              </p>
+
+              <div className="flex items-center gap-2 p-2.5 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-200/90">
+                <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+                <span>all your chats are logged by the provider for security audits/reasons.</span>
+              </div>
+
+              {nvidiaError && (
+                <div className="p-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-red-400" />
+                  <span>{nvidiaError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveNvidia} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-zinc-300 block">
+                    NVIDIA API Key
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={nvidiaApiKey}
+                    onChange={(e) => setNvidiaApiKey(e.target.value)}
+                    placeholder="Enter NVIDIA API Key (e.g. nvapi-...)"
+                    disabled={nvidiaSaving}
+                    className="w-full px-3 py-2 text-xs font-mono bg-[#09090C] border border-white/[0.1] rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/40"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingProvider(null)}
+                    disabled={nvidiaSaving}
+                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={nvidiaSaving || !nvidiaApiKey.trim()}
+                    className="px-4 py-1.5 text-xs font-medium text-black bg-white hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
+                  >
+                    {nvidiaSaving && <Loader2 size={13} className="animate-spin text-black" />}
+                    <span>{nvidiaSaving ? 'Verifying...' : 'Save'}</span>
                   </button>
                 </div>
               </form>

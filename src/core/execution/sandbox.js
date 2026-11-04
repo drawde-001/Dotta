@@ -62,7 +62,10 @@ export async function runSandboxCommand({
     commandTimeoutMs: timeoutMs,
     memoryLimitMb
   });
-  const effectiveWorkspaceRoot = sandbox.workDir;
+  const effectiveWorkspaceRoot =
+    workspaceRoot && typeof workspaceRoot === 'string' && fs.existsSync(workspaceRoot)
+      ? workspaceRoot
+      : sandbox.workDir;
 
   // Enforce strict host-path & workspace-escape blocking
   const pathCheck = assertNoHostPathAccess(command, sandbox.sandboxRoot);

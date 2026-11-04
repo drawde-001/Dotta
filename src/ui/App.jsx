@@ -476,6 +476,8 @@ export default function App() {
     currentThreadIdRef.current = draftId;
     threadMessagesMapRef.current[draftId] = [];
     setMessages([]);
+    setOpenFiles([]);
+    setActiveTabId('browser');
     setActiveInterrupt(null);
     setView('home');
     setSettingsOpen(false);
@@ -494,6 +496,8 @@ export default function App() {
     if (targetId === activeThreadId) return;
 
     const cached = threadMessagesMapRef.current[targetId];
+    setOpenFiles([]);
+    setActiveTabId('browser');
     if (Array.isArray(cached) && cached.length > 0) {
       setActiveThreadId(targetId);
       currentThreadIdRef.current = targetId;
@@ -2131,6 +2135,7 @@ export default function App() {
                 {view === 'home' && workspaceMode === 'work' && (
                   <div className="hidden lg:flex h-full">
                     <WorkspacePanel
+                      threadId={activeThreadId}
                       streamState={streamState}
                       onSimulateUrlChange={(newUrl) =>
                         setStreamState((prev) => ({ ...prev, url: newUrl }))
@@ -2331,6 +2336,7 @@ export default function App() {
                 </div>
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <WorkspacePanel
+                    threadId={activeThreadId}
                     streamState={streamState}
                     onSimulateUrlChange={(newUrl) =>
                       setStreamState((prev) => ({ ...prev, url: newUrl }))

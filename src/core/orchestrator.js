@@ -56,6 +56,15 @@ import {
 } from './media/media-processor.js';
 import { AGENT_TOOLS_CATALOG, getScopedTools, getScopedToolsForIntent } from './tools/catalog.js';
 import { streamModelTurn } from './models/model-adapter.js';
+import {
+  isPromptToolCallingModel,
+  buildPromptToolCallingInstruction,
+  parsePromptToolCall,
+  validatePromptToolCall,
+  formatUntrustedToolResult,
+  buildPromptToolRetryNotice,
+  MAX_GLIMMER_TOOL_STEPS
+} from './models/prompt-tool-orchestrator.js';
 import { buildFunctionResponseParts, normalizeThreadContents } from './models/content-protocol.js';
 import {
   workspaceFileRead,
@@ -67,7 +76,8 @@ import {
   createWorkspace,
   getLatestFileArtifact,
   sanitizeRelativeDisplayPath,
-  validateAndResolvePath
+  validateAndResolvePath,
+  getThreadWorkspaceRoot
 } from './execution/workspace.js';
 import {
   runSandboxCommand,
@@ -144,11 +154,18 @@ You possess direct, real-world execution tools to fulfill user instructions:
   * Segmentation: If you need to segment an object, call the "segment_image" tool (Meta SAM 3.1).
   * Image Generation: When the user requests generating or creating an image, call "generate_image" (Meta Muse Image 1.0).
   * Every model called across perception, planning, vision, speech, and tool execution is strictly a Meta model.
-3. Workspace & Files (Strict Root Directory Isolation):
-- "workspace_create": Initialize a dedicated run workspace directory.
-- "file_read", "file_list", "file_search", "file_write", "file_edit", "file_delete".
+3. Thread Workspace & Files (Dedicated Per-Thread Persistent Storage):
+- DEDICATED THREAD WORKSPACE: Each conversation thread has its own dedicated, persistent workspace sandbox. Any file or document you create or edit with "file_write", "file_edit", etc. is saved directly into this thread's persistent workspace and is immediately visible to the user in their Workspace Panel file explorer.
+- WORKSPACE REUSE RULE: The active thread's workspace is automatically initialized and preserved across all your turns. You MUST reuse the existing thread workspace—NEVER call "workspace_create" just to create a new file or start a turn.
+- FOLDER ORGANIZATION RULE: When creating files, ALWAYS organize related files into dedicated folders inside the workspace (for example: "website/index.html", "website/style.css", "website/script.js", or "reports/summary.md", "portfolio/...") rather than dumping all files flat in the root directory.
+- DANGEROUS COMMANDS vs PERSISTENT FILES (TWO DISTINCT LAYERS):
+  * All persistent code, documents, HTML builds, and artifacts belong in the thread workspace (via "file_write", "file_edit").
+  * Untrusted or dangerous commands, external scripts, and browser automation run inside the temporary execution run sandbox with its own self-destructing isolation.
+- PREVIEWING WEBSITES & CODE IN THE BROWSER:
+  * When you design, build, or edit a website, web app, or HTML page in the thread workspace, you can serve and view it live in the Chromium browser!
+  * The server automatically serves your thread's workspace files via a secured loopback preview endpoint: "http://localhost:3001/api/workspace/preview/<threadId>/<subfolder>/". For example, if you saved "website/index.html", navigate the browser to "http://localhost:3001/api/workspace/preview/<threadId>/website/index.html" (or simply the folder URL) using "browser_read_page" or "browser_action". The live Chromium browser will render the page and stream it directly to the user!
 - CHAT ATTACHMENTS: Files the user attaches in chat are saved into their workspace under "uploads/" before you run. When a user attaches a file, it IS already in the workspace — check "file_list" (path "uploads") and use the right tool on it (file_read, segment_image, media processors). Never claim an attached file is missing without listing "uploads/" first.
-- STRICT ROOT PRIVACY RULE: Neither you nor the user has access to the root directory. Never attempt to access, list, or reveal the name or location of the root directory or parent directories. Always use relative interior paths (e.g. "src/...", "app.js").
+- STRICT ROOT PRIVACY RULE: Neither you nor the user has access to the root directory. Never attempt to access, list, or reveal the name or location of the root directory or parent directories. Always use relative interior paths (e.g. "website/index.html", "app/main.js").
 4. Sandboxed Execution:
 - "shell_run": Execute terminal/bash commands in the isolated workspace sandbox.
 - "shell_output": Check output or logs of running background commands.
@@ -346,7 +363,8 @@ export class DottaEngine extends EventEmitter {
       return await this.customExecutors[toolName](toolArgs, context);
     }
 
-    const { workspaceRoot, runId } = context;
+    const { workspaceRoot, runId, threadId, userId } = context;
+    const threadWorkspaceRoot = (userId && threadId) ? getThreadWorkspaceRoot(userId, threadId) : workspaceRoot;
 
     switch (toolName) {
       case 'browser_search':
@@ -437,28 +455,28 @@ export class DottaEngine extends EventEmitter {
         return await processVideo({ userId: context.userId, ref: toolArgs.bio_ref, model: context.model });
 
       case 'workspace_create':
-        return createWorkspace(runId || toolArgs.name, toolArgs.name);
+        return createWorkspace({ runId, userId, threadId, name: toolArgs.name });
 
       case 'file_read':
-        return workspaceFileRead({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileRead({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'file_list':
-        return workspaceFileList({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileList({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'file_search':
-        return workspaceFileSearch({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileSearch({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'file_write':
-        return workspaceFileWrite({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileWrite({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'file_edit':
-        return workspaceFileEdit({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileEdit({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'file_delete':
-        return workspaceFileDelete({ ...toolArgs, workspaceRoot, runId });
+        return workspaceFileDelete({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId, threadId, userId });
 
       case 'shell_run':
-        return await runSandboxCommand({ ...toolArgs, workspaceRoot, runId });
+        return await runSandboxCommand({ ...toolArgs, workspaceRoot: threadWorkspaceRoot, runId });
 
       case 'shell_output':
         return await getSandboxCommandOutput(toolArgs.id);
@@ -1021,6 +1039,7 @@ export class DottaEngine extends EventEmitter {
     let turnCount = 0;
     let formVerificationRetries = 0;
     let lastToolResults = [];
+    let promptToolRetryCount = 0;
 
     try {
       while (!isCompleted) {
@@ -1046,15 +1065,26 @@ export class DottaEngine extends EventEmitter {
           isResume: Boolean(resume)
         });
 
+        const isPromptTooling = isPromptToolCallingModel(model);
+        if (isPromptTooling && turnCount > MAX_GLIMMER_TOOL_STEPS) {
+          console.warn(`[Orchestrator] Reached maximum tool steps (${MAX_GLIMMER_TOOL_STEPS}) for ${model}`);
+          isCompleted = true;
+          break;
+        }
+
+        const effectiveSystemInstruction = isPromptTooling
+          ? `${this.systemInstruction}\n\n${buildPromptToolCallingInstruction(activeTools)}`
+          : this.systemInstruction;
+
         let turnThought = '';
         let turnText = '';
         const functionCalls = [];
 
         const streamResult = await streamModelTurn({
           contents: compactThreadContext(contents),
-          systemInstruction: this.systemInstruction,
+          systemInstruction: effectiveSystemInstruction,
           model,
-          tools: activeTools,
+          tools: isPromptTooling ? null : activeTools,
           generationConfig: { effort: dynamicEffort },
           userCredentials,
           callbacks: {
@@ -1087,7 +1117,57 @@ export class DottaEngine extends EventEmitter {
         }
 
         // If the model produced function calls, execute them
-        const callsToExecute = streamResult.functionCalls || functionCalls;
+        let callsToExecute = streamResult.functionCalls || functionCalls;
+
+        if (isPromptTooling) {
+          const parsedPrompt = parsePromptToolCall(turnText);
+          if (parsedPrompt.isToolCall) {
+            if (parsedPrompt.isValid) {
+              const validation = validatePromptToolCall(parsedPrompt.toolCall, activeTools);
+              if (validation.valid) {
+                callsToExecute = [parsedPrompt.toolCall];
+                promptToolRetryCount = 0;
+              } else {
+                if (promptToolRetryCount < 2) {
+                  promptToolRetryCount++;
+                  console.warn(`[Orchestrator] Glimmer tool schema validation failed (${promptToolRetryCount}/2): ${validation.error}`);
+                  contents.push({
+                    role: 'model',
+                    parts: streamResult.modelParts || [{ text: turnText }]
+                  });
+                  contents.push({
+                    role: 'user',
+                    parts: [{ text: buildPromptToolRetryNotice(parsedPrompt.toolCall.name, validation.error) }]
+                  });
+                  continue;
+                } else {
+                  console.warn('[Orchestrator] Glimmer max tool schema retries reached. Falling back to plain text.');
+                  callsToExecute = [];
+                }
+              }
+            } else {
+              // Malformed JSON inside tool block
+              if (promptToolRetryCount < 2) {
+                promptToolRetryCount++;
+                console.warn(`[Orchestrator] Glimmer malformed tool JSON (${promptToolRetryCount}/2): ${parsedPrompt.parseError}`);
+                contents.push({
+                  role: 'model',
+                  parts: streamResult.modelParts || [{ text: turnText }]
+                });
+                contents.push({
+                  role: 'user',
+                  parts: [{ text: buildPromptToolRetryNotice('unknown', parsedPrompt.parseError) }]
+                });
+                continue;
+              } else {
+                console.warn('[Orchestrator] Glimmer max JSON repair retries reached. Falling back to plain text.');
+                callsToExecute = [];
+              }
+            }
+          } else {
+            callsToExecute = [];
+          }
+        }
 
         if (callsToExecute && callsToExecute.length > 0) {
           const toolResults = [];
@@ -1526,9 +1606,10 @@ export class DottaEngine extends EventEmitter {
             // Background artifact keeper: any generated image is also copied
             // into the user's current workspace (artifacts/) so generated
             // work is never lost with the temp image cache.
+            const targetArtifactsRoot = (userId && threadId) ? getThreadWorkspaceRoot(userId, threadId) : workspaceRoot;
             if (
               userId &&
-              workspaceRoot &&
+              targetArtifactsRoot &&
               execResult?.data?.filename &&
               (toolName === 'generate_image' ||
                 toolName === 'edit_image' ||
@@ -1539,7 +1620,7 @@ export class DottaEngine extends EventEmitter {
                 const img = getGeneratedImage(execResult.data.filename);
                 if (img?.buffer) {
                   const dest = validateAndResolvePath(
-                    workspaceRoot,
+                    targetArtifactsRoot,
                     `artifacts/${execResult.data.filename}`
                   );
                   fs.mkdirSync(path.dirname(dest), { recursive: true });
@@ -1618,12 +1699,26 @@ export class DottaEngine extends EventEmitter {
             parts: streamResult.modelParts
           });
 
-          const responseParts = buildFunctionResponseParts(toolResults);
-          if (bioMediaParts.length > 0) responseParts.push(...bioMediaParts);
-          contents.push({
-            role: 'user',
-            parts: responseParts
-          });
+          if (isPromptTooling) {
+            const untrustedParts = toolResults.map((tr) => {
+              const toolOutput = tr.response?.result || tr.result || '';
+              return {
+                text: formatUntrustedToolResult(tr.name, toolOutput)
+              };
+            });
+            if (bioMediaParts.length > 0) untrustedParts.push(...bioMediaParts);
+            contents.push({
+              role: 'user',
+              parts: untrustedParts
+            });
+          } else {
+            const responseParts = buildFunctionResponseParts(toolResults);
+            if (bioMediaParts.length > 0) responseParts.push(...bioMediaParts);
+            contents.push({
+              role: 'user',
+              parts: responseParts
+            });
+          }
           lastToolResults = toolResults;
 
           persistTurn(threadId, {

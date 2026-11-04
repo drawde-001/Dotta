@@ -546,7 +546,8 @@ export class RunSandbox {
 
     // Localhost check
     const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-    if (isLocalhost && !this.allowLocalhost && !isExplicitlyAllowlisted) {
+    const isWorkspacePreview = isLocalhost && parsed.pathname.startsWith('/api/workspace/preview');
+    if (isLocalhost && !this.allowLocalhost && !isExplicitlyAllowlisted && !isWorkspacePreview) {
       const record = {
         seq: this.egressLog.length + 1,
         timestamp: Date.now(),

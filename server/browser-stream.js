@@ -209,6 +209,16 @@ export async function initLiveBrowser(broadcast, initialUrl = null) {
     await browserContext.route('**/*', async (route) => {
       const req = route.request();
       const url = req.url();
+
+      try {
+        const parsed = new URL(url);
+        const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1';
+        if (isLoopback && (parsed.pathname.includes('/api/workspace/preview') || (Number(parsed.port) >= 3000 && Number(parsed.port) <= 9999))) {
+          await route.continue().catch(() => {});
+          return;
+        }
+      } catch {}
+
       if (activeBrowserSandbox && !activeBrowserSandbox.destroyed) {
         const check = activeBrowserSandbox.checkNetworkRequest(url, {
           method: req.method(),

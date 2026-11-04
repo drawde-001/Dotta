@@ -11,7 +11,8 @@ import {
   ChevronDown,
   ChevronRight,
   Search,
-  FileText
+  FileText,
+  Play
 } from 'lucide-react';
 import { LiveBrowserStream } from './LiveBrowserStream';
 import { FileCodeViewer, getFileIcon } from './FileCodeViewer';
@@ -26,33 +27,45 @@ export function WorkspacePanel({
   activeTabId = 'browser',
   onSelectTab,
   onCloseFileTab,
-  onClosePanel
+  onClosePanel,
+  threadId = null
 }) {
   const [isMaximized, setIsMaximized] = useState(false);
   const [treeLayout, setTreeLayout] = useState('closed'); // closed | tree | split
   const [filter, setFilter] = useState('');
   const [sandboxFiles, setSandboxFiles] = useState([]);
+  const [collapsedFolders, setCollapsedFolders] = useState({});
 
-  // Load the signed-in user's sandboxed file list (never root/system files).
+  // Load the signed-in user's sandboxed file list for the current thread
   const loadSandboxFiles = async () => {
     try {
-      const res = await fetch('/api/workspace/files', {
-        headers: { 'x-user-id': getUserId() }
+      const url = threadId
+        ? `/api/workspace/files?threadId=${encodeURIComponent(threadId)}`
+        : '/api/workspace/files';
+      const res = await fetch(url, {
+        headers: {
+          'x-user-id': getUserId(),
+          ...(threadId ? { 'x-thread-id': threadId } : {})
+        }
       });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok && Array.isArray(data.files)) {
         setSandboxFiles(data.files);
+      } else {
+        setSandboxFiles([]);
       }
-    } catch {}
+    } catch {
+      setSandboxFiles([]);
+    }
   };
 
   useEffect(() => {
     loadSandboxFiles();
-  }, []);
+  }, [threadId]);
 
   useEffect(() => {
     if (treeLayout !== 'closed') loadSandboxFiles();
-  }, [treeLayout, openFiles.length]);
+  }, [treeLayout, openFiles.length, threadId]);
 
   // Keyboard shortcuts matching launcher card hints (Ctrl+T for Browser, Ctrl+P for Files)
   useEffect(() => {
@@ -131,16 +144,64 @@ export function WorkspacePanel({
       return;
     }
     try {
-      const res = await fetch(
-        `/api/workspace/file?path=${encodeURIComponent(f.path)}`,
-        { headers: { 'x-user-id': getUserId() } }
-      );
+      const url = threadId
+        ? `/api/workspace/file?path=${encodeURIComponent(f.path)}&threadId=${encodeURIComponent(threadId)}`
+        : `/api/workspace/file?path=${encodeURIComponent(f.path)}`;
+      const res = await fetch(url, {
+        headers: {
+          'x-user-id': getUserId(),
+          ...(threadId ? { 'x-thread-id': threadId } : {})
+        }
+      });
       const data = await res.json().catch(() => null);
       if (res.ok && data?.ok && data.file) {
         window.dispatchEvent(new CustomEvent('dotta:open-file', { detail: data.file }));
       }
     } catch {}
     setTreeLayout('split');
+  };
+
+  const hasPreviewable = sandboxFiles.some(
+    (f) => (f.name || '').endsWith('.html') || (f.path || '').endsWith('.html')
+  );
+
+  const handleLaunchPreview = () => {
+    if (!threadId) return;
+    const previewUrl = `http://localhost:3001/api/workspace/preview/${encodeURIComponent(threadId)}/`;
+    if (onSendWsMessage) {
+      onSendWsMessage({ type: 'navigate', url: previewUrl });
+    }
+    selectTab('browser');
+  };
+
+  const groupedTree = React.useMemo(() => {
+    const folders = new Map();
+    const rootFiles = [];
+    for (const f of visibleTreeFiles) {
+      const rawPath = String(f.path || f.name || '').replace(/\\/g, '/');
+      const lastSlash = rawPath.lastIndexOf('/');
+      if (lastSlash === -1) {
+        rootFiles.push(f);
+      } else {
+        const folder = rawPath.slice(0, lastSlash);
+        if (!folders.has(folder)) {
+          folders.set(folder, []);
+        }
+        folders.get(folder).push(f);
+      }
+    }
+    return {
+      sortedFolders: Array.from(folders.keys()).sort(),
+      folders,
+      rootFiles
+    };
+  }, [visibleTreeFiles]);
+
+  const toggleFolder = (folderPath) => {
+    setCollapsedFolders((prev) => ({
+      ...prev,
+      [folderPath]: !prev[folderPath]
+    }));
   };
 
   // Safe display name only: never render root/system directory paths.
@@ -307,9 +368,22 @@ export function WorkspacePanel({
                 : 'w-full'
             }`}
           >
-            <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[13px] font-semibold text-zinc-100">
-              <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-              File tree
+            <div className="flex items-center justify-between px-3 pt-3 pb-2 text-[13px] font-semibold text-zinc-100">
+              <div className="flex items-center gap-1.5">
+                <ChevronDown size={14} className="shrink-0 text-zinc-500" />
+                <span>Files</span>
+              </div>
+              {hasPreviewable && (
+                <button
+                  type="button"
+                  onClick={handleLaunchPreview}
+                  title="Open live preview in browser"
+                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25 border border-emerald-500/30 transition cursor-pointer"
+                >
+                  <Play size={10} className="fill-emerald-400" />
+                  <span>Preview</span>
+                </button>
+              )}
             </div>
             <div className="px-2.5 pb-2">
               <div className="flex h-8 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2 transition-colors focus-within:border-zinc-600">
@@ -325,8 +399,57 @@ export function WorkspacePanel({
               </div>
             </div>
             <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-1.5 pb-2">
-              {visibleTreeFiles.map((f) => {
-                const fid = f.id || f.path || f.name;
+              {/* Render Folders First */}
+              {groupedTree.sortedFolders.map((folderPath) => {
+                const folderFiles = groupedTree.folders.get(folderPath) || [];
+                const isCollapsed = collapsedFolders[folderPath];
+                return (
+                  <div key={folderPath} className="space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleFolder(folderPath)}
+                      className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04] transition cursor-pointer select-none"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight size={13} className="text-zinc-500 shrink-0" />
+                      ) : (
+                        <ChevronDown size={13} className="text-zinc-500 shrink-0" />
+                      )}
+                      <Folder size={13} className="text-amber-400/80 shrink-0" />
+                      <span className="truncate font-medium text-zinc-300">{folderPath}</span>
+                      <span className="ml-auto text-[10px] text-zinc-500">{folderFiles.length}</span>
+                    </button>
+                    {!isCollapsed && (
+                      <div className="pl-3 space-y-0.5 border-l border-white/[0.06] ml-3">
+                        {folderFiles.map((f) => {
+                          const fid = f.path || f.name;
+                          const fname = f.name || f.path.split(/[/\\]/).pop();
+                          const isRowActive = !!activeFile && activeTabId === fid;
+                          return (
+                            <button
+                              key={fid}
+                              type="button"
+                              onClick={() => handleTreeFileClick(f)}
+                              className={`w-full flex items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition cursor-pointer ${
+                                isRowActive
+                                  ? 'bg-white/[0.06] text-zinc-100 font-medium'
+                                  : 'text-zinc-300 hover:bg-white/[0.04]'
+                              }`}
+                            >
+                              {getFileIcon(fname)}
+                              <span className="truncate">{fname}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Render Root Files */}
+              {groupedTree.rootFiles.map((f) => {
+                const fid = f.path || f.name;
                 const fname = f.name || (f.path ? f.path.split(/[/\\]/).pop() : 'untitled');
                 const isRowActive = !!activeFile && activeTabId === fid;
                 return (
@@ -336,7 +459,7 @@ export function WorkspacePanel({
                     onClick={() => handleTreeFileClick(f)}
                     className={`flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition cursor-pointer ${
                       isRowActive
-                        ? 'bg-white/[0.06] text-zinc-100'
+                        ? 'bg-white/[0.06] text-zinc-100 font-medium'
                         : 'text-zinc-300 hover:bg-white/[0.04]'
                     }`}
                   >
@@ -345,10 +468,11 @@ export function WorkspacePanel({
                   </button>
                 );
               })}
+
               {visibleTreeFiles.length === 0 && (
                 <p className="px-2 py-1.5 text-xs text-zinc-500">
                   {sandboxFiles.length === 0
-                    ? 'No files in your workspace yet.'
+                    ? 'No files in this thread yet.'
                     : 'No files match.'}
                 </p>
               )}

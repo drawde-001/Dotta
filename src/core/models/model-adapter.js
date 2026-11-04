@@ -306,6 +306,9 @@ export function getModelAdapter(providerName = 'meta') {
 
 export function resolveProviderForModel(modelId = '') {
   const m = String(modelId || '').trim().toLowerCase();
+  if (m === 'muse-glimmer' || m.includes('glimmer') || m.startsWith('meta/muse-glimmer')) {
+    return 'nvidia';
+  }
   if (
     !m ||
     m.startsWith('meta-') ||
@@ -316,7 +319,6 @@ export function resolveProviderForModel(modelId = '') {
   ) {
     return 'meta';
   }
-  // All models in Dotta are strictly Meta models
   return 'meta';
 }
 
@@ -334,7 +336,18 @@ export async function streamModelTurn({
   // If user-funded credentials are provided for this run, construct an ephemeral,
   // user-scoped adapter that does not leak or persist across turns/users.
   let adapter;
-  if (userCredentials && (userCredentials.metaKey || userCredentials.modal?.tokenId || userCredentials.modal?.apiKey)) {
+  const isGlimmer = model === 'muse-glimmer' || String(model).includes('glimmer') || String(model).startsWith('meta/muse-glimmer');
+
+  if (userCredentials && (userCredentials.nvidiaKey || userCredentials.nvidia?.apiKey) && isGlimmer) {
+    const nvidiaKey = userCredentials.nvidiaKey || userCredentials.nvidia?.apiKey;
+    adapter = new MetaModelAdapter({
+      apiKeyGetter: () => nvidiaKey,
+      baseUrlGetter: () => 'https://integrate.api.nvidia.com/v1',
+      defaultModel: 'meta/muse-glimmer-30b',
+      modelResolver: () => 'meta/muse-glimmer-30b',
+      authHeader: (k) => ({ Authorization: `Bearer ${k}` })
+    });
+  } else if (userCredentials && (userCredentials.metaKey || userCredentials.modal?.tokenId || userCredentials.modal?.apiKey)) {
     const isModalRun =
       Boolean(userCredentials.modal?.endpointUrl && (userCredentials.modal?.tokenId || userCredentials.modal?.apiKey)) &&
       (model === 'muse-spark-open' || String(model).includes('open'));
@@ -368,6 +381,14 @@ export async function streamModelTurn({
         authHeader: (k) => ({ Authorization: `Bearer ${k}` })
       });
     }
+  } else if (isGlimmer && process.env.NVIDIA_API_KEY) {
+    adapter = new MetaModelAdapter({
+      apiKeyGetter: () => process.env.NVIDIA_API_KEY,
+      baseUrlGetter: () => 'https://integrate.api.nvidia.com/v1',
+      defaultModel: 'meta/muse-glimmer-30b',
+      modelResolver: () => 'meta/muse-glimmer-30b',
+      authHeader: (k) => ({ Authorization: `Bearer ${k}` })
+    });
   } else {
     // Fallback adapter for tests or operator mode
     adapter = getModelAdapter(provider);

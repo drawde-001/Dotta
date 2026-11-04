@@ -367,6 +367,23 @@ function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-s
                     </div>
                     <span className="text-[10px] text-indigo-400 font-mono">meta api</span>
                   </div>
+
+                  {/* Muse Glimmer (NVIDIA NIM) */}
+                  <div
+                    onClick={() => {
+                      onSelectModel?.('muse-glimmer');
+                      setModelMenuOpen(false);
+                    }}
+                    className={`aic-mode-menu-item !h-9 px-2.5 rounded-lg flex items-center justify-between cursor-pointer ${
+                      selectedModel === 'muse-glimmer' ? 'bg-white/10 text-white font-medium' : 'text-zinc-300 hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Zap size={14} className="text-emerald-400" />
+                      <span className="text-[13px]">muse-glimmer</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono">nvidia nim</span>
+                  </div>
                 </div>
               </div>
             </div>
