@@ -229,7 +229,7 @@ Built natively for the Meta Global AI Developer Hackathon, Dotta leverages Meta'
 
 ### 1. Core Reasoning & Autonomous Planning: Meta Muse Spark Open
 * **Primary Brain:** `meta-models/Muse-Spark-Open-816B-A42B` (Meta Muse Spark Open 816B Mixture-of-Experts)
-* **Inference Partner:** Hosted on **Modal** serverless vLLM GPU infrastructure via OpenAI-compatible endpoints configured through `MODAL_MUSE_SPARK_URL` in `.env`.
+* **Inference Partner:** Hosted on **Modal** serverless vLLM GPU infrastructure via OpenAI-compatible endpoints configured through user Modal credentials in Settings -> API Keys & Compute (or `MODAL_MUSE_SPARK_URL` for headless CLI testing).
 * **Role:** Drives the multi-turn autonomous execution loop—inspecting live DOM snapshots, synthesizing sandbox scripts, verifying form constraints, evaluating security gates, and orchestrating browser tools.
 * **Hackathon Award Alignment:** Purpose-built for the **$10,000 Best Build on Meta Open Weight Models** bonus award and the **$5,000 Best Agentic Use-Case** award.
 
@@ -319,16 +319,17 @@ Dotta implements a **User-Funded Developer Billing Architecture**: users bring t
 2. Navigate to the **API Keys & Compute** tab.
 3. Under **Meta AI Configuration** (Required):
    - Click **Configure Meta Key** (or **Replace Key**).
-   - Enter your personal Meta API key (e.g., from the Meta developer portal).
+   - Enter your personal Meta API key (users can generate their personal Meta API key at [dev.meta.ai](https://dev.meta.ai)).
    - Click **Save**. Dotta sends a tiny, 1-token probe request to verify the key and immediately encrypts it using application-level **AES-256-GCM**.
 4. Under **Modal Compute Configuration** (Optional):
    - Click **Configure Modal**.
-   - Enter your Modal Endpoint URL (`https://...modal.run`), Modal Token ID, and Modal Token Secret.
+   - Enter your personal Modal Endpoint URL (`https://...modal.run`), Modal Token ID, and Modal Token Secret.
    - Click **Save**. Dotta runs a verification check with strict SSRF defenses to ensure serverless vLLM connectivity for open-weight Muse Spark models.
 
 ### Cryptographic Security & Hard Gate
 
-* **"No Key, No Charge" Hard Gate**: If an account does not have a verified Meta API key configured, agent execution is blocked with HTTP 403 before any inference is attempted.
+* **Server Holds Zero Model Keys**: Dotta runs strictly on 100% Bring Your Own Key (BYOK) and Bring Your Own Compute. The server holds zero model API keys or shared compute endpoints. All AI inference and GPU execution are billed directly to each user's personal developer credentials.
+* **"No Key, No Charge" Hard Gate**: If an account does not have a verified Meta API key configured, agent execution and media processing are blocked with HTTP 403 `KEY_REQUIRED` before any model call is attempted.
 * **Zero Client Secret Exposure**: Secrets are stored in the Supabase `user_credentials_secret` table with Row-Level Security (RLS) configured with **zero policies** for `anon` and `authenticated` roles. Client browsers can never select, insert, update, or delete secrets directly.
 * **AES-256-GCM Encryption**: Payloads are encrypted at the application level with a unique 12-byte random IV per record, authenticated tags, and key rotation support via `key_version`.
 * **Zero Secret Leakage**: Raw API keys are never printed in logs, never returned in API responses (only the masked hint, e.g. `...zsdef`, is displayed), and purged from memory immediately upon turn completion.
@@ -397,8 +398,8 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_supabase_anon_key_here
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
 
-# Optional: Default Server Fallback Meta Key (users bring their own in UI)
-META_MUSE_API_KEY=
+# Note: 100% Bring Your Own Key (BYOK). The server holds no model key.
+# Every user adds their personal Meta API key (and optional personal Modal vLLM URL & tokens) in Settings -> API Keys & Compute.
 DEFAULT_MODEL=muse-spark-open
 ```
 
