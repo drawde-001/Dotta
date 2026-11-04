@@ -30,6 +30,18 @@ import {
 } from 'lucide-react';
 import { validateReturnTo } from './lib/url.js';
 
+function getInitialRouteState() {
+  const path = typeof window !== 'undefined' ? window.location.pathname : '/';
+  if (path === '/bio') {
+    return { view: 'bio', settingsOpen: false, settingsTab: 'keys' };
+  }
+  if (path.startsWith('/settings')) {
+    const tab = path.includes('account') ? 'account' : 'keys';
+    return { view: 'home', settingsOpen: true, settingsTab: tab };
+  }
+  return { view: 'home', settingsOpen: false, settingsTab: 'keys' };
+}
+
 export default function App() {
   const [messages, setMessages] = useState([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -39,13 +51,15 @@ export default function App() {
   const [selectedModel, setSelectedModel] = useState('muse-spark-open');
   const [actionSetIndex, setActionSetIndex] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [view, setView] = useState('home');
+  const initialRoute = useMemo(() => getInitialRouteState(), []);
+  const [view, setView] = useState(initialRoute.view);
   const [openFiles, setOpenFiles] = useState([]);
   const [activeTabId, setActiveTabId] = useState('plus');
   const [currentUser, setLocalCurrentUser] = useState(() => getCurrentUser());
   const [authChecking, setAuthChecking] = useState(true);
   const [notFoundNotice, setNotFoundNotice] = useState(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(initialRoute.settingsOpen);
+  const [settingsTab, setSettingsTab] = useState(initialRoute.settingsTab);
 
   // Check authenticated session on mount (Zero-Flash Route Guard)
   useEffect(() => {
@@ -59,12 +73,26 @@ export default function App() {
             setCurrentUser(data.user);
             setLocalCurrentUser(data.user);
 
-            // If user logged in and on /login route, redirect to returnTo or /
+            // If user logged in and on /login route, redirect to returnTo or /new
             const currentPath = window.location.pathname;
             if (currentPath === '/login') {
               const params = new URLSearchParams(window.location.search);
               const returnTo = validateReturnTo(params.get('returnTo'));
-              window.history.replaceState(null, '', returnTo);
+              const target = (returnTo === '/' || !returnTo) ? '/new' : returnTo;
+              window.history.replaceState(null, '', target);
+              if (target === '/bio') {
+                setView('bio');
+              } else if (target.startsWith('/settings')) {
+                setSettingsOpen(true);
+                setSettingsTab(target.includes('account') ? 'account' : 'keys');
+              }
+            } else if (currentPath === '/bio') {
+              setView('bio');
+            } else if (currentPath.startsWith('/settings')) {
+              setSettingsOpen(true);
+              setSettingsTab(currentPath.includes('account') ? 'account' : 'keys');
+            } else if (currentPath === '/' || currentPath === '') {
+              window.history.replaceState(null, '', '/new');
             }
           }
         } else {
@@ -76,7 +104,7 @@ export default function App() {
             const currentPath = window.location.pathname;
             const currentSearch = window.location.search;
             if (currentPath !== '/login') {
-              const fullPath = currentPath + currentSearch;
+              const fullPath = (currentPath === '/' ? '/new' : currentPath) + currentSearch;
               const returnToParam = encodeURIComponent(fullPath);
               window.history.replaceState(null, '', `/login?returnTo=${returnToParam}`);
             }
@@ -102,7 +130,14 @@ export default function App() {
     // Validate returnTo parameter before redirecting
     const params = new URLSearchParams(window.location.search);
     const returnTo = validateReturnTo(params.get('returnTo'));
-    window.history.replaceState(null, '', returnTo);
+    const target = (returnTo === '/' || !returnTo) ? '/new' : returnTo;
+    window.history.replaceState(null, '', target);
+    if (target === '/bio') {
+      setView('bio');
+    } else if (target.startsWith('/settings')) {
+      setSettingsOpen(true);
+      setSettingsTab(target.includes('account') ? 'account' : 'keys');
+    }
   };
 
   const handleLogout = async () => {
@@ -200,7 +235,7 @@ export default function App() {
           // Attempt to load the thread from URL
           const threadRes = await fetch(`/api/threads/${urlThreadId}`);
           if (threadRes.status === 404 || !threadRes.ok) {
-            // Not found or not owned -> show 404 notice and redirect to /
+            // Not found or not owned -> show 404 notice and redirect to /new
             if (!cancelled) {
               setNotFoundNotice({
                 active: true,
@@ -209,7 +244,7 @@ export default function App() {
               setTimeout(() => {
                 if (!cancelled) {
                   setNotFoundNotice(null);
-                  handleNewChat();
+                  handleNewChat(false);
                 }
               }, 2500);
             }
@@ -232,6 +267,11 @@ export default function App() {
               isGeneratingTitle: false
             }));
             setThreads(loadedThreads);
+
+            // If loaded thread has 0 messages, user is at home with no sent messages -> normalize to /new
+            if (msgs.length === 0) {
+              window.history.replaceState(null, '', '/new');
+            }
             return;
           }
         }
@@ -245,43 +285,23 @@ export default function App() {
             isGeneratingTitle: false
           }));
           setThreads(loadedThreads);
+        }
 
-          const firstId = loadedThreads[0].id;
-          setActiveThreadId(firstId);
-          currentThreadIdRef.current = firstId;
-          if (!urlThreadId && window.location.pathname !== '/chat/' + firstId) {
-            window.history.replaceState(null, '', '/chat/' + firstId);
+        // When user is at home / new chat and has not sent a message, URL must be /new (not a premature UUID)
+        const curPath = window.location.pathname;
+        if (
+          curPath === '/' ||
+          curPath === '/new' ||
+          (!curPath.startsWith('/chat/') && !curPath.startsWith('/settings') && curPath !== '/bio')
+        ) {
+          const draftId = `draft-${Date.now()}`;
+          setActiveThreadId(draftId);
+          currentThreadIdRef.current = draftId;
+          threadMessagesMapRef.current[draftId] = [];
+          setMessages([]);
+          if (curPath !== '/new') {
+            window.history.replaceState(null, '', '/new');
           }
-
-          try {
-            const threadRes = await fetch(`/api/threads/${firstId}`);
-            if (threadRes.ok) {
-              const threadData = await threadRes.json();
-              if (!cancelled && threadData?.ok && Array.isArray(threadData?.thread?.messages)) {
-                threadMessagesMapRef.current[firstId] = threadData.thread.messages;
-                setMessages(threadData.thread.messages);
-              }
-            }
-          } catch {}
-        } else {
-          // Initialize first thread via server POST /api/threads
-          try {
-            const createRes = await fetch('/api/threads', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: 'New chat', status: 'regular', messages: [] })
-            });
-            const createData = await createRes.json();
-            if (createData?.ok && createData.thread) {
-              const fresh = createData.thread;
-              setThreads([fresh]);
-              setActiveThreadId(fresh.id);
-              currentThreadIdRef.current = fresh.id;
-              threadMessagesMapRef.current[fresh.id] = [];
-              setMessages([]);
-              window.history.replaceState(null, '', '/chat/' + fresh.id);
-            }
-          } catch {}
         }
       } catch (err) {
         console.warn('[App] Error initializing user threads:', err);
@@ -425,56 +445,28 @@ export default function App() {
     setActionSetIndex((prev) => (prev + 1) % quickActionSets.length);
   };
 
-  const handleNewChat = useCallback(async () => {
+  const handleNewChat = useCallback((pushHistory = true) => {
     if (isRunning) return;
-    try {
-      const res = await fetch('/api/threads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: 'New chat',
-          status: 'regular',
-          messages: []
-        })
-      });
-      const data = await res.json().catch(() => null);
-      const newId = data?.thread?.id || (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`);
-      const newThread = {
-        id: newId,
-        title: 'New chat',
-        status: 'regular',
-        lastMessageAt: new Date(),
-        isGeneratingTitle: false
-      };
-      threadMessagesMapRef.current[newId] = [];
-      setThreads((prev) => [newThread, ...prev.filter((t) => t.id !== newId)]);
-      setActiveThreadId(newId);
-      currentThreadIdRef.current = newId;
-      setMessages([]);
-      setActiveInterrupt(null);
-      window.history.pushState(null, '', '/chat/' + newId);
-    } catch {
-      const newId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`;
-      const newThread = {
-        id: newId,
-        title: 'New chat',
-        status: 'regular',
-        lastMessageAt: new Date(),
-        isGeneratingTitle: false
-      };
-      threadMessagesMapRef.current[newId] = [];
-      setThreads((prev) => [newThread, ...prev.filter((t) => t.id !== newId)]);
-      setActiveThreadId(newId);
-      currentThreadIdRef.current = newId;
-      setMessages([]);
-      setActiveInterrupt(null);
-      window.history.pushState(null, '', '/chat/' + newId);
+    const draftId = `draft-${Date.now()}`;
+    setActiveThreadId(draftId);
+    currentThreadIdRef.current = draftId;
+    threadMessagesMapRef.current[draftId] = [];
+    setMessages([]);
+    setActiveInterrupt(null);
+    setView('home');
+    setSettingsOpen(false);
+    if (pushHistory) {
+      window.history.pushState(null, '', '/new');
+    } else {
+      window.history.replaceState(null, '', '/new');
     }
   }, [isRunning]);
 
   const handleSwitchThread = useCallback(async (targetId) => {
     if (isRunning || targetId === activeThreadId) return;
     setActiveInterrupt(null);
+    setView('home');
+    setSettingsOpen(false);
 
     const cached = threadMessagesMapRef.current[targetId];
     if (Array.isArray(cached) && cached.length > 0) {
@@ -499,7 +491,11 @@ export default function App() {
           setActiveThreadId(targetId);
           currentThreadIdRef.current = targetId;
           setMessages(msgs);
-          window.history.pushState(null, '', '/chat/' + targetId);
+          if (msgs.length > 0) {
+            window.history.pushState(null, '', '/chat/' + targetId);
+          } else {
+            window.history.replaceState(null, '', '/new');
+          }
         } else {
           setNotFoundNotice({
             active: true,
@@ -534,7 +530,7 @@ export default function App() {
     setThreads((prev) => {
       const remaining = prev.filter((t) => t.id !== targetId);
       if (remaining.length === 0) {
-        handleNewChat();
+        handleNewChat(true);
         return [];
       }
       if (activeThreadId === targetId) {
@@ -543,34 +539,102 @@ export default function App() {
         currentThreadIdRef.current = nextActive;
         const cached = threadMessagesMapRef.current[nextActive] || [];
         setMessages(cached);
-        window.history.pushState(null, '', '/chat/' + nextActive);
+        if (cached.length > 0) {
+          window.history.pushState(null, '', '/chat/' + nextActive);
+        } else {
+          window.history.pushState(null, '', '/new');
+        }
       }
       return remaining;
     });
   }, [activeThreadId, handleNewChat]);
 
-  // Handle browser back/forward history navigation
+  // Handle browser back/forward history navigation across /bio, /settings, /new, and /chat/:id
   useEffect(() => {
     const handlePopState = () => {
       const path = window.location.pathname;
-      const chatMatch = path.match(/^\/chat\/([a-zA-Z0-9-]+)/);
-      if (chatMatch) {
-        const targetId = chatMatch[1];
-        if (targetId !== currentThreadIdRef.current) {
-          handleSwitchThread(targetId);
+      if (path === '/bio') {
+        setView('bio');
+        setSettingsOpen(false);
+      } else if (path.startsWith('/settings')) {
+        setSettingsOpen(true);
+        setSettingsTab(path.includes('account') ? 'account' : 'keys');
+      } else if (path === '/new' || path === '/' || path === '') {
+        setView('home');
+        setSettingsOpen(false);
+        handleNewChat(false);
+      } else {
+        const chatMatch = path.match(/^\/chat\/([a-zA-Z0-9-]+)/);
+        if (chatMatch) {
+          setView('home');
+          setSettingsOpen(false);
+          const targetId = chatMatch[1];
+          if (targetId !== currentThreadIdRef.current) {
+            handleSwitchThread(targetId);
+          }
         }
-      } else if (path === '/' || path === '') {
-        handleNewChat();
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, [handleSwitchThread, handleNewChat]);
 
+  const handleSelectView = useCallback((nextView) => {
+    setView(nextView);
+    setSettingsOpen(false);
+    if (nextView === 'bio') {
+      window.history.pushState(null, '', '/bio');
+    } else {
+      const activeTId = currentThreadIdRef.current;
+      const cached = threadMessagesMapRef.current[activeTId] || [];
+      if (cached.length > 0 && !activeTId.startsWith('draft-')) {
+        window.history.pushState(null, '', `/chat/${activeTId}`);
+      } else {
+        window.history.pushState(null, '', '/new');
+      }
+    }
+  }, []);
+
+  const handleOpenSettings = useCallback((tab = 'keys') => {
+    setSettingsOpen(true);
+    setSettingsTab(tab);
+    window.history.pushState(null, '', tab === 'account' ? '/settings/account' : '/settings');
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setSettingsOpen(false);
+    if (view === 'bio') {
+      window.history.pushState(null, '', '/bio');
+    } else {
+      const activeTId = currentThreadIdRef.current;
+      const cached = threadMessagesMapRef.current[activeTId] || [];
+      if (cached.length > 0 && !activeTId.startsWith('draft-')) {
+        window.history.pushState(null, '', `/chat/${activeTId}`);
+      } else {
+        window.history.pushState(null, '', '/new');
+      }
+    }
+  }, [view]);
+
+  const handleSettingsTabChange = useCallback((tab) => {
+    setSettingsTab(tab);
+    window.history.replaceState(null, '', tab === 'account' ? '/settings/account' : '/settings');
+  }, []);
+
+  // Listen for open settings events from API key error action card
+  useEffect(() => {
+    const handleOpenSettingsEvent = (e) => {
+      const tab = e.detail?.tab || 'keys';
+      handleOpenSettings(tab);
+    };
+    window.addEventListener('dotta:open-settings', handleOpenSettingsEvent);
+    return () => window.removeEventListener('dotta:open-settings', handleOpenSettingsEvent);
+  }, [handleOpenSettings]);
+
   const handleDismissNotFound = useCallback(() => {
     setNotFoundNotice(null);
-    window.history.replaceState(null, '', '/');
-    handleNewChat();
+    window.history.replaceState(null, '', '/new');
+    handleNewChat(false);
   }, [handleNewChat]);
 
   const handleSendMessage = async (userMessage, options = {}) => {
@@ -594,12 +658,46 @@ export default function App() {
 
     if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && isRunning)) return;
 
-    // If this is the first message in the thread, trigger silent title generation
-    const currentTId = currentThreadIdRef.current;
-    if (currentTId && window.location.pathname !== `/chat/${currentTId}`) {
+    // Allocate real thread UUID on first message submit and update URL from /new to /chat/:id
+    let currentTId = currentThreadIdRef.current;
+    const isFirstInThread = (messages.length === 0) || (currentTId && currentTId.startsWith('draft-'));
+
+    if (isFirstInThread) {
+      const realThreadId = typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`;
+      currentTId = realThreadId;
+      currentThreadIdRef.current = realThreadId;
+      setActiveThreadId(realThreadId);
+      threadMessagesMapRef.current[realThreadId] = [];
+
+      // Save initial thread to database
+      fetch('/api/threads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: realThreadId,
+          title: 'New chat',
+          status: 'regular',
+          messages: []
+        })
+      }).catch(() => {});
+
+      // Insert thread into list and update URL to /chat/<realThreadId>
+      setThreads((prev) => [
+        {
+          id: realThreadId,
+          title: 'New chat',
+          status: 'regular',
+          lastMessageAt: new Date(),
+          isGeneratingTitle: Boolean(userText.trim())
+        },
+        ...prev.filter((t) => t.id !== realThreadId && !t.id.startsWith('draft-'))
+      ]);
+
+      window.history.pushState(null, '', `/chat/${realThreadId}`);
+    } else if (currentTId && window.location.pathname !== `/chat/${currentTId}`) {
       window.history.pushState(null, '', `/chat/${currentTId}`);
     }
-    const isFirstInThread = (messages.length === 0);
+
     if (isFirstInThread && userText.trim()) {
       setThreads((prev) =>
         prev.map((t) =>
@@ -824,7 +922,14 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`Server returned HTTP ${response.status}`);
+        let errData = null;
+        try {
+          errData = await response.json();
+        } catch {}
+        const errMsg = errData?.error || `Server returned HTTP ${response.status}`;
+        const err = new Error(errMsg);
+        if (errData?.code) err.code = errData.code;
+        throw err;
       }
 
       const reader = response.body.getReader();
@@ -1398,10 +1503,10 @@ export default function App() {
       {/* Left icon rail: Home / BIO are the only clickable tabs */}
       <AppRail
         view={view}
-        onSelectView={setView}
+        onSelectView={handleSelectView}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => handleOpenSettings('keys')}
       />
 
       {/* Main Split Body wrapped with AssistantRuntimeProvider */}
@@ -1412,7 +1517,7 @@ export default function App() {
             <div className="z-30 my-2 mr-2 flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
               <ThreadsPanel
                 onCollapse={() => setSidebarOpen(false)}
-                onOpenBio={() => setView('bio')}
+                onOpenBio={() => handleSelectView('bio')}
               />
             </div>
           )}
@@ -1606,9 +1711,11 @@ export default function App() {
       {/* Settings Modal (Account & API Keys) */}
       <SettingsModal
         isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        onClose={handleCloseSettings}
         currentUser={currentUser}
         onLogout={handleLogout}
+        initialTab={settingsTab}
+        onTabChange={handleSettingsTabChange}
       />
     </div>
   );

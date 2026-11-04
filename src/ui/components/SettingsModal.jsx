@@ -18,12 +18,18 @@ import {
   Settings
 } from 'lucide-react';
 
-export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
-  const [activeTab, setActiveTab] = useState('keys'); // 'account' | 'keys'
+export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialTab = 'keys', onTabChange }) {
+  const [activeTab, setActiveTab] = useState(initialTab || 'keys'); // 'account' | 'keys'
   const [integrations, setIntegrations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [errorNotice, setErrorNotice] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
+
+  useEffect(() => {
+    if (initialTab && (initialTab === 'keys' || initialTab === 'account')) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Popups state
   const [editingProvider, setEditingProvider] = useState(null); // 'meta' | 'modal' | null
@@ -180,29 +186,29 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div
-        className="relative flex flex-col w-full max-w-2xl bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
+        className="relative flex flex-col w-full max-w-2xl bg-[#0D0D10] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
         onClick={(e) => {
           e.stopPropagation();
           setMenuOpenFor(null);
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800/80 bg-zinc-900/60">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.06] bg-[#121216]">
           <div className="flex items-center gap-2.5">
-            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-              <Settings size={18} />
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.06] text-white border border-white/[0.1]">
+              <Settings size={17} />
             </div>
             <div>
-              <h2 className="text-base font-semibold text-zinc-100">Settings</h2>
+              <h2 className="text-sm font-semibold text-white tracking-tight">Settings</h2>
               <p className="text-xs text-zinc-400">Manage your developer account & billing integrations</p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60 rounded-lg transition-colors cursor-pointer"
+            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.06] rounded-lg transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X size={18} />
@@ -210,16 +216,17 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex items-center px-6 border-b border-zinc-800 bg-zinc-950/40 gap-6 text-xs font-medium">
+        <div className="flex items-center px-6 border-b border-white/[0.06] bg-[#0D0D10] gap-6 text-xs font-medium">
           <button
             type="button"
             onClick={() => {
               setActiveTab('keys');
               setEditingProvider(null);
+              if (typeof onTabChange === 'function') onTabChange('keys');
             }}
             className={`py-3 transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'keys'
-                ? 'border-emerald-500 text-emerald-400 font-semibold'
+                ? 'border-white text-white font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
@@ -231,10 +238,11 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
             onClick={() => {
               setActiveTab('account');
               setEditingProvider(null);
+              if (typeof onTabChange === 'function') onTabChange('account');
             }}
             className={`py-3 transition-colors border-b-2 cursor-pointer flex items-center gap-1.5 ${
               activeTab === 'account'
-                ? 'border-emerald-500 text-emerald-400 font-semibold'
+                ? 'border-white text-white font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-zinc-200'
             }`}
           >
@@ -244,9 +252,9 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
         </div>
 
         {/* Body Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {errorNotice && (
-            <div className="flex items-center gap-2 p-3 text-xs text-rose-300 bg-rose-950/40 border border-rose-900/50 rounded-xl">
+            <div className="flex items-center gap-2 p-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl">
               <AlertCircle size={15} className="shrink-0" />
               <span>{errorNotice}</span>
             </div>
@@ -254,11 +262,11 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
           {/* TAB 1: API KEYS & BILLING INTEGRATIONS */}
           {activeTab === 'keys' && (
-            <div className="space-y-5">
-              <div className="p-3.5 bg-zinc-950/60 border border-zinc-800/70 rounded-xl flex items-start gap-3">
-                <Shield size={17} className="text-emerald-400 shrink-0 mt-0.5" />
-                <div className="text-xs leading-relaxed text-zinc-300">
-                  <span className="font-semibold text-zinc-100">User-Funded Developer Billing: </span>
+            <div className="space-y-4">
+              <div className="p-3.5 bg-white/[0.02] border border-white/[0.06] rounded-xl flex items-start gap-3">
+                <Shield size={16} className="text-zinc-300 shrink-0 mt-0.5" />
+                <div className="text-xs leading-relaxed text-zinc-400">
+                  <span className="font-medium text-white">User-Funded Developer Billing: </span>
                   Bring your personal Meta API key (and optional Modal credentials). All AI token usage and GPU compute
                   are billed directly to your personal accounts. Secrets are encrypted using AES-256-GCM and never shared.
                 </div>
@@ -266,22 +274,22 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
               {loading ? (
                 <div className="flex items-center justify-center py-12 text-zinc-400 text-xs gap-2">
-                  <Loader2 size={16} className="animate-spin text-emerald-400" />
+                  <Loader2 size={16} className="animate-spin text-white" />
                   <span>Loading configuration status...</span>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3.5">
                   {/* 1. Meta AI Configuration */}
-                  <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-3">
+                  <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
                           <Key size={16} />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-zinc-100">Meta AI Configuration</span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded">
+                            <span className="text-sm font-medium text-white">Meta AI Configuration</span>
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.08] text-zinc-200 border border-white/[0.1] rounded">
                               Required
                             </span>
                           </div>
@@ -294,18 +302,18 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                       {/* Status indicator */}
                       <div className="flex items-center gap-2">
                         {metaIntegration.status === 'connected' ? (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-200 bg-white/[0.06] border border-white/[0.1] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
                             Connected
                           </span>
                         ) : metaIntegration.status === 'error' ? (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-rose-400 bg-rose-950/40 border border-rose-900/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-300 bg-red-500/10 border border-red-500/20 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
                             Error
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-zinc-400 bg-zinc-800/40 border border-zinc-700/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-400 bg-white/[0.02] border border-white/[0.05] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                             Not Configured
                           </span>
                         )}
@@ -314,12 +322,12 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
                     {/* Masked Key Display or Add Button */}
                     {metaIntegration.status === 'connected' ? (
-                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/90 border border-zinc-800/90 rounded-lg">
+                      <div className="flex items-center justify-between p-2.5 bg-[#0B0B0E] border border-white/[0.06] rounded-lg">
                         <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono text-zinc-400 tracking-wider">
+                          <span className="text-xs font-mono text-zinc-300 tracking-wider">
                             {metaIntegration.maskedHint || '...active'}
                           </span>
-                          <span className="text-[11px] font-mono px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded">
+                          <span className="text-[11px] font-mono px-2 py-0.5 bg-white/[0.06] text-zinc-300 border border-white/[0.06] rounded">
                             meta
                           </span>
                         </div>
@@ -329,10 +337,10 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                             type="button"
                             onClick={() => handleCopyHint('meta', metaIntegration.maskedHint)}
                             title="Copy masked hint"
-                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
                           >
                             {copiedKey === 'meta' ? (
-                              <Check size={14} className="text-emerald-400" />
+                              <Check size={14} className="text-white" />
                             ) : (
                               <Copy size={14} />
                             )}
@@ -345,13 +353,13 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                               setMenuOpenFor(menuOpenFor === 'meta' ? null : 'meta');
                             }}
                             title="Options"
-                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
                           >
                             <MoreVertical size={14} />
                           </button>
 
                           {menuOpenFor === 'meta' && (
-                            <div className="absolute right-0 top-8 z-30 w-36 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 text-xs">
+                            <div className="absolute right-0 top-8 z-30 w-36 bg-[#18181D] border border-white/[0.1] rounded-lg shadow-2xl py-1 text-xs">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -359,7 +367,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                                   setEditingProvider('meta');
                                   setMetaError(null);
                                 }}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 cursor-pointer"
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-300 hover:bg-white/[0.08] hover:text-white cursor-pointer"
                               >
                                 <RefreshCw size={13} />
                                 Replace Key
@@ -367,7 +375,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                               <button
                                 type="button"
                                 onClick={() => handleDisconnect('meta')}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-rose-400 hover:bg-rose-950/40 cursor-pointer"
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-400 hover:text-red-300 hover:bg-white/[0.04] cursor-pointer"
                               >
                                 <Trash2 size={13} />
                                 Disconnect
@@ -385,25 +393,25 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                             setEditingProvider('meta');
                             setMetaError(null);
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-emerald-400 bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-800/60 rounded-lg transition-colors cursor-pointer"
+                          className="px-3.5 py-1.5 text-xs font-medium text-black bg-white hover:bg-zinc-200 rounded-lg transition-colors cursor-pointer shadow-sm"
                         >
-                          Configure Meta Key
+                          Add Meta Key
                         </button>
                       </div>
                     )}
                   </div>
 
                   {/* 2. Modal Compute Configuration */}
-                  <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-3">
+                  <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
                           <Cpu size={16} />
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-zinc-100">Modal Compute Configuration</span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-zinc-800 text-zinc-400 border border-zinc-700 rounded">
+                            <span className="text-sm font-medium text-white">Modal Compute Configuration</span>
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06] rounded">
                               Optional
                             </span>
                           </div>
@@ -416,18 +424,18 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                       {/* Status indicator */}
                       <div className="flex items-center gap-2">
                         {modalIntegration.status === 'connected' ? (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-emerald-400 bg-emerald-950/40 border border-emerald-900/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-200 bg-white/[0.06] border border-white/[0.1] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
                             Connected
                           </span>
                         ) : modalIntegration.status === 'error' ? (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-rose-400 bg-rose-950/40 border border-rose-900/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-300 bg-red-500/10 border border-red-500/20 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
                             Error
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-zinc-400 bg-zinc-800/40 border border-zinc-700/60 rounded-full">
-                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-400 bg-white/[0.02] border border-white/[0.05] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                             Not Configured
                           </span>
                         )}
@@ -436,12 +444,12 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
                     {/* Masked Key Display or Add Button */}
                     {modalIntegration.status === 'connected' ? (
-                      <div className="flex items-center justify-between p-2.5 bg-zinc-900/90 border border-zinc-800/90 rounded-lg">
+                      <div className="flex items-center justify-between p-2.5 bg-[#0B0B0E] border border-white/[0.06] rounded-lg">
                         <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono text-zinc-400 tracking-wider">
+                          <span className="text-xs font-mono text-zinc-300 tracking-wider">
                             {modalIntegration.maskedHint || '...active'}
                           </span>
-                          <span className="text-[11px] font-mono px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded">
+                          <span className="text-[11px] font-mono px-2 py-0.5 bg-white/[0.06] text-zinc-300 border border-white/[0.06] rounded">
                             modal
                           </span>
                         </div>
@@ -451,10 +459,10 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                             type="button"
                             onClick={() => handleCopyHint('modal', modalIntegration.maskedHint)}
                             title="Copy masked hint"
-                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
                           >
                             {copiedKey === 'modal' ? (
-                              <Check size={14} className="text-emerald-400" />
+                              <Check size={14} className="text-white" />
                             ) : (
                               <Copy size={14} />
                             )}
@@ -467,13 +475,13 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                               setMenuOpenFor(menuOpenFor === 'modal' ? null : 'modal');
                             }}
                             title="Options"
-                            className="p-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
+                            className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/[0.08] rounded transition-colors cursor-pointer"
                           >
                             <MoreVertical size={14} />
                           </button>
 
                           {menuOpenFor === 'modal' && (
-                            <div className="absolute right-0 top-8 z-30 w-36 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl py-1 text-xs">
+                            <div className="absolute right-0 top-8 z-30 w-36 bg-[#18181D] border border-white/[0.1] rounded-lg shadow-2xl py-1 text-xs">
                               <button
                                 type="button"
                                 onClick={() => {
@@ -481,7 +489,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                                   setEditingProvider('modal');
                                   setModalError(null);
                                 }}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 cursor-pointer"
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-300 hover:bg-white/[0.08] hover:text-white cursor-pointer"
                               >
                                 <RefreshCw size={13} />
                                 Replace Config
@@ -489,7 +497,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                               <button
                                 type="button"
                                 onClick={() => handleDisconnect('modal')}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-rose-400 hover:bg-rose-950/40 cursor-pointer"
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-zinc-400 hover:text-red-300 hover:bg-white/[0.04] cursor-pointer"
                               >
                                 <Trash2 size={13} />
                                 Disconnect
@@ -507,7 +515,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                             setEditingProvider('modal');
                             setModalError(null);
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-zinc-300 bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700 rounded-lg transition-colors cursor-pointer"
+                          className="px-3.5 py-1.5 text-xs font-medium text-zinc-200 bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] rounded-lg transition-colors cursor-pointer"
                         >
                           Configure Modal
                         </button>
@@ -522,13 +530,13 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
           {/* TAB 2: ACCOUNT DETAILS */}
           {activeTab === 'account' && (
             <div className="space-y-4">
-              <div className="p-4 bg-zinc-950/80 border border-zinc-800 rounded-xl space-y-3">
+              <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-semibold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.1] flex items-center justify-center text-white font-semibold text-sm">
                     {currentUser?.name?.[0]?.toUpperCase() || currentUser?.email?.[0]?.toUpperCase() || 'U'}
                   </div>
                   <div>
-                    <h3 className="text-sm font-medium text-zinc-100">
+                    <h3 className="text-sm font-medium text-white">
                       {currentUser?.name || 'Authorized User'}
                     </h3>
                     <p className="text-xs text-zinc-400 flex items-center gap-1.5">
@@ -538,21 +546,21 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-2 gap-3 text-xs">
+                <div className="pt-3 border-t border-white/[0.06] grid grid-cols-2 gap-3 text-xs">
                   <div>
                     <span className="text-zinc-500 block">Role</span>
                     <span className="text-zinc-200 capitalize font-medium">{currentUser?.role || 'Developer'}</span>
                   </div>
                   <div>
                     <span className="text-zinc-500 block">Session Status</span>
-                    <span className="text-emerald-400 font-medium flex items-center gap-1">
-                      <CheckCircle2 size={12} /> Authenticated
+                    <span className="text-zinc-200 font-medium flex items-center gap-1">
+                      <CheckCircle2 size={12} className="text-zinc-300" /> Authenticated
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-4 bg-zinc-950/50 border border-zinc-800/80 rounded-xl space-y-2">
+              <div className="p-4 bg-white/[0.02] border border-white/[0.06] rounded-xl space-y-2">
                 <h4 className="text-xs font-medium text-zinc-200">Security Architecture</h4>
                 <ul className="text-xs text-zinc-400 space-y-1.5 list-disc list-inside">
                   <li>Row-Level Security (RLS) restricts access to your own private records.</li>
@@ -566,7 +574,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                   <button
                     type="button"
                     onClick={onLogout}
-                    className="px-4 py-2 text-xs font-medium text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-900/40 rounded-xl transition-colors cursor-pointer"
+                    className="px-4 py-2 text-xs font-medium text-zinc-300 hover:text-white hover:bg-white/[0.06] border border-white/[0.1] rounded-xl transition-colors cursor-pointer"
                   >
                     Log Out
                   </button>
@@ -578,17 +586,17 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
         {/* POPUP 1: Meta AI Key Dialog */}
         {editingProvider === 'meta' && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-4">
+          <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-md bg-[#121216] border border-white/[0.1] rounded-2xl shadow-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-                  <Key size={16} className="text-blue-400" />
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Key size={16} className="text-zinc-300" />
                   <span>Meta AI Configuration</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditingProvider(null)}
-                  className="p-1 text-zinc-400 hover:text-zinc-200 rounded-lg cursor-pointer"
+                  className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
                 >
                   <X size={16} />
                 </button>
@@ -599,8 +607,8 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
               </p>
 
               {metaError && (
-                <div className="p-3 text-xs text-rose-300 bg-rose-950/40 border border-rose-900/60 rounded-xl flex items-start gap-2">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-400" />
+                <div className="p-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-red-400" />
                   <span>{metaError}</span>
                 </div>
               )}
@@ -617,7 +625,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     onChange={(e) => setMetaApiKey(e.target.value)}
                     placeholder="Enter Meta API Key (e.g. sk-meta-...)"
                     disabled={metaSaving}
-                    className="w-full px-3 py-2 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-emerald-500/70"
+                    className="w-full px-3 py-2 text-xs font-mono bg-[#09090C] border border-white/[0.1] rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/40"
                   />
                 </div>
 
@@ -626,16 +634,16 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     type="button"
                     onClick={() => setEditingProvider(null)}
                     disabled={metaSaving}
-                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 rounded-lg cursor-pointer"
+                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={metaSaving || !metaApiKey.trim()}
-                    className="px-4 py-1.5 text-xs font-medium text-zinc-900 bg-emerald-400 hover:bg-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-1.5 text-xs font-medium text-black bg-white hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
                   >
-                    {metaSaving && <Loader2 size={13} className="animate-spin" />}
+                    {metaSaving && <Loader2 size={13} className="animate-spin text-black" />}
                     <span>{metaSaving ? 'Verifying...' : 'Save'}</span>
                   </button>
                 </div>
@@ -646,17 +654,17 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
 
         {/* POPUP 2: Modal Compute Dialog */}
         {editingProvider === 'modal' && (
-          <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-150">
-            <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-5 space-y-4">
+          <div className="absolute inset-0 z-40 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+            <div className="w-full max-w-md bg-[#121216] border border-white/[0.1] rounded-2xl shadow-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
-                  <Cpu size={16} className="text-indigo-400" />
+                <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                  <Cpu size={16} className="text-zinc-300" />
                   <span>Modal Compute Configuration</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setEditingProvider(null)}
-                  className="p-1 text-zinc-400 hover:text-zinc-200 rounded-lg cursor-pointer"
+                  className="p-1 text-zinc-400 hover:text-white rounded-lg cursor-pointer"
                 >
                   <X size={16} />
                 </button>
@@ -667,8 +675,8 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
               </p>
 
               {modalError && (
-                <div className="p-3 text-xs text-rose-300 bg-rose-950/40 border border-rose-900/60 rounded-xl flex items-start gap-2">
-                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-rose-400" />
+                <div className="p-3 text-xs text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl flex items-start gap-2">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5 text-red-400" />
                   <span>{modalError}</span>
                 </div>
               )}
@@ -684,7 +692,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     onChange={(e) => setModalEndpoint(e.target.value)}
                     placeholder="https://your-workspace--muse-spark-open.modal.run"
                     disabled={modalSaving}
-                    className="w-full px-3 py-2 text-xs bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/70"
+                    className="w-full px-3 py-2 text-xs bg-[#09090C] border border-white/[0.1] rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/40"
                   />
                 </div>
 
@@ -698,7 +706,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     onChange={(e) => setModalTokenId(e.target.value)}
                     placeholder="ak-..."
                     disabled={modalSaving}
-                    className="w-full px-3 py-2 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/70"
+                    className="w-full px-3 py-2 text-xs font-mono bg-[#09090C] border border-white/[0.1] rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/40"
                   />
                 </div>
 
@@ -713,7 +721,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     onChange={(e) => setModalTokenSecret(e.target.value)}
                     placeholder="as-..."
                     disabled={modalSaving}
-                    className="w-full px-3 py-2 text-xs font-mono bg-zinc-950 border border-zinc-800 rounded-xl text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-indigo-500/70"
+                    className="w-full px-3 py-2 text-xs font-mono bg-[#09090C] border border-white/[0.1] rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:border-white/40"
                   />
                 </div>
 
@@ -722,16 +730,16 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout }) {
                     type="button"
                     onClick={() => setEditingProvider(null)}
                     disabled={modalSaving}
-                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200 rounded-lg cursor-pointer"
+                    className="px-3.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-white rounded-lg cursor-pointer transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={modalSaving || !modalEndpoint.trim() || !modalTokenId.trim() || !modalTokenSecret.trim()}
-                    className="px-4 py-1.5 text-xs font-medium text-zinc-900 bg-indigo-400 hover:bg-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg flex items-center gap-1.5 cursor-pointer"
+                    className="px-4 py-1.5 text-xs font-medium text-black bg-white hover:bg-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg flex items-center gap-1.5 cursor-pointer shadow-sm transition-colors"
                   >
-                    {modalSaving && <Loader2 size={13} className="animate-spin" />}
+                    {modalSaving && <Loader2 size={13} className="animate-spin text-black" />}
                     <span>{modalSaving ? 'Verifying...' : 'Save'}</span>
                   </button>
                 </div>

@@ -30,6 +30,7 @@ import {
   FileIcon,
   TerminalIcon,
   WrenchIcon,
+  Key,
 } from "lucide-react";
 import {
   ActionBarPrimitive,
@@ -1344,27 +1345,62 @@ function MessageError() {
   }
 
   let title = 'Run Failed';
-  let description = 'The model and all failover endpoints failed to respond. Please check your credentials or network connection.';
+  let description = 'The model and all failover endpoints failed to respond. Please check your network connection.';
+  let action = null;
 
-  if (rawError.includes('Modal') || rawError.includes('modal.direct') || rawError.includes('MODAL')) {
+  const isMissingApiKey =
+    rawError.includes('KEY_REQUIRED') ||
+    rawError.includes('A Meta API key is required') ||
+    rawError.includes('Configure your Meta settings') ||
+    (rawError.includes('API key') && (rawError.includes('required') || rawError.includes('missing') || rawError.includes('Settings')));
+
+  const isInvalidApiKey =
+    rawError.includes('invalid_api_key') ||
+    rawError.includes('Incorrect API key') ||
+    (rawError.includes('401') && rawError.includes('API key'));
+
+  if (isMissingApiKey) {
+    title = 'API Key Required';
+    description = 'Please add your API key from Settings -> API Keys to start chatting.';
+    action = (
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent('dotta:open-settings', { detail: { tab: 'keys' } }));
+        }}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+      >
+        <Key className="size-3.5 text-zinc-300" />
+        Configure API Key in Settings
+      </button>
+    );
+  } else if (isInvalidApiKey) {
+    title = 'Invalid API Key';
+    description = 'Your Meta API key was rejected by the provider. Please verify or update your key in Settings -> API Keys.';
+    action = (
+      <button
+        type="button"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent('dotta:open-settings', { detail: { tab: 'keys' } }));
+        }}
+        className="inline-flex items-center gap-1.5 rounded-xl bg-white/[0.08] hover:bg-white/[0.14] border border-white/[0.12] px-3 py-1.5 text-xs font-medium text-white transition-colors cursor-pointer"
+      >
+        <Key className="size-3.5 text-zinc-300" />
+        Update API Key in Settings
+      </button>
+    );
+  } else if (rawError.includes('Modal') || rawError.includes('modal.direct') || rawError.includes('MODAL')) {
     title = 'Modal Endpoint Failed';
     description = rawError;
-  } else if (
-    rawError.includes('401') ||
-    rawError.includes('403') ||
-    rawError.includes('API key') ||
-    rawError.includes('TOKEN') ||
-    rawError.includes('Unauthorized') ||
-    rawError.includes('proxy auth required')
-  ) {
-    title = 'Authentication Error';
-    description = rawError || 'Invalid or missing API key/token for the model endpoint.';
   } else if (rawError.includes('429') || rawError.includes('quota') || rawError.includes('Rate limit')) {
     title = 'Rate Limit / Quota Exceeded';
     description = rawError || 'The model endpoint rate limit or quota has been exceeded.';
   } else if (rawError.includes('500') || rawError.includes('502') || rawError.includes('503') || rawError.includes('504')) {
     title = 'Model Host Server Error';
     description = rawError || 'The upstream inference server returned an internal error.';
+  } else if (rawError.includes('401') || rawError.includes('403') || rawError.includes('Unauthorized') || rawError.includes('proxy auth required')) {
+    title = 'Authentication Error';
+    description = rawError || 'Access was denied. Please check your session or permissions.';
   } else if (rawError) {
     title = 'Inference Error';
     description = rawError;
@@ -1378,6 +1414,7 @@ function MessageError() {
       <ErrorState
         title={title}
         description={description}
+        action={action}
         onRetry={handleRetry}
       />
     </div>

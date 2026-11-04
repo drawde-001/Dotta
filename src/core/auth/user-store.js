@@ -9,6 +9,7 @@ import {
   getUserCredentialsSecret
 } from '../db/supabase.js';
 import { encryptCredentialsPayload, maskApiKey } from './crypto.js';
+import { loadUserBio } from '../bio/store.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
@@ -165,6 +166,13 @@ export function createUser({ email, password, firstName, lastName, name }) {
   syncUserToDb(newUser).catch((err) => {
     console.warn(`[UserStore] Supabase signup sync error for ${newUser.email}:`, err.message);
   });
+
+  // Seed Alex BIO profile and materialize seed files in workspace
+  try {
+    loadUserBio(newUser.id);
+  } catch (err) {
+    console.warn(`[UserStore] Error seeding bio for ${newUser.id}:`, err.message);
+  }
 
   return sanitizeUserOutput(newUser);
 }
