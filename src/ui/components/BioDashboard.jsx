@@ -453,13 +453,16 @@ export function BioDashboard() {
     'w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-600';
 
   return (
-    <div ref={rootRef} className="flex flex-col gap-6">
+    <div ref={rootRef} className="flex flex-col gap-6 pb-24 lg:pb-6">
       {/* Global Header: BIO */}
       <header className="flex items-center justify-between border-b border-white/[0.06] pb-3">
         <div className="flex items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-base font-semibold tracking-tight text-zinc-100">BIO</h1>
+              <h1 className="text-base font-semibold tracking-tight text-zinc-100 flex items-center gap-1.5">
+                <Leaf size={16} className="text-zinc-300" />
+                <span>BIO</span>
+              </h1>
               <span className="rounded-full border border-zinc-700/50 bg-zinc-800/90 px-2 py-0.5 font-mono text-[10px] text-zinc-300">
                 User-Owned Store
               </span>

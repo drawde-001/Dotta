@@ -186,9 +186,12 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={onClose}
+    >
       <div
-        className="relative flex flex-col w-full max-w-2xl bg-[#0D0D10] border border-white/[0.08] rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]"
+        className="relative flex flex-col w-full max-w-2xl bg-[#0D0D10] border-t sm:border border-white/[0.08] rounded-t-[28px] sm:rounded-2xl shadow-2xl overflow-hidden max-h-[88vh] sm:max-h-[90vh]"
         onClick={(e) => {
           e.stopPropagation();
           setMenuOpenFor(null);

@@ -529,7 +529,7 @@ function UserMessageFooter() {
   const timeString = formatMessageTime(createdAt);
 
   return (
-    <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 opacity-0 group-hover/user-msg:opacity-100 transition-opacity select-none px-1">
+    <div className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400 dark:text-zinc-500 opacity-100 lg:opacity-0 lg:group-hover/user-msg:opacity-100 transition-opacity select-none px-1">
       <span>{displayModel}</span>
       <span className="text-zinc-500 dark:text-zinc-600">·</span>
       <span>{timeString}</span>
@@ -1247,12 +1247,30 @@ function AssistantMessage() {
       className="relative mx-auto w-full max-w-[var(--thread-max-width)] px-2 fade-in slide-in-from-bottom-1 animate-in duration-150"
       data-role="assistant"
     >
-      <div className="break-words leading-relaxed text-foreground">
-        <AssistantMessageBody />
-        <MessageError />
+      <div className="flex items-start gap-2.5">
+        {/* Dotta Orb Avatar */}
+        <div className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full overflow-hidden shadow-sm">
+          <svg viewBox="0 0 128 128" className="w-full h-full">
+            <defs>
+              <radialGradient id="threadOrbGrad" cx="35%" cy="30%" r="75%">
+                <stop offset="0%" stopColor="#ffffff"/>
+                <stop offset="40%" stopColor="#e4e4e7"/>
+                <stop offset="75%" stopColor="#71717a"/>
+                <stop offset="100%" stopColor="#27272a"/>
+              </radialGradient>
+            </defs>
+            <circle cx="64" cy="64" r="54" fill="url(#threadOrbGrad)" stroke="#18181b" strokeWidth="2"/>
+            <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
+            <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
+          </svg>
+        </div>
+        <div className="min-w-0 flex-1 break-words leading-relaxed text-foreground">
+          <AssistantMessageBody />
+          <MessageError />
+        </div>
       </div>
 
-      <div className="mt-1 ml-2 flex min-h-6 items-center">
+      <div className="mt-1 ml-8 flex min-h-6 items-center">
         <BranchPicker />
         <AssistantActionBar />
       </div>

@@ -80,8 +80,8 @@ export function AuthScreen({ onLoginSuccess }) {
 
   return (
     <div className="fixed inset-0 z-50 h-screen w-screen m-0 p-0 rounded-none border-none select-none font-sans overflow-hidden grid grid-cols-1 lg:grid-cols-2 bg-[#0a0a0b]">
-      {/* Left Column: Outer Black Frame containing the Green Card */}
-      <div className="h-full w-full p-3 sm:p-4 lg:p-5 bg-[#0a0a0b] flex flex-col">
+      {/* Left Column: Outer Black Frame containing the Green Card (Desktop only, hidden on mobile/tablet) */}
+      <div className="hidden lg:flex h-full w-full p-3 sm:p-4 lg:p-5 bg-[#0a0a0b] flex-col">
         <div className="relative flex h-full w-full flex-col justify-end overflow-hidden rounded-[20px] sm:rounded-[24px] p-8 sm:p-10 lg:p-12 pb-10 sm:pb-12 text-white bg-[radial-gradient(120%_120%_at_30%_20%,#1f7a6b_0%,#0f2a24_60%,#0b1a16_100%)] shadow-2xl">
           {/* Subtle Ambient Radial Glow */}
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_400px_at_70%_30%,rgba(255,255,255,0.08),transparent)]" />
@@ -120,9 +120,29 @@ export function AuthScreen({ onLoginSuccess }) {
         </div>
       </div>
 
-      {/* Right Column: Form Side (Center-aligned layout) */}
+      {/* Right Column: Form Side (Mobile and desktop friendly, vertically scrollable) */}
       <div className="relative flex h-full w-full flex-col justify-center items-center overflow-y-auto bg-[#0a0a0b] p-6 sm:p-10 lg:p-12">
-        <div className="max-w-[380px] mx-auto w-full">
+        <div className="max-w-[380px] mx-auto w-full py-4">
+          {/* Mobile Brand Header */}
+          <div className="flex lg:hidden items-center justify-center gap-2.5 mb-6">
+            <div className="w-8 h-8 rounded-full overflow-hidden shadow-md">
+              <svg viewBox="0 0 128 128" className="w-full h-full">
+                <defs>
+                  <radialGradient id="authOrbGrad" cx="35%" cy="30%" r="75%">
+                    <stop offset="0%" stopColor="#ffffff"/>
+                    <stop offset="40%" stopColor="#e4e4e7"/>
+                    <stop offset="75%" stopColor="#71717a"/>
+                    <stop offset="100%" stopColor="#27272a"/>
+                  </radialGradient>
+                </defs>
+                <circle cx="64" cy="64" r="54" fill="url(#authOrbGrad)" stroke="#18181b" strokeWidth="2"/>
+                <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
+                <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-white tracking-tight">Dotta</span>
+          </div>
+
           {/* Header */}
           <h2 className="text-white text-xl sm:text-2xl font-semibold">
             {mode === 'signup' ? 'Sign Up Account' : 'Log In Account'}

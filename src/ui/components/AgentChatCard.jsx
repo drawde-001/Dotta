@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 
 function messageText(msg) {
   return (msg?.content || [])
@@ -8,7 +8,14 @@ function messageText(msg) {
     .join('');
 }
 
-export function AgentChatCard({ messages = [], isWorking = false, composer = null }) {
+export function AgentChatCard({
+  messages = [],
+  isWorking = false,
+  composer = null,
+  onClose = null,
+  isMobileSheet = false,
+  className = ''
+}) {
   const logRef = useRef(null);
   const visible = messages
     .map((msg) => ({ id: msg.id, role: msg.role, text: messageText(msg) }))
@@ -22,17 +29,31 @@ export function AgentChatCard({ messages = [], isWorking = false, composer = nul
   return (
     <aside
       aria-label="Agent chat"
-      className="flex h-full w-[320px] shrink-0 flex-col border-l border-white/[0.06] bg-[#141417] xl:w-[360px]"
+      className={`flex h-full flex-col ${
+        isMobileSheet
+          ? 'w-full bg-[#121216]'
+          : 'w-[320px] shrink-0 border-l border-white/[0.06] bg-[#141417] xl:w-[360px]'
+      } ${className}`}
     >
-      <div className="shrink-0 border-b border-white/[0.06] px-5 pb-4 pt-5">
-        <div className="flex items-center gap-2.5">
+      <div className="shrink-0 border-b border-white/[0.06] px-5 pb-4 pt-5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5 min-w-0">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border border-zinc-700/60 bg-zinc-800 text-zinc-200">
             <MessageSquare size={16} />
           </span>
-          <h2 className="text-sm font-semibold leading-snug tracking-tight text-zinc-100">
+          <h2 className="text-sm font-semibold leading-snug tracking-tight text-zinc-100 truncate">
             Tell agent the changes you want to make
           </h2>
         </div>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close BIO Assist"
+            className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer shrink-0 ml-2"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       <div

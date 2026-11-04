@@ -1773,6 +1773,26 @@ export const InputDock: React.FC<InputDockProps> = ({
         .aic-recording-dot {
           animation: aicPulseDot 1.2s infinite ease-in-out;
         }
+
+        @media (max-width: 1023px) {
+          .aic-composer-card {
+            border-radius: 24px !important;
+            padding: 12px 14px 10px 14px !important;
+          }
+          .aic-icon-btn {
+            width: 38px !important;
+            height: 38px !important;
+          }
+          .aic-decluttered-turbo-btn,
+          .aic-model-trigger-btn {
+            height: 36px !important;
+          }
+          .aic-submit-btn,
+          .aic-submit-circle-btn {
+            width: 38px !important;
+            height: 38px !important;
+          }
+        }
       `}</style>
 
       {/* Hidden file input for "+ Upload or add files" */}
@@ -1832,14 +1852,16 @@ export const InputDock: React.FC<InputDockProps> = ({
               />
             )}
 
-            {/* Live Voice Recording & Transcribing Component INSIDE the composer (no Done button) */}
+            {/* Live Voice Recording & Transcribing Component INSIDE the composer on Desktop */}
             {(isRecording || isTranscribing) && (
-              <ComposerVoiceDictation
-                isRecording={isRecording}
-                isTranscribing={isTranscribing}
-                recordingSeconds={recordingSeconds}
-                recordingTime={formattedRecordingTime}
-              />
+              <div className="hidden lg:block">
+                <ComposerVoiceDictation
+                  isRecording={isRecording}
+                  isTranscribing={isTranscribing}
+                  recordingSeconds={recordingSeconds}
+                  recordingTime={formattedRecordingTime}
+                />
+              </div>
             )}
 
             {/* Inline Error Card for API Key Required / Rate Limits in Voice & Attachments */}
@@ -1914,6 +1936,61 @@ export const InputDock: React.FC<InputDockProps> = ({
             ))}
           </div>
 
+          {/* Active Voice Recording View for Mobile & Tablet (Reference 3) */}
+          {isRecording && (
+            <div className="flex lg:hidden items-center justify-between py-1 px-1 select-none animate-in fade-in duration-150 w-full mb-1">
+              {/* Left: Plus attachment button */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                title="Add attachment"
+                className="w-10 h-10 rounded-full bg-white/[0.06] hover:bg-white/[0.12] flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer shrink-0"
+              >
+                <Plus size={18} />
+              </button>
+
+              {/* Center: Pulsating Dotted Waveform (Ref 3) */}
+              <div className="flex-1 flex items-center justify-center px-3">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-200 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-300 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 aic-recording-dot" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-500 aic-recording-dot" />
+                </div>
+              </div>
+
+              {/* Right: Stop Recording Button & Send Audio Button (Ref 3) */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={cancelVoiceRecording}
+                  title="Stop recording"
+                  className="w-10 h-10 rounded-full border border-white/20 bg-white/[0.08] hover:bg-white/[0.16] active:scale-95 flex items-center justify-center transition cursor-pointer"
+                >
+                  <span className="w-3.5 h-3.5 rounded-[3px] bg-zinc-200" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={stopVoiceRecording}
+                  title="Send audio note"
+                  className="w-10 h-10 rounded-full bg-[#1e2530] border border-white/10 hover:bg-[#283242] active:scale-95 flex items-center justify-center text-[#93c5fd] hover:text-white transition cursor-pointer shadow-md"
+                >
+                  <ArrowUp size={16} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Prompt Textarea */}
           <textarea
             ref={promptInputRef}
@@ -1926,13 +2003,13 @@ export const InputDock: React.FC<InputDockProps> = ({
                 handleSubmitPrompt();
               }
             }}
-            className="aic-prompt-input"
+            className={`aic-prompt-input ${isRecording ? 'hidden lg:block' : ''}`}
             placeholder={isRecording || isTranscribing ? '' : 'What would you like to do today?'}
             aria-label="Prompt input"
           />
 
           {/* Bottom Controls Bar */}
-          <div className="flex items-center justify-between gap-2 relative w-full min-w-0">
+          <div className={`flex items-center justify-between gap-2 relative w-full min-w-0 ${isRecording ? 'hidden lg:flex' : ''}`}>
             {/* Left Controls Group: Paperclip + Sliders + Model (no effort text) */}
             <div className="flex items-center gap-1 min-w-0 flex-1">
               {/* 1. Plus Button with Popover (replacing plain paperclip) */}

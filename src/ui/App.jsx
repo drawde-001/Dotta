@@ -13,6 +13,7 @@ import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
 import { AuthScreen } from '@/components/AuthScreen';
 import { SettingsModal } from '@/components/SettingsModal';
+import { ThreadListItems } from '@/components/assistant-ui/elements/thread-list.aui';
 import { getUserId, getCurrentUser, setCurrentUser, clearCurrentUser } from '@/lib/user';
 import { sanitizeChatText } from '../core/levels/redact-text.js';
 import {
@@ -26,7 +27,20 @@ import {
   Shuffle,
   PanelLeftOpen,
   PanelRightOpen,
-  AlertCircle
+  AlertCircle,
+  Menu,
+  Ghost,
+  Home,
+  Leaf,
+  MessageSquare,
+  History,
+  Library,
+  AtSign,
+  MoreHorizontal,
+  Settings,
+  SquarePen,
+  Search,
+  X
 } from 'lucide-react';
 import { validateReturnTo } from './lib/url.js';
 
@@ -60,6 +74,11 @@ export default function App() {
   const [notFoundNotice, setNotFoundNotice] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(initialRoute.settingsOpen);
   const [settingsTab, setSettingsTab] = useState(initialRoute.settingsTab);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [mobileWorkspaceOpen, setMobileWorkspaceOpen] = useState(false);
+  const [mobileBioChatOpen, setMobileBioChatOpen] = useState(false);
+  const [drawerSearch, setDrawerSearch] = useState('');
+  const [drawerSearchOpen, setDrawerSearchOpen] = useState(false);
 
   // Check authenticated session on mount (Zero-Flash Route Guard)
   useEffect(() => {
@@ -1537,190 +1556,486 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
-      {/* Left icon rail: Home / BIO are the only clickable tabs */}
-      <AppRail
-        view={view}
-        onSelectView={handleSelectView}
-        currentUser={currentUser}
-        onLogout={handleLogout}
-        onOpenSettings={() => handleOpenSettings('keys')}
-      />
+    <div className="flex flex-col lg:flex-row h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
+      {/* Left icon rail (Desktop only): Home / BIO are the only clickable tabs */}
+      <div className="hidden lg:flex shrink-0">
+        <AppRail
+          view={view}
+          onSelectView={handleSelectView}
+          currentUser={currentUser}
+          onLogout={handleLogout}
+          onOpenSettings={() => handleOpenSettings('keys')}
+        />
+      </div>
 
-      {/* Main Split Body wrapped with AssistantRuntimeProvider */}
+      {/* Main App Container wrapped with AssistantRuntimeProvider */}
       <AssistantRuntimeProvider runtime={runtime}>
-        <div className="flex-1 flex overflow-hidden relative">
-          {/* Threads panel (Home view only): rounded, collapsible */}
-          {view === 'home' && sidebarOpen && (
-            <div className="z-30 my-2 mr-2 flex w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
-              <ThreadsPanel
-                onCollapse={() => setSidebarOpen(false)}
-                onOpenBio={() => handleSelectView('bio')}
-              />
-            </div>
-          )}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
 
-          {view === 'home' && !sidebarOpen && (
+          {/* Mobile & Tablet Fixed Top Bar (lg:hidden) */}
+          <header className="h-14 shrink-0 bg-[#0E0E12]/90 backdrop-blur-md border-b border-white/[0.07] px-3 flex items-center justify-between z-30 select-none lg:hidden">
+            {/* Left: Hamburger Button (Opens Sidebar Drawer) */}
             <button
               type="button"
-              onClick={() => setSidebarOpen(true)}
-              aria-label="Open threads panel"
-              title="Open threads"
-              className="absolute left-2 top-[20px] z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+              onClick={() => setMobileDrawerOpen(true)}
+              aria-label="Open sidebar drawer"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-300 hover:text-white hover:bg-white/[0.08] active:scale-95 transition cursor-pointer"
             >
-              <PanelLeftOpen size={16} />
+              <Menu size={20} />
             </button>
-          )}
 
-          {/* Rounded canvas */}
-          <div className="min-w-0 flex-1 py-2 pr-2">
-            <div className="relative flex h-full overflow-hidden rounded-[24px] border border-white/[0.05] bg-[#101013] shadow-xl sm:rounded-[28px]">
-          {view === 'bio' ? (
-            <>
-              <div className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-                <BioDashboard />
-              </div>
-              <AgentChatCard
-                messages={messages}
-                isWorking={isRunning}
-                composer={
-                  <InputDock
-                    heroMode={false}
-                    maxWidth="100%"
-                    onSendMessage={handleSendMessage}
-                    isWorking={isRunning}
-                    onStopWorking={handleCancel}
-                    selectedModel={selectedModel}
-                    onSelectModel={setSelectedModel}
-                    mode={agentMode}
-                    onChangeMode={setAgentMode}
-                    activeInterrupt={activeInterrupt}
-                    onResolveInterrupt={handleResolveInterrupt}
-                  />
-                }
-              />
-            </>
-          ) : (
-          <>
-          {/* Center: Chat Panel (Hero or Message Thread) */}
-          <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
-            {messages.length === 0 ? (
-              /* Centered Hero View */
-              <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
-                <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
-                  Dotta
-                </h1>
-                <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
-                  {heroSubtitles[subtitleIndex]}
-                </p>
+            {/* Center: Blank (No name, No Dotta logo per Eddy) */}
+            <div className="flex-1" />
 
-                {/* Exact Chatbox in Hero Mode */}
-                <div className="w-full">
-                  <InputDock
-                    heroMode={true}
-                    maxWidth="596px"
-                    onSendMessage={handleSendMessage}
-                    isWorking={isRunning}
-                    onStopWorking={handleCancel}
-                    selectedModel={selectedModel}
-                    onSelectModel={setSelectedModel}
-                    mode={agentMode}
-                    onChangeMode={setAgentMode}
-                    activeInterrupt={activeInterrupt}
-                    onResolveInterrupt={handleResolveInterrupt}
-                  />
-                </div>
+            {/* Right: Incognito Icon (Strictly unclickable) + Workspace Reveal Icon (Hidden on BIO page per Eddy) */}
+            {view === 'home' && (
+              <div className="flex items-center gap-1">
+                <span
+                  title="Incognito Mode"
+                  aria-hidden="true"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 pointer-events-none select-none cursor-default"
+                >
+                  <Ghost size={20} />
+                </span>
 
-                {/* Curated Suggestion Chips */}
-                <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
-                  {activeQuickActions.map((chip, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => handleSendMessage(chip.label)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
-                    >
-                      <span className="text-zinc-400">{chip.icon}</span>
-                      <span>{chip.label}</span>
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleShuffleQuickActions}
-                    className="p-1.5 rounded-full border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
-                    title="Shuffle suggestions"
-                  >
-                    <Shuffle size={13} />
-                  </button>
-                </div>
-              </div>
-            ) : (
-              /* Active Message Thread with Bottom Docked InputDock */
-              <div className="flex-1 flex flex-col h-full overflow-hidden relative">
-                <div className="flex-1 min-h-0">
-                  <Thread
-                    activeInterrupt={activeInterrupt}
-                    onResolveInterrupt={handleResolveInterrupt}
-                    selectedModel={selectedModel}
-                    onSelectModel={setSelectedModel}
-                    onReload={handleReload}
-                  />
-                </div>
-
-                {/* Bottom Docked Composer */}
-                <div className="shrink-0 p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
-                  <InputDock
-                    heroMode={false}
-                    maxWidth="100%"
-                    onSendMessage={handleSendMessage}
-                    isWorking={isRunning}
-                    onStopWorking={handleCancel}
-                    selectedModel={selectedModel}
-                    onSelectModel={setSelectedModel}
-                    mode={agentMode}
-                    onChangeMode={setAgentMode}
-                    activeInterrupt={activeInterrupt}
-                    onResolveInterrupt={handleResolveInterrupt}
-                  />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileWorkspaceOpen(true)}
+                  title="Workspace"
+                  aria-label="Open workspace"
+                  className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/[0.08] active:scale-95 transition cursor-pointer"
+                >
+                  <PanelRightOpen size={20} />
+                </button>
               </div>
             )}
-          </div>
-          </>
-          )}
+          </header>
 
-          {/* Right: Workspace Panel (Home view, right edge of canvas) */}
-          {view === 'home' && workspaceMode === 'work' && (
-            <WorkspacePanel
-              streamState={streamState}
-              onSimulateUrlChange={(newUrl) =>
-                setStreamState((prev) => ({ ...prev, url: newUrl }))
-              }
-              onManualNavigate={(targetUrl) =>
-                handleSendMessage(`Navigate to ${targetUrl}`)
-              }
-              onSendWsMessage={handleSendWsMessage}
-              openFiles={openFiles}
-              activeTabId={activeTabId}
-              onSelectTab={(tabId) => setActiveTabId(tabId)}
-              onCloseFileTab={handleCloseFileTab}
-              onClosePanel={handleCloseWorkspace}
-            />
-          )}
+          {/* Main Body Split / Canvas */}
+          <div className="flex-1 flex overflow-hidden relative min-w-0">
+            {/* Desktop Threads panel (Home view only): rounded, collapsible */}
+            {view === 'home' && sidebarOpen && (
+              <div className="hidden lg:flex z-30 my-2 mr-2 w-[260px] shrink-0 flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[#141417] shadow-xl">
+                <ThreadsPanel
+                  onCollapse={() => setSidebarOpen(false)}
+                  onOpenBio={() => handleSelectView('bio')}
+                />
+              </div>
+            )}
 
-          {view === 'home' && workspaceMode === 'chat' && (
-            <button
-              type="button"
-              onClick={() => setWorkspaceMode('work')}
-              aria-label="Open workspace panel"
-              title="Open workspace panel"
-              className="absolute right-3 top-3 z-40 flex h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
-            >
-              <PanelRightOpen size={16} />
-            </button>
-          )}
+            {view === 'home' && !sidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open threads panel"
+                title="Open threads"
+                className="hidden lg:flex absolute left-2 top-[20px] z-40 h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+              >
+                <PanelLeftOpen size={16} />
+              </button>
+            )}
+
+            {/* Canvas */}
+            <div className="min-w-0 flex-1 p-0 lg:py-2 lg:pr-2">
+              <div className="relative flex h-full overflow-hidden rounded-none lg:rounded-[24px] border-0 lg:border border-white/[0.05] bg-[#101013] shadow-none lg:shadow-xl sm:rounded-none lg:sm:rounded-[28px]">
+                {view === 'bio' ? (
+                  <>
+                    <div className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
+                      <BioDashboard />
+                    </div>
+                    {/* Desktop Agent Chat Card (hidden on mobile/tablet) */}
+                    <AgentChatCard
+                      className="hidden lg:flex"
+                      messages={messages}
+                      isWorking={isRunning}
+                      composer={
+                        <InputDock
+                          heroMode={false}
+                          maxWidth="100%"
+                          onSendMessage={handleSendMessage}
+                          isWorking={isRunning}
+                          onStopWorking={handleCancel}
+                          selectedModel={selectedModel}
+                          onSelectModel={setSelectedModel}
+                          mode={agentMode}
+                          onChangeMode={setAgentMode}
+                          activeInterrupt={activeInterrupt}
+                          onResolveInterrupt={handleResolveInterrupt}
+                        />
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* Center: Chat Panel (Hero or Message Thread) */}
+                    <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
+                      {messages.length === 0 ? (
+                        /* Centered Hero View */
+                        <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
+                          {/* Authentic Dotta Orb Logo (Ref prompt 8) */}
+                          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-xl">
+                            <svg viewBox="0 0 128 128" className="w-full h-full">
+                              <defs>
+                                <radialGradient id="heroOrbGrad" cx="35%" cy="30%" r="75%">
+                                  <stop offset="0%" stopColor="#ffffff"/>
+                                  <stop offset="40%" stopColor="#e4e4e7"/>
+                                  <stop offset="75%" stopColor="#71717a"/>
+                                  <stop offset="100%" stopColor="#27272a"/>
+                                </radialGradient>
+                                <filter id="heroOrbShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                  <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000000" floodOpacity="0.4"/>
+                                </filter>
+                              </defs>
+                              <circle cx="64" cy="64" r="52" fill="url(#heroOrbGrad)" stroke="#18181b" strokeWidth="2" filter="url(#heroOrbShadow)"/>
+                              <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
+                              <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
+                            </svg>
+                          </div>
+
+                          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
+                            Dotta
+                          </h1>
+                          <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
+                            {heroSubtitles[subtitleIndex]}
+                          </p>
+
+                          {/* Exact Chatbox in Hero Mode */}
+                          <div className="w-full">
+                            <InputDock
+                              heroMode={true}
+                              maxWidth="596px"
+                              onSendMessage={handleSendMessage}
+                              isWorking={isRunning}
+                              onStopWorking={handleCancel}
+                              selectedModel={selectedModel}
+                              onSelectModel={setSelectedModel}
+                              mode={agentMode}
+                              onChangeMode={setAgentMode}
+                              activeInterrupt={activeInterrupt}
+                              onResolveInterrupt={handleResolveInterrupt}
+                            />
+                          </div>
+
+                          {/* Curated Suggestion Chips */}
+                          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
+                            {activeQuickActions.map((chip, idx) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => handleSendMessage(chip.label)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
+                              >
+                                <span className="text-zinc-400">{chip.icon}</span>
+                                <span>{chip.label}</span>
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={handleShuffleQuickActions}
+                              className="p-1.5 rounded-full border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
+                              title="Shuffle suggestions"
+                            >
+                              <Shuffle size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Active Message Thread with Bottom Docked InputDock */
+                        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                          <div className="flex-1 min-h-0">
+                            <Thread
+                              activeInterrupt={activeInterrupt}
+                              onResolveInterrupt={handleResolveInterrupt}
+                              selectedModel={selectedModel}
+                              onSelectModel={setSelectedModel}
+                              onReload={handleReload}
+                            />
+                          </div>
+
+                          {/* Bottom Docked Composer */}
+                          <div className="shrink-0 p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
+                            <InputDock
+                              heroMode={false}
+                              maxWidth="100%"
+                              onSendMessage={handleSendMessage}
+                              isWorking={isRunning}
+                              onStopWorking={handleCancel}
+                              selectedModel={selectedModel}
+                              onSelectModel={setSelectedModel}
+                              mode={agentMode}
+                              onChangeMode={setAgentMode}
+                              activeInterrupt={activeInterrupt}
+                              onResolveInterrupt={handleResolveInterrupt}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Right: Desktop Workspace Panel (Home view, right edge of canvas) */}
+                {view === 'home' && workspaceMode === 'work' && (
+                  <div className="hidden lg:flex h-full">
+                    <WorkspacePanel
+                      streamState={streamState}
+                      onSimulateUrlChange={(newUrl) =>
+                        setStreamState((prev) => ({ ...prev, url: newUrl }))
+                      }
+                      onManualNavigate={(targetUrl) =>
+                        handleSendMessage(`Navigate to ${targetUrl}`)
+                      }
+                      onSendWsMessage={handleSendWsMessage}
+                      openFiles={openFiles}
+                      activeTabId={activeTabId}
+                      onSelectTab={(tabId) => setActiveTabId(tabId)}
+                      onCloseFileTab={handleCloseFileTab}
+                      onClosePanel={handleCloseWorkspace}
+                    />
+                  </div>
+                )}
+
+                {view === 'home' && workspaceMode === 'chat' && (
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceMode('work')}
+                    aria-label="Open workspace panel"
+                    title="Open workspace panel"
+                    className="hidden lg:flex absolute right-3 top-3 z-40 h-8 w-8 cursor-pointer items-center justify-center rounded-[10px] border border-white/[0.08] bg-[#141417] text-zinc-400 shadow-xl transition-colors hover:text-zinc-100"
+                  >
+                    <PanelRightOpen size={16} />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Mobile & Tablet Off-Canvas Sidebar Drawer */}
+          {mobileDrawerOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden flex">
+              <div
+                className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity cursor-pointer"
+                onClick={() => setMobileDrawerOpen(false)}
+                aria-label="Close menu"
+              />
+              <aside className="relative z-10 w-[82%] max-w-[310px] h-full bg-[#121216] border-r border-white/[0.08] shadow-2xl flex flex-col justify-between overflow-hidden animate-in slide-in-from-left duration-200">
+                <div className="px-4 pt-4 pb-2 flex items-center justify-between shrink-0">
+                  <span className="text-sm font-semibold text-white tracking-tight">Dotta</span>
+                  <button
+                    type="button"
+                    onClick={() => setDrawerSearchOpen((prev) => !prev)}
+                    title="Search"
+                    aria-label="Search chats"
+                    className="w-8 h-8 rounded-full bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center text-zinc-400 hover:text-white transition cursor-pointer"
+                  >
+                    <Search size={16} />
+                  </button>
+                </div>
+
+                <div
+                  className="flex-1 overflow-y-auto px-3 py-1 space-y-1 relative"
+                  onClickCapture={(e) => {
+                    if (e.target.closest('button[data-slot="aui_thread-list-item-trigger"]') || e.target.closest('[data-slot="aui_thread-list-item"]')) {
+                      setMobileDrawerOpen(false);
+                    }
+                  }}
+                >
+                  {drawerSearchOpen && (
+                    <div className="px-1 py-1">
+                      <input
+                        type="text"
+                        value={drawerSearch}
+                        onChange={(e) => setDrawerSearch(e.target.value)}
+                        placeholder="Search chats..."
+                        autoFocus
+                        className="w-full bg-[#18181d] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:outline-none"
+                      />
+                    </div>
+                  )}
+
+                  <div className="space-y-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectView('home');
+                        setMobileDrawerOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal transition cursor-pointer ${
+                        view === 'home'
+                          ? 'bg-white/[0.08] text-white font-medium'
+                          : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'
+                      }`}
+                    >
+                      <Home size={16} className="text-zinc-400" />
+                      <span>Home</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleSelectView('bio');
+                        setMobileDrawerOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal transition cursor-pointer ${
+                        view === 'bio'
+                          ? 'bg-white/[0.08] text-white font-medium'
+                          : 'text-zinc-300 hover:bg-white/[0.06] hover:text-white'
+                      }`}
+                    >
+                      <Leaf size={16} className="text-zinc-300" />
+                      <span>BIO</span>
+                    </button>
+
+                    <div className="w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal text-zinc-500 opacity-60 cursor-not-allowed select-none" title="Coming soon">
+                      <MessageSquare size={16} className="text-zinc-500" />
+                      <span>Chats</span>
+                    </div>
+                    <div className="w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal text-zinc-500 opacity-60 cursor-not-allowed select-none" title="Coming soon">
+                      <History size={16} className="text-zinc-500" />
+                      <span>History</span>
+                    </div>
+                    <div className="w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal text-zinc-500 opacity-60 cursor-not-allowed select-none" title="Coming soon">
+                      <Library size={16} className="text-zinc-500" />
+                      <span>Library</span>
+                    </div>
+                    <div className="w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal text-zinc-500 opacity-60 cursor-not-allowed select-none" title="Coming soon">
+                      <AtSign size={16} className="text-zinc-500" />
+                      <span>Mentions</span>
+                    </div>
+                    <div className="w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-xs font-normal text-zinc-500 opacity-60 cursor-not-allowed select-none" title="Coming soon">
+                      <MoreHorizontal size={16} className="text-zinc-500" />
+                      <span>More options</span>
+                    </div>
+                  </div>
+
+                  <div className="h-px bg-white/[0.06] my-2" />
+
+                  <div className="px-1 text-xs">
+                    <ThreadListItems searchQuery={drawerSearch} />
+                  </div>
+
+                  <div className="h-24" />
+                </div>
+
+                {/* Floating Bottom Bar: Gear on Left, New Chat in White on Right */}
+                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between pointer-events-none z-20">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileDrawerOpen(false);
+                      handleOpenSettings('keys');
+                    }}
+                    aria-label="Open Settings"
+                    title="Settings"
+                    className="pointer-events-auto w-11 h-11 rounded-full bg-[#1c1c22] border border-white/[0.12] text-zinc-300 hover:text-white flex items-center justify-center shadow-xl active:scale-95 transition cursor-pointer"
+                  >
+                    <Settings size={20} className="text-zinc-300" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileDrawerOpen(false);
+                      handleNewChat();
+                    }}
+                    title="New Chat"
+                    className="pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-full bg-white hover:bg-zinc-200 text-black font-semibold text-xs shadow-xl active:scale-95 transition cursor-pointer"
+                  >
+                    <SquarePen size={16} className="text-black" />
+                    <span>Chat</span>
+                  </button>
+                </div>
+              </aside>
+            </div>
+          )}
+
+          {/* Mobile & Tablet Workspace Slide-up Sheet */}
+          {mobileWorkspaceOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+              <div
+                className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity cursor-pointer"
+                onClick={() => setMobileWorkspaceOpen(false)}
+                aria-label="Close workspace"
+              />
+              <div className="relative z-10 w-full h-[88vh] bg-[#121216] border-t border-white/[0.1] rounded-t-[28px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+                <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between shrink-0 bg-[#121216]">
+                  <h3 className="text-xs font-semibold text-white">Workspace</h3>
+                  <button
+                    type="button"
+                    onClick={() => setMobileWorkspaceOpen(false)}
+                    aria-label="Close workspace"
+                    className="w-8 h-8 rounded-full bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 flex items-center justify-center text-zinc-300 hover:text-white transition cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <div className="flex-1 min-h-0 overflow-hidden">
+                  <WorkspacePanel
+                    streamState={streamState}
+                    onSimulateUrlChange={(newUrl) =>
+                      setStreamState((prev) => ({ ...prev, url: newUrl }))
+                    }
+                    onManualNavigate={(targetUrl) =>
+                      handleSendMessage(`Navigate to ${targetUrl}`)
+                    }
+                    onSendWsMessage={handleSendWsMessage}
+                    openFiles={openFiles}
+                    activeTabId={activeTabId}
+                    onSelectTab={(tabId) => setActiveTabId(tabId)}
+                    onCloseFileTab={handleCloseFileTab}
+                    onClosePanel={() => setMobileWorkspaceOpen(false)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* BIO Mobile FAB Button & Slide-up Sheet */}
+          {view === 'bio' && (
+            <button
+              type="button"
+              onClick={() => setMobileBioChatOpen(true)}
+              aria-label="Open BIO Assist"
+              title="Open BIO Assist"
+              className="fixed bottom-6 right-5 z-40 lg:hidden w-14 h-14 rounded-full bg-white text-black hover:bg-zinc-200 active:scale-95 shadow-2xl flex items-center justify-center transition-all cursor-pointer group"
+            >
+              <MessageSquare size={24} className="transition-transform group-hover:scale-110" />
+            </button>
+          )}
+
+          {view === 'bio' && mobileBioChatOpen && (
+            <div className="fixed inset-0 z-50 lg:hidden flex flex-col justify-end">
+              <div
+                className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity cursor-pointer"
+                onClick={() => setMobileBioChatOpen(false)}
+                aria-label="Close BIO Assist"
+              />
+              <div className="relative z-10 w-full h-[88vh] bg-[#121216] border-t border-white/[0.1] rounded-t-[28px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom duration-200">
+                <AgentChatCard
+                  messages={messages}
+                  isWorking={isRunning}
+                  isMobileSheet={true}
+                  onClose={() => setMobileBioChatOpen(false)}
+                  composer={
+                    <InputDock
+                      heroMode={false}
+                      maxWidth="100%"
+                      onSendMessage={handleSendMessage}
+                      isWorking={isRunning}
+                      onStopWorking={handleCancel}
+                      selectedModel={selectedModel}
+                      onSelectModel={setSelectedModel}
+                      mode={agentMode}
+                      onChangeMode={setAgentMode}
+                      activeInterrupt={activeInterrupt}
+                      onResolveInterrupt={handleResolveInterrupt}
+                    />
+                  }
+                />
+              </div>
+            </div>
+          )}
+
         </div>
       </AssistantRuntimeProvider>
 
