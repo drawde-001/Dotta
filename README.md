@@ -9,9 +9,9 @@
 🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)  
 📺 **Demo Video:** [https://www.youtube.com/watch?v=Fy-d29LnUJs](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 
-Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box.
+**Dotta is a personal browser agent.**
 
-Dotta is an autonomous web task automation AI agent featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
+Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box, featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
 
 ---
 

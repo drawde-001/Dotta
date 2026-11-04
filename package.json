@@ -1,6 +1,7 @@
 {
   "name": "dotta",
   "version": "1.0.0",
+  "description": "Dotta is a personal browser agent",
   "private": true,
   "homepage": "https://dotta.duckdns.org",
   "type": "module",
