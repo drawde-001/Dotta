@@ -14,6 +14,9 @@ import {
   ScrollText,
   LayoutGrid,
   Puzzle,
+  Key,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 import { AskUserInterruptCard } from './AskUserInterruptCard';
 import { ComposerAttachments } from './assistant-ui/elements/attachment.aui';
@@ -339,6 +342,10 @@ export const InputDock: React.FC<InputDockProps> = ({
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [transcribingStatus, setTranscribingStatus] = useState<string>('Transcribing audio...');
   const [recordingSeconds, setRecordingSeconds] = useState<number>(0);
+  const [transcriptionError, setTranscriptionError] = useState<{
+    code: 'KEY_REQUIRED' | 'RATE_LIMITED' | 'ERROR';
+    message: string;
+  } | null>(null);
   const [contextMenuOpen, setContextMenuOpen] = useState<boolean>(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -920,8 +927,12 @@ export const InputDock: React.FC<InputDockProps> = ({
 
   const startVoiceRecording = async () => {
     try {
+      setTranscriptionError(null);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert('Microphone access is not supported by your browser.');
+        setTranscriptionError({
+          code: 'ERROR',
+          message: 'Microphone access is not supported by your browser.'
+        });
         return;
       }
 
@@ -987,9 +998,15 @@ export const InputDock: React.FC<InputDockProps> = ({
     } catch (err: any) {
       console.error('Microphone access error:', err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        alert('Microphone permission was denied. Please allow microphone access in your browser to record audio.');
+        setTranscriptionError({
+          code: 'ERROR',
+          message: 'Microphone permission was denied. Please allow microphone access in your browser.'
+        });
       } else {
-        alert(`Could not access microphone: ${err.message || 'Unknown error'}`);
+        setTranscriptionError({
+          code: 'ERROR',
+          message: `Could not access microphone: ${err.message || 'Unknown error'}`
+        });
       }
       setIsRecording(false);
     }
@@ -1023,6 +1040,7 @@ export const InputDock: React.FC<InputDockProps> = ({
 
   const handleAudioTranscription = async (blob: Blob, explicitDurationSec?: number) => {
     try {
+      setTranscriptionError(null);
       setIsTranscribing(true);
       setTranscribingStatus('Transcribing');
       const fallbackDuration =
@@ -1050,38 +1068,66 @@ export const InputDock: React.FC<InputDockProps> = ({
           })
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          const serverTranscript = String(data.transcript || '').trim();
-          const isRefusal = [
-            /don'?t (have the ability|have access|have ears|see|find|have|detect) (to |any |an |the )?(listen|transcribe|hear|process|audio)/i,
-            /don'?t have the ability/i,
-            /cannot (hear|transcribe|listen|access|process)/i,
-            /can'?t (hear|transcribe|listen|access|process|generate|provide|create)/i,
-            /not (able|equipped) to (listen|transcribe|process|hear)/i,
-            /unable to (transcribe|listen|process|hear|access)/i,
-            /no audio (file|transcript|input|recording|data|attachment)? (was|is|has been) (included|provided|attached|received|found|present|sent)/i,
-            /no (audio|speech|spoken words) (was|were|has been) (provided|included|found|attached)/i,
-            /there('?s| is| are) no audio/i,
-            /no spoken words to transcribe/i,
-            /there('?s| is| are) (nothing|no spoken words|no audio) (for me )?to transcribe/i,
-            /don'?t have an audio/i,
-            /can'?t process audio/i,
-            /can'?t generate a (verbatim )?transcription/i,
-            /cannot generate a (verbatim )?transcription/i,
-            /if you (can |could )?provide (the |a )?(text|transcript|description)/i,
-            /if you (can )?upload (the |an )?audio/i,
-            /please (provide|upload|attach) (the |an |or attach )?(text|audio|transcript)/i,
-            /happy to assist with formatting, editing, or summarizing/i
-          ].some((pat) => pat.test(serverTranscript));
-          if (
-            data.ok &&
-            serverTranscript &&
-            !serverTranscript.startsWith('[Transcribed audio segment') &&
-            !isRefusal
-          ) {
-            collectedTranscripts.push(serverTranscript);
-          }
+        if (response.status === 403) {
+          const errData = await response.json().catch(() => ({}));
+          setTranscriptionError({
+            code: 'KEY_REQUIRED',
+            message: errData.error || 'A Meta API key is required to transcribe audio. Please configure your key in Settings -> Account.'
+          });
+          setIsTranscribing(false);
+          return;
+        }
+
+        if (response.status === 429) {
+          const errData = await response.json().catch(() => ({}));
+          setTranscriptionError({
+            code: 'RATE_LIMITED',
+            message: errData.error || 'Meta API rate limit reached on muse-voice-transcribe-1.0. Please wait a moment before trying again.'
+          });
+          setIsTranscribing(false);
+          return;
+        }
+
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          setTranscriptionError({
+            code: 'ERROR',
+            message: errData.error || `Audio transcription failed with HTTP ${response.status}. Please check your credentials.`
+          });
+          setIsTranscribing(false);
+          return;
+        }
+
+        const data = await response.json();
+        const serverTranscript = String(data.transcript || '').trim();
+        const isRefusal = [
+          /don'?t (have the ability|have access|have ears|see|find|have|detect) (to |any |an |the )?(listen|transcribe|hear|process|audio)/i,
+          /don'?t have the ability/i,
+          /cannot (hear|transcribe|listen|access|process)/i,
+          /can'?t (hear|transcribe|listen|access|process|generate|provide|create)/i,
+          /not (able|equipped) to (listen|transcribe|process|hear)/i,
+          /unable to (transcribe|listen|process|hear|access)/i,
+          /no audio (file|transcript|input|recording|data|attachment)? (was|is|has been) (included|provided|attached|received|found|present|sent)/i,
+          /no (audio|speech|spoken words) (was|were|has been) (provided|included|found|attached)/i,
+          /there('?s| is| are) no audio/i,
+          /no spoken words to transcribe/i,
+          /there('?s| is| are) (nothing|no spoken words|no audio) (for me )?to transcribe/i,
+          /don'?t have an audio/i,
+          /can'?t process audio/i,
+          /can'?t generate a (verbatim )?transcription/i,
+          /cannot generate a (verbatim )?transcription/i,
+          /if you (can |could )?provide (the |a )?(text|transcript|description)/i,
+          /if you (can )?upload (the |an )?audio/i,
+          /please (provide|upload|attach) (the |an |or attach )?(text|audio|transcript)/i,
+          /happy to assist with formatting, editing, or summarizing/i
+        ].some((pat) => pat.test(serverTranscript));
+        if (
+          data.ok &&
+          serverTranscript &&
+          !serverTranscript.startsWith('[Transcribed audio segment') &&
+          !isRefusal
+        ) {
+          collectedTranscripts.push(serverTranscript);
         }
       }
 
@@ -1095,8 +1141,12 @@ export const InputDock: React.FC<InputDockProps> = ({
           promptInputRef.current?.focus();
         }, 0);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Transcription handler error:', err);
+      setTranscriptionError({
+        code: 'ERROR',
+        message: err.message || 'An unexpected error occurred while transcribing audio.'
+      });
     } finally {
       setIsTranscribing(false);
       setRecordingSeconds(0);
@@ -1790,6 +1840,51 @@ export const InputDock: React.FC<InputDockProps> = ({
                 recordingSeconds={recordingSeconds}
                 recordingTime={formattedRecordingTime}
               />
+            )}
+
+            {/* Inline Error Card for API Key Required / Rate Limits in Voice & Attachments */}
+            {transcriptionError && (
+              <div
+                role="alert"
+                className="mb-2.5 flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-950/40 backdrop-blur-md px-3.5 py-2 text-xs text-red-200 select-none shadow-sm animate-in fade-in"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  {transcriptionError.code === 'KEY_REQUIRED' ? (
+                    <Key className="size-4 shrink-0 text-red-400" />
+                  ) : transcriptionError.code === 'RATE_LIMITED' ? (
+                    <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+                  ) : (
+                    <ShieldAlert className="size-4 shrink-0 text-red-400" />
+                  )}
+                  <span className="font-medium text-zinc-100 truncate">
+                    {transcriptionError.message}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {transcriptionError.code === 'KEY_REQUIRED' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(
+                          new CustomEvent('dotta:open-settings', { detail: { tab: 'account' } })
+                        );
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 px-2.5 py-1 text-xs font-semibold text-white transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <Key className="size-3 text-zinc-300" />
+                      Configure in Settings
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setTranscriptionError(null)}
+                    aria-label="Dismiss error"
+                    className="p-1 rounded-md text-zinc-400 hover:text-zinc-100 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* @ Context Mention Popover */}

@@ -163,17 +163,15 @@ async function callMetaMuseVoiceTranscribe({
   isFinalFallback = false
 }) {
   const modalToken =
-    process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
-      ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
-      : process.env.MODAL_API_KEY;
+    options.modal?.tokenId && options.modal?.apiKey
+      ? `${options.modal.tokenId}.${options.modal.apiKey}`
+      : null;
 
+  // Strictly enforce user-supplied decrypted credentials. Zero server environment key fallback.
   const metaKey =
     options.apiKey ||
-    modalToken ||
-    getApiKey('MUSE_API_KEY') ||
-    getApiKey('META_MUSE_API_KEY') ||
-    getApiKey('MODEL_API_KEY') ||
-    getApiKey('LLAMA_API_KEY');
+    options.userCredentials?.metaKey ||
+    modalToken;
 
   if (!metaKey) {
     return null;
@@ -189,7 +187,7 @@ async function callMetaMuseVoiceTranscribe({
     process.env.META_MUSE_BASE_URL ||
     process.env.MUSE_BASE_URL ||
     process.env.META_BASE_URL ||
-    ''
+    'https://api.meta.ai/v1'
   ).replace(/\/$/, '');
 
   const baseUrls = Array.from(
@@ -199,36 +197,58 @@ async function callMetaMuseVoiceTranscribe({
         process.env.MUSE_VOICE_URL,
         process.env.META_VOICE_URL,
         process.env.MUSE_ASR_URL,
-        process.env.FIREWORKS_API_URL,
-        process.env.TOGETHER_API_URL,
         process.env.MODEL_API_BASE_URL,
         process.env.META_MUSE_BASE_URL,
-        process.env.MUSE_BASE_URL,
-        process.env.META_BASE_URL,
-        process.env.FIREWORKS_API_KEY ? 'https://api.fireworks.ai/inference/v1' : null,
-        process.env.TOGETHER_API_KEY ? 'https://api.together.xyz/v1' : null
+        'https://api.meta.ai/v1'
       ].filter(Boolean)
     )
   );
 
   for (const metaBaseUrl of baseUrls) {
     const multipartEndpoints = [
-      { url: `${metaBaseUrl}/asr/transcribe`, model: 'muse-voice-transcribe-1.0' },
-      { url: `${metaBaseUrl}/audio/transcriptions`, model: 'muse-voice-transcribe-1.0' }
+      { url: `${metaBaseUrl}/asr/transcribe`, model: 'muse-voice-transcribe-1.0', format: 'meta_official' },
+      { url: `${metaBaseUrl}/asr/transcribe`, model: 'muse-voice-transcribe-1.0', format: 'standard' },
+      { url: `${metaBaseUrl}/audio/transcriptions`, model: 'muse-voice-transcribe-1.0', format: 'standard' }
     ];
 
     for (const ep of multipartEndpoints) {
       try {
         const formData = new FormData();
-        formData.append('file', blob, filename);
-        formData.append('model', ep.model);
+        if (ep.format === 'meta_official') {
+          // Official Meta ASR documentation schema: request JSON + audio binary
+          formData.append(
+            'request',
+            JSON.stringify({
+              model: 'muse-voice-transcribe-1.0',
+              audioEncoding: defaultExt.toUpperCase() === 'WAV' ? 'WAV' : 'MP3',
+              mode: 'PUSH_TO_TALK'
+            })
+          );
+          formData.append('audio', blob, filename);
+        } else {
+          // Standard OpenAI-compatible multipart schema
+          formData.append('file', blob, filename);
+          formData.append('model', ep.model);
+        }
 
         const res = await fetch(ep.url, {
           method: 'POST',
-          headers: { Authorization: `Bearer ${metaKey}` },
+          headers: {
+            Authorization: `Bearer ${metaKey}`,
+            Accept: 'application/json'
+          },
           body: formData,
           signal: AbortSignal.timeout(timeoutMs)
         });
+
+        if (res.status === 429) {
+          return {
+            ok: false,
+            rateLimited: true,
+            status: 429,
+            error: 'Meta API rate limit reached on muse-voice-transcribe-1.0.'
+          };
+        }
 
         if (res.ok) {
           const contentType = res.headers.get('content-type') || '';
@@ -259,10 +279,14 @@ async function callMetaMuseVoiceTranscribe({
           }
         }
       } catch (err) {
-        console.warn(
-          `[MediaProcessor] muse-voice-transcribe-1.0 multipart error (${ep.url}):`,
-          err.message
-        );
+        if (err.name === 'TimeoutError' || err.message?.includes('timeout')) {
+          console.warn(`[MediaProcessor] muse-voice-transcribe-1.0 timeout on ${ep.url}`);
+        } else {
+          console.warn(
+            `[MediaProcessor] muse-voice-transcribe-1.0 multipart error (${ep.url}):`,
+            err.message
+          );
+        }
       }
     }
 
@@ -368,14 +392,15 @@ async function callMetaMuseVoiceTranscribe({
 export async function callModalMuseSparkAudio({
   base64,
   rawMime = 'audio/wav',
-  timeoutMs = 25000
+  timeoutMs = 25000,
+  options = {}
 } = {}) {
   const modalToken =
-    process.env.MODAL_PROXY_TOKEN_ID && process.env.MODAL_PROXY_TOKEN_SECRET
-      ? `${process.env.MODAL_PROXY_TOKEN_ID}.${process.env.MODAL_PROXY_TOKEN_SECRET}`
-      : process.env.MODAL_API_KEY;
+    options.modal?.tokenId && options.modal?.apiKey
+      ? `${options.modal.tokenId}.${options.modal.apiKey}`
+      : null;
 
-  const key = modalToken || getApiKey('MODEL_API_KEY') || getApiKey('META_MUSE_API_KEY');
+  const key = options.apiKey || options.userCredentials?.metaKey || modalToken;
   if (!key || !base64) return null;
 
   const modalUrl = (process.env.MODAL_MUSE_SPARK_URL || '').replace(/\/+$/, '');
@@ -444,6 +469,23 @@ export async function callModalMuseSparkAudio({
  * If all Meta models are unreachable or fail, returns an honest error.
  */
 export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
+  // Hard gate: user-supplied credentials are required
+  const hasKey = Boolean(
+    options.apiKey ||
+    options.userCredentials?.metaKey ||
+    (options.modal?.tokenId && options.modal?.apiKey)
+  );
+
+  if (!hasKey && !options.mockText) {
+    return {
+      ok: false,
+      code: 'KEY_REQUIRED',
+      error: 'A Meta API key is required to transcribe audio. Please configure your key in Settings -> Account.',
+      source: 'meta:key_required',
+      modelFamily: 'meta'
+    };
+  }
+
   const rawMime = (audioPayload.mimeType || 'audio/wav').split(';')[0].trim();
   const defaultExt = rawMime.includes('wav') ? 'wav' : rawMime.includes('mp3') ? 'mp3' : 'webm';
   const filename = audioPayload.filename || `audio.${defaultExt}`;
@@ -481,13 +523,23 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   if (museVoiceRes && museVoiceRes.ok && museVoiceRes.text && !isAudioTranscriptionRefusal(museVoiceRes.text)) {
     return museVoiceRes;
   }
+  if (museVoiceRes?.rateLimited) {
+    return {
+      ok: false,
+      code: 'RATE_LIMITED',
+      error: 'Meta API rate limit reached on muse-voice-transcribe-1.0. Please wait a moment before trying again.',
+      source: 'meta:rate_limited',
+      modelFamily: 'meta'
+    };
+  }
 
   // Primary 2: Sister Meta model (Muse Spark Open via Modal vLLM)
   if (base64) {
     const modalRes = await callModalMuseSparkAudio({
       base64,
       rawMime,
-      timeoutMs: 10000
+      timeoutMs: 10000,
+      options
     });
     if (modalRes && modalRes.ok && modalRes.text && !isAudioTranscriptionRefusal(modalRes.text)) {
       return modalRes;
@@ -507,6 +559,15 @@ export async function transcribeSingleAudioChunk(audioPayload, options = {}) {
   });
   if (finalMetaRes && finalMetaRes.ok && finalMetaRes.text && !isAudioTranscriptionRefusal(finalMetaRes.text)) {
     return finalMetaRes;
+  }
+  if (finalMetaRes?.rateLimited) {
+    return {
+      ok: false,
+      code: 'RATE_LIMITED',
+      error: 'Meta API rate limit reached on muse-voice-transcribe-1.0. Please wait a moment before trying again.',
+      source: 'meta:rate_limited',
+      modelFamily: 'meta'
+    };
   }
 
   if (options.mockText) {

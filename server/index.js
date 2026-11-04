@@ -1447,9 +1447,45 @@ app.delete('/api/threads/:threadId', async (req, res) => {
 app.post('/api/transcribe', async (req, res) => {
   try {
     const { audio, durationSec, mimeType, filename, mockText, model } = req.body || {};
-    const totalDuration = Number(durationSec) || 0;
+    const sessionUserId =
+      sanitizeUserId(req.userId) ||
+      sanitizeUserId(req.get('x-user-id') || req.body?.userId);
+
+    if (!sessionUserId) {
+      return res.status(401).json({ ok: false, error: 'Authentication required' });
+    }
+
+    // User-Funded Hard Gate: Load and decrypt credentials strictly per-user
+    const metaSecret = await getUserCredentialsSecret(sessionUserId, 'meta');
+    const modalSecret = await getUserCredentialsSecret(sessionUserId, 'modal');
+
+    let userMetaKey = null;
+    if (metaSecret) {
+      try {
+        userMetaKey = decryptCredentialsPayload(metaSecret.encryptedPayload)?.apiKey;
+      } catch (err) {
+        console.warn(`[API /api/transcribe] Failed to decrypt user Meta credentials for ${sessionUserId}:`, err.message);
+      }
+    }
+
+    let userModalKey = null;
+    if (modalSecret) {
+      try {
+        userModalKey = decryptCredentialsPayload(modalSecret.encryptedPayload);
+      } catch {}
+    }
+
+    // Strict Hard Gate: zero server environment subsidies allowed
+    if (!userMetaKey && !userModalKey?.tokenId && !userModalKey?.apiKey) {
+      return res.status(403).json({
+        ok: false,
+        code: 'KEY_REQUIRED',
+        error: 'A Meta API key is required to transcribe audio. Please configure your key in Settings -> Account.'
+      });
+    }
 
     // Segment based on 10-minute (600s) threshold
+    const totalDuration = Number(durationSec) || 0;
     const segments = calculateMediaSegments(totalDuration, 600);
 
     let buffer = null;
@@ -1465,7 +1501,16 @@ app.post('/api/transcribe', async (req, res) => {
     const transcriptionResult = await transcribeAudioSequentially(
       segments,
       { buffer, mimeType: mimeType || 'audio/wav', filename },
-      { mockText, preferredModel: model }
+      {
+        apiKey: userMetaKey,
+        modal: userModalKey,
+        userCredentials: {
+          metaKey: userMetaKey,
+          modal: userModalKey
+        },
+        mockText: process.env.NODE_ENV === 'test' ? mockText : undefined,
+        preferredModel: model || 'muse-voice-transcribe-1.0'
+      }
     );
 
     res.json({
@@ -1476,7 +1521,14 @@ app.post('/api/transcribe', async (req, res) => {
     });
   } catch (err) {
     console.error('[API /api/transcribe error]', err);
-    res.status(500).json({ ok: false, error: err.message });
+    const isRateLimit =
+      err.message?.includes('429') ||
+      err.message?.toLowerCase().includes('rate limit');
+    res.status(isRateLimit ? 429 : 500).json({
+      ok: false,
+      code: isRateLimit ? 'RATE_LIMITED' : 'TRANSCRIPTION_FAILED',
+      error: err.message
+    });
   }
 });
 
@@ -1555,21 +1607,58 @@ app.post('/api/attachments/process', async (req, res) => {
       } else if (att.type?.startsWith('audio/') || att.name?.match(/\.(wav|mp3|m4a|ogg|webm|flac)$/i)) {
         if (att.dataUrl?.startsWith('data:')) {
           try {
+            // Strict Hard Gate for Audio Attachments: zero server environment subsidies
+            const metaSecret = sessionUserId ? await getUserCredentialsSecret(sessionUserId, 'meta') : null;
+            const modalSecret = sessionUserId ? await getUserCredentialsSecret(sessionUserId, 'modal') : null;
+
+            let userMetaKey = null;
+            if (metaSecret) {
+              try {
+                userMetaKey = decryptCredentialsPayload(metaSecret.encryptedPayload)?.apiKey;
+              } catch {}
+            }
+            let userModalKey = null;
+            if (modalSecret) {
+              try {
+                userModalKey = decryptCredentialsPayload(modalSecret.encryptedPayload);
+              } catch {}
+            }
+
+            if (!userMetaKey && !userModalKey?.tokenId && !userModalKey?.apiKey) {
+              return res.status(403).json({
+                ok: false,
+                code: 'KEY_REQUIRED',
+                error: 'A Meta API key is required to process audio attachments. Please configure your key in Settings -> Account.'
+              });
+            }
+
             const comma = att.dataUrl.indexOf(',');
             const base64 = att.dataUrl.slice(comma + 1);
             const buffer = Buffer.from(base64, 'base64');
             const transcriptionResult = await transcribeAudioSequentially(
               calculateMediaSegments(300, 600),
               { buffer, mimeType: att.type || 'audio/wav', filename: att.name },
-              { preferredModel: req.body?.model || process.env.DEFAULT_MODEL || 'muse-spark-open' }
+              {
+                apiKey: userMetaKey,
+                modal: userModalKey,
+                userCredentials: {
+                  metaKey: userMetaKey,
+                  modal: userModalKey
+                },
+                preferredModel: req.body?.model || 'muse-voice-transcribe-1.0'
+              }
             );
             if (transcriptionResult?.transcript) {
               textSummary = `[Audio Transcript of "${att.name}"]:\n${transcriptionResult.transcript}`;
             }
           } catch (err) {
             console.error('[Dotta Attachments] Meta audio transcription failed:', err.message);
-            return res.status(503).json({
+            const isRateLimit =
+              err.message?.includes('429') ||
+              err.message?.toLowerCase().includes('rate limit');
+            return res.status(isRateLimit ? 429 : 503).json({
               ok: false,
+              code: isRateLimit ? 'RATE_LIMITED' : 'TRANSCRIPTION_FAILED',
               error: `Audio transcription failed for "${att.name}": ${err.message || 'All Meta voice model endpoints are unreachable.'}`
             });
           }

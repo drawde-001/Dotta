@@ -843,6 +843,44 @@ export default function App() {
             userId: getUserId()
           })
         });
+        if (attRes.status === 403) {
+          const errData = await attRes.json().catch(() => ({}));
+          if (errData.code === 'KEY_REQUIRED') {
+            const activeTId = currentThreadIdRef.current;
+            const assistantErrMessage = {
+              id: `err-${Date.now()}`,
+              role: 'assistant',
+              content: '',
+              status: 'error',
+              error: 'KEY_REQUIRED: A Meta API key is required to process audio attachments. Please configure your key in Settings -> Account.',
+              timestamp: Date.now()
+            };
+            setThreadMessagesMap((prev) => ({
+              ...prev,
+              [activeTId]: [...(prev[activeTId] || []), assistantErrMessage]
+            }));
+            setIsWorking(false);
+            return;
+          }
+        }
+        if (attRes.status === 429) {
+          const errData = await attRes.json().catch(() => ({}));
+          const activeTId = currentThreadIdRef.current;
+          const assistantErrMessage = {
+            id: `err-${Date.now()}`,
+            role: 'assistant',
+            content: '',
+            status: 'error',
+            error: errData.error || 'RATE_LIMITED: Meta API rate limit reached on audio processing. Please wait a moment.',
+            timestamp: Date.now()
+          };
+          setThreadMessagesMap((prev) => ({
+            ...prev,
+            [activeTId]: [...(prev[activeTId] || []), assistantErrMessage]
+          }));
+          setIsWorking(false);
+          return;
+        }
         if (attRes.ok) {
           const attData = await attRes.json();
           attachmentSystemContext = attData.contextPrompt || '';

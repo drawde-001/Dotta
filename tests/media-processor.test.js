@@ -13,6 +13,7 @@ import {
   validateImageMetadata,
   calculateMediaSegments,
   transcribeAudioSequentially,
+  transcribeSingleAudioChunk,
   getSameFamilyModelCandidates,
   isMetaFamilyModel,
   isAudioTranscriptionRefusal,
@@ -144,6 +145,17 @@ assert.strictEqual(isAudioTranscriptionRefusal(refusal5), true);
 assert.strictEqual(isAudioTranscriptionRefusal(validTranscript1), false);
 assert.strictEqual(isAudioTranscriptionRefusal(validTranscript2), false);
 console.log('✓ Audio transcription refusal detection correctly discriminates refusals from transcripts.');
+
+// [Test 7] Verifying Hard Gate: KEY_REQUIRED when no user key is provided
+console.log('\n[Test 7] Verifying Hard Gate: KEY_REQUIRED when no user credentials...');
+const noKeyResult = await transcribeSingleAudioChunk({
+  buffer: Buffer.from('RIFF_WAV_SIMULATED_DATA'),
+  mimeType: 'audio/wav'
+});
+assert.strictEqual(noKeyResult.ok, false);
+assert.strictEqual(noKeyResult.code, 'KEY_REQUIRED');
+assert.ok(noKeyResult.error.includes('Meta API key is required'));
+console.log('✓ Hard gate verified: Audio chunk transcription returns KEY_REQUIRED with zero credentials.');
 
 console.log('\n======================================================');
 console.log('ALL MEDIA PROCESSOR & AUDIO TESTS PASSED SUCCESSFULLY!');
