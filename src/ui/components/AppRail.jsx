@@ -6,8 +6,7 @@ import {
   Library,
   AtSign,
   MoreHorizontal,
-  Settings,
-  LogOut
+  Settings
 } from 'lucide-react';
 
 function LeafMark() {
@@ -94,17 +93,6 @@ export function AppRail({ view, onSelectView, currentUser, onLogout, onOpenSetti
       >
         <Settings size={18} />
       </button>
-      {onLogout && (
-        <button
-          type="button"
-          onClick={onLogout}
-          title={`Log out (${currentUser?.name || currentUser?.email || 'User'})`}
-          aria-label="Log out"
-          className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl text-zinc-500 hover:text-red-400 hover:bg-white/[0.06] transition-colors cursor-pointer"
-        >
-          <LogOut size={17} />
-        </button>
-      )}
     </div>
   );
 }

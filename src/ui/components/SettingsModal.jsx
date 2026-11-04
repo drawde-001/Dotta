@@ -247,7 +247,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
             }`}
           >
             <User size={14} />
-            Account Details
+            Account
           </button>
         </div>
 
@@ -527,7 +527,7 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
             </div>
           )}
 
-          {/* TAB 2: ACCOUNT DETAILS */}
+          {/* TAB 2: ACCOUNT */}
           {activeTab === 'account' && (
             <div className="space-y-4">
               <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">

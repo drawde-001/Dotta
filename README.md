@@ -10,7 +10,7 @@
 🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)  
 📺 **Demo Video:** [https://www.youtube.com/watch?v=Fy-d29LnUJs](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 
-**Dotta is a personal browser agent powered by Meta Muse, featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.**
+**Dotta is a personal browser agent powered by Meta Muse (`muse-spark-open` by default), featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.**
 
 ---
 
