@@ -84,6 +84,21 @@
   animation: thread-dot-bounce 1s infinite ease-in-out both;
 }
 
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+@supports (height: 100dvh) {
+  html, body, #root {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
 :root, .dark {
   color-scheme: dark;
   --aui-accent: #0ea5e9;

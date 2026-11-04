@@ -1881,7 +1881,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen h-[100dvh] w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
+    <div className="fixed inset-0 flex flex-col lg:flex-row w-full h-full bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Left icon rail (Desktop only): Home / BIO are the only clickable tabs */}
       <div className="hidden lg:flex shrink-0">
         <AppRail
@@ -1996,9 +1996,9 @@ export default function App() {
                     <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden relative w-full">
                       {messages.length === 0 ? (
                         /* Centered Hero View (Matching Prototype Image 4 on mobile, untouched on desktop) */
-                        <div className="flex-1 flex flex-col justify-between lg:justify-center items-center px-4 pt-2 sm:pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full min-h-full">
+                        <div className="flex-1 min-h-0 flex flex-col justify-between lg:justify-center items-center px-3 sm:px-4 pt-1 sm:pt-4 pb-0 lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full h-full overflow-y-auto lg:overflow-visible">
                           {/* Center Content */}
-                          <div className="flex-1 lg:flex-initial flex flex-col items-center justify-center text-center my-auto px-2 w-full">
+                          <div className="flex-1 lg:flex-initial flex flex-col items-center justify-center text-center my-0 lg:my-auto px-2 w-full">
                             {/* Authentic Dotta Orb Logo (Ref prompt 8 & Image 4) */}
                             <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-full flex items-center justify-center mb-2.5 sm:mb-4 shadow-xl shrink-0">
                               <svg viewBox="0 0 128 128" className="w-full h-full">
@@ -2067,8 +2067,8 @@ export default function App() {
                             </div>
                           </div>
 
-                          {/* Mobile only: Composer anchored at bottom of screen with safe area (Matching Image 4) */}
-                          <div className="lg:hidden w-full shrink-0 pt-2 pb-1">
+                          {/* Mobile only: Composer anchored floating above bottom bezel and soft navigation keys */}
+                          <div className="lg:hidden w-full shrink-0 px-2 pt-2 pb-[max(3rem,calc(env(safe-area-inset-bottom)+1.75rem))]">
                             <InputDock
                               heroMode={true}
                               maxWidth="100%"
@@ -2099,12 +2099,12 @@ export default function App() {
 
                           {/* Mobile/Tablet Soft Dark Gradient Fade (Layer 2) */}
                           <div
-                            className="pointer-events-none absolute bottom-0 left-0 right-0 h-44 sm:h-48 z-10 lg:hidden bg-gradient-to-t from-[#101013] via-[#101013]/85 to-transparent"
+                            className="pointer-events-none absolute bottom-0 left-0 right-0 h-52 sm:h-56 z-10 lg:hidden bg-gradient-to-t from-[#101013] via-[#101013]/85 to-transparent"
                             aria-hidden="true"
                           />
 
                           {/* Composer Container: Floating on Mobile/Tablet (Layer 3), Docked on Desktop */}
-                          <div className="absolute lg:static bottom-0 left-0 right-0 z-20 pointer-events-none lg:pointer-events-auto px-3 sm:px-4 pb-[max(0.85rem,calc(env(safe-area-inset-bottom)+0.35rem))] lg:p-3 lg:pb-6 lg:bg-[#101013] lg:border-t lg:border-white/[0.06] border-t-0">
+                          <div className="absolute lg:static bottom-0 left-0 right-0 z-20 pointer-events-none lg:pointer-events-auto px-3 sm:px-4 pb-[max(3rem,calc(env(safe-area-inset-bottom)+1.75rem))] lg:p-3 lg:pb-6 lg:bg-[#101013] lg:border-t lg:border-white/[0.06] border-t-0">
                             <div className="max-w-3xl w-full mx-auto pointer-events-auto">
                               <InputDock
                                 heroMode={false}
