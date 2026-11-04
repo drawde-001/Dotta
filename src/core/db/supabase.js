@@ -5,8 +5,15 @@
  * Synchronizes users, profiles, active sessions, conversations/threads, runs, and audit logs.
  */
 
+import fs from 'fs';
+import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const LOCAL_CREDENTIALS_FILE = path.resolve(__dirname, '../../data/credentials.json');
+const LOCAL_INTEGRATIONS_FILE = path.resolve(__dirname, '../../data/integrations.json');
 
 const SUPABASE_URL = process.env.SUPABASE_URL || '';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
@@ -498,3 +505,334 @@ export async function logDbAudit({ userId, action, details = {}, ipAddress = '' 
     });
   } catch {}
 }
+
+// -----------------------------------------------------------------------------
+// User-Funded Billing Credentials & Integrations Storage
+// -----------------------------------------------------------------------------
+
+function readLocalJson(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch {}
+  return [];
+}
+
+function writeLocalJson(filePath, data) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error(`[Db] Failed to write ${path.basename(filePath)}:`, err.message);
+  }
+}
+
+/**
+ * Save an encrypted credential secret to public.user_credentials_secret.
+ * Accessible only by service_role (zero policies for client roles).
+ */
+export async function saveUserCredentialsSecret({
+  userId,
+  provider,
+  encryptedPayload,
+  keyVersion = 1
+}) {
+  if (!userId || !provider || !encryptedPayload) {
+    throw new Error('[Db] Missing required fields for saveUserCredentialsSecret');
+  }
+
+  const normUserId = String(userId);
+  const normProvider = String(provider).toLowerCase().trim();
+  const now = new Date().toISOString();
+
+  // Local fallback persistence (storing ONLY encrypted ciphertext)
+  const localList = readLocalJson(LOCAL_CREDENTIALS_FILE);
+  const existingIdx = localList.findIndex(
+    (item) => item.user_id === normUserId && item.provider === normProvider
+  );
+  const record = {
+    user_id: normUserId,
+    provider: normProvider,
+    encrypted_payload: encryptedPayload,
+    key_version: keyVersion,
+    updated_at: now
+  };
+  if (existingIdx >= 0) {
+    localList[existingIdx] = { ...localList[existingIdx], ...record };
+  } else {
+    localList.push({ ...record, created_at: now });
+  }
+  writeLocalJson(LOCAL_CREDENTIALS_FILE, localList);
+
+  const sb = getSupabaseClient();
+  if (sb) {
+    try {
+      const { error } = await sb.from('user_credentials_secret').upsert(
+        {
+          user_id: normUserId,
+          provider: normProvider,
+          encrypted_payload: encryptedPayload,
+          key_version: keyVersion,
+          updated_at: now
+        },
+        { onConflict: 'user_id,provider' }
+      );
+      if (error) {
+        console.warn('[Supabase] user_credentials_secret upsert warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] user_credentials_secret unexpected error:', err.message);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Fetch an encrypted credential secret by userId and provider.
+ * Returns { encrypted_payload, key_version } or null.
+ */
+export async function getUserCredentialsSecret(userId, provider) {
+  if (!userId || !provider) return null;
+
+  const normUserId = String(userId);
+  const normProvider = String(provider).toLowerCase().trim();
+
+  const sb = getSupabaseClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('user_credentials_secret')
+        .select('encrypted_payload, key_version, updated_at')
+        .eq('user_id', normUserId)
+        .eq('provider', normProvider)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          encryptedPayload: data.encrypted_payload,
+          keyVersion: data.key_version,
+          updatedAt: data.updated_at
+        };
+      }
+    } catch {}
+  }
+
+  // Fallback to local store
+  const localList = readLocalJson(LOCAL_CREDENTIALS_FILE);
+  const found = localList.find(
+    (item) => item.user_id === normUserId && item.provider === normProvider
+  );
+  if (found) {
+    return {
+      encryptedPayload: found.encrypted_payload,
+      keyVersion: found.key_version,
+      updatedAt: found.updated_at
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Save user integration status and masked hint to public.user_integrations.
+ */
+export async function saveUserIntegration({
+  userId,
+  provider,
+  status = 'not_configured',
+  maskedHint = null,
+  verifiedAt = null,
+  lastErrorCode = null
+}) {
+  if (!userId || !provider) {
+    throw new Error('[Db] Missing required fields for saveUserIntegration');
+  }
+
+  const normUserId = String(userId);
+  const normProvider = String(provider).toLowerCase().trim();
+  const now = new Date().toISOString();
+
+  // Local fallback
+  const localList = readLocalJson(LOCAL_INTEGRATIONS_FILE);
+  const existingIdx = localList.findIndex(
+    (item) => item.user_id === normUserId && item.provider === normProvider
+  );
+  const record = {
+    user_id: normUserId,
+    provider: normProvider,
+    status,
+    masked_hint: maskedHint,
+    verified_at: verifiedAt || (status === 'connected' ? now : null),
+    last_error_code: lastErrorCode,
+    updated_at: now
+  };
+  if (existingIdx >= 0) {
+    localList[existingIdx] = { ...localList[existingIdx], ...record };
+  } else {
+    localList.push(record);
+  }
+  writeLocalJson(LOCAL_INTEGRATIONS_FILE, localList);
+
+  const sb = getSupabaseClient();
+  if (sb) {
+    try {
+      const { error } = await sb.from('user_integrations').upsert(
+        {
+          user_id: normUserId,
+          provider: normProvider,
+          status,
+          masked_hint: maskedHint,
+          verified_at: verifiedAt || (status === 'connected' ? now : null),
+          last_error_code: lastErrorCode,
+          updated_at: now
+        },
+        { onConflict: 'user_id,provider' }
+      );
+      if (error) {
+        console.warn('[Supabase] user_integrations upsert warning:', error.message);
+      }
+    } catch (err) {
+      console.warn('[Supabase] user_integrations error:', err.message);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Retrieve user integration status and masked hint.
+ */
+export async function getUserIntegration(userId, provider) {
+  if (!userId || !provider) return null;
+
+  const normUserId = String(userId);
+  const normProvider = String(provider).toLowerCase().trim();
+
+  const sb = getSupabaseClient();
+  if (sb) {
+    try {
+      const { data, error } = await sb
+        .from('user_integrations')
+        .select('*')
+        .eq('user_id', normUserId)
+        .eq('provider', normProvider)
+        .maybeSingle();
+
+      if (!error && data) {
+        return {
+          userId: data.user_id,
+          provider: data.provider,
+          status: data.status,
+          maskedHint: data.masked_hint,
+          verifiedAt: data.verified_at,
+          lastErrorCode: data.last_error_code
+        };
+      }
+    } catch {}
+  }
+
+  // Fallback to local store
+  const localList = readLocalJson(LOCAL_INTEGRATIONS_FILE);
+  const found = localList.find(
+    (item) => item.user_id === normUserId && item.provider === normProvider
+  );
+  if (found) {
+    return {
+      userId: found.user_id,
+      provider: found.provider,
+      status: found.status,
+      maskedHint: found.masked_hint,
+      verifiedAt: found.verified_at,
+      lastErrorCode: found.last_error_code
+    };
+  }
+
+  return {
+    userId: normUserId,
+    provider: normProvider,
+    status: 'not_configured',
+    maskedHint: null,
+    verifiedAt: null,
+    lastErrorCode: null
+  };
+}
+
+/**
+ * List all integrations for a given user.
+ * Returns an array containing the integration statuses for 'meta' and 'modal'.
+ */
+export async function listUserIntegrations(userId) {
+  if (!userId) return [];
+  const normUserId = String(userId);
+
+  const metaIntegration = await getUserIntegration(normUserId, 'meta');
+  const modalIntegration = await getUserIntegration(normUserId, 'modal');
+
+  return [metaIntegration, modalIntegration];
+}
+
+/**
+ * Disconnect an integration:
+ * Deletes the secret record and resets integration status to 'not_configured'.
+ */
+export async function deleteUserCredentials(userId, provider) {
+  if (!userId || !provider) return false;
+
+  const normUserId = String(userId);
+  const normProvider = String(provider).toLowerCase().trim();
+
+  // 1. Delete from local credentials
+  const localCreds = readLocalJson(LOCAL_CREDENTIALS_FILE).filter(
+    (item) => !(item.user_id === normUserId && item.provider === normProvider)
+  );
+  writeLocalJson(LOCAL_CREDENTIALS_FILE, localCreds);
+
+  // 2. Reset local integration status
+  const localIntegrations = readLocalJson(LOCAL_INTEGRATIONS_FILE);
+  const intIdx = localIntegrations.findIndex(
+    (item) => item.user_id === normUserId && item.provider === normProvider
+  );
+  if (intIdx >= 0) {
+    localIntegrations[intIdx] = {
+      ...localIntegrations[intIdx],
+      status: 'not_configured',
+      masked_hint: null,
+      verified_at: null,
+      last_error_code: null,
+      updated_at: new Date().toISOString()
+    };
+    writeLocalJson(LOCAL_INTEGRATIONS_FILE, localIntegrations);
+  }
+
+  // 3. Supabase deletion & update
+  const sb = getSupabaseClient();
+  if (sb) {
+    try {
+      await sb
+        .from('user_credentials_secret')
+        .delete()
+        .eq('user_id', normUserId)
+        .eq('provider', normProvider);
+
+      await sb.from('user_integrations').upsert(
+        {
+          user_id: normUserId,
+          provider: normProvider,
+          status: 'not_configured',
+          masked_hint: null,
+          verified_at: null,
+          last_error_code: null,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id,provider' }
+      );
+    } catch (err) {
+      console.warn('[Supabase] deleteUserCredentials error:', err.message);
+    }
+  }
+
+  return true;
+}
+

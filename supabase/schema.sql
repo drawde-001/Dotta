@@ -74,6 +74,29 @@ CREATE TABLE IF NOT EXISTS public.user_uploads (
   created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- 8. User Credentials Secret Table (Encrypted API keys, service_role access ONLY)
+CREATE TABLE IF NOT EXISTS public.user_credentials_secret (
+  user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('meta', 'modal')),
+  encrypted_payload TEXT NOT NULL,
+  key_version INTEGER NOT NULL DEFAULT 1,
+  created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+  PRIMARY KEY (user_id, provider)
+);
+
+-- 9. User Integrations Status Table (Integration status & masked hints, SELECT for authenticated users)
+CREATE TABLE IF NOT EXISTS public.user_integrations (
+  user_id TEXT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL CHECK (provider IN ('meta', 'modal')),
+  status TEXT NOT NULL DEFAULT 'not_configured' CHECK (status IN ('not_configured', 'connected', 'error')),
+  masked_hint TEXT,
+  verified_at TIMESTAMPTZ,
+  last_error_code TEXT,
+  updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+  PRIMARY KEY (user_id, provider)
+);
+
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
@@ -82,6 +105,8 @@ ALTER TABLE public.user_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_uploads ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_credentials_secret ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_integrations ENABLE ROW LEVEL SECURITY;
 
 -- Service Role Full Access Policies (only backend service role can bypass)
 CREATE POLICY "Service role full access on users" ON public.users FOR ALL TO service_role USING (true) WITH CHECK (true);
@@ -91,6 +116,8 @@ CREATE POLICY "Service role full access on user_sessions" ON public.user_session
 CREATE POLICY "Service role full access on conversations" ON public.conversations FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access on user_audit_logs" ON public.user_audit_logs FOR ALL TO service_role USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access on user_uploads" ON public.user_uploads FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_credentials_secret" ON public.user_credentials_secret FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access on user_integrations" ON public.user_integrations FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Authenticated User Scoped Access Policies (Strict user_id = auth.uid()::text)
 CREATE POLICY "Users access own record" ON public.users FOR ALL TO authenticated USING (auth.uid()::text = id) WITH CHECK (auth.uid()::text = id);
@@ -98,4 +125,6 @@ CREATE POLICY "Users access own profile" ON public.user_profiles FOR ALL TO auth
 CREATE POLICY "Users access own settings" ON public.user_settings FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 CREATE POLICY "Users access own conversations" ON public.conversations FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
 CREATE POLICY "Users access own uploads" ON public.user_uploads FOR ALL TO authenticated USING (auth.uid()::text = user_id) WITH CHECK (auth.uid()::text = user_id);
+CREATE POLICY "Users read own integrations" ON public.user_integrations FOR SELECT TO authenticated USING (auth.uid()::text = user_id);
+
 
