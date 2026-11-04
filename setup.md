@@ -265,65 +265,108 @@ sudo ufw status
 
 ---
 
-## 7. Start the Dotta Service with PM2
+---
 
-Start the application with PM2 to keep it running 24/7 with automatic restart on crashes:
+## 7. Launch Dotta
+
+You can launch Dotta using either **Option A: Docker Compose (Recommended)** or **Option B: PM2 on Host**.
+
+### Option A: 1-Command Docker Compose (Production Standard)
+This is the recommended deployment method used in production. It launches both the Dotta Node container (`dotta_app`) and Caddy (`dotta_caddy`) with automated SSL, health checks, and persistent volumes:
+
 ```bash
 cd /var/www/dotta
-pm2 start server/index.js --name "dotta" --time
+
+# Build the container and start the services in background
+docker compose up -d --build
+
+# Verify running services
+docker compose ps
 ```
 
-Save the process list and configure PM2 to restart on system boot:
-```bash
-pm2 save
-pm2 startup
-# Copy and run the command printed by pm2 startup
-```
+Persistent volumes automatically preserve your data across redeploys:
+- `bio_data`: User BIO profiles, sessions, and database backups (`/app/src/data`)
+- `workspaces_data`: User sandboxes, file uploads, and seeded assets (`/app/src/workspaces`)
+- `caddy_data`: Automated Let's Encrypt certificates (`/data`)
 
-### Useful PM2 Commands
+To view live application logs:
 ```bash
-pm2 status          # View application status
-pm2 logs dotta      # Stream live backend & agent execution logs
-pm2 restart dotta   # Restart backend server
-pm2 reload dotta    # Zero-downtime reload
+docker compose logs -f app
 ```
 
 ---
 
-## 8. Continuous Deployment (Updating the Server)
+### Option B: PM2 Process Manager (Host Node)
 
-Whenever you push updates to your repository, deploy the changes to your VM with this single command:
+If you prefer running Node directly on the host machine:
+
 ```bash
-cd /var/www/dotta && git pull && npm install && npm run build && pm2 reload dotta
+cd /var/www/dotta
+
+# 1. Install Playwright browser dependencies on the host
+npx playwright install chromium
+npx playwright install-deps chromium
+
+# 2. Build the production React frontend
+npm run build
+
+# 3. Start the application with PM2
+pm2 start server/index.js --name "dotta" --time
+
+# 4. Save the process list and configure PM2 startup
+pm2 save
+pm2 startup
 ```
 
-You can save this as a deployment script (`deploy.sh`):
+---
+
+## 8. Continuous Deployment & Updates
+
+Whenever you push updates to your repository, deploy the changes to your server:
+
+### For Docker Compose (Option A):
 ```bash
-#!/bin/bash
-set -e
-echo "Deploying latest Dotta..."
+cd /var/www/dotta
+git pull origin main
+docker compose build --no-cache
+docker compose up -d --force-recreate app
+```
+
+### For PM2 (Option B):
+```bash
+cd /var/www/dotta
 git pull origin main
 npm install
 npm run build
 pm2 reload dotta
-echo "Deployment successful! Live at https://yourdomain.com"
-```
-Make it executable:
-```bash
-chmod +x deploy.sh
 ```
 
 ---
 
-## 9. Verification & Health Check
+## 9. Reproducible Verification & Health Check
+
+Confirm your instance is running correctly:
 
 1. **Verify Backend Health:**
    ```bash
    curl -i http://localhost:3001/api/health
    # Returns: {"status":"healthy","defaultModel":"muse-spark-open", ...}
    ```
+
 2. **Verify Public HTTPS:**
-   Open `https://yourdomain.com` in your browser.
+   Open `https://yourdomain.com/new` in your browser.
    - You will see the Assistant-UI chat shell connected to Dotta.
-   - Enter a prompt: *"Create a file called notes.txt and list files"*.
-   - The streaming tokens and real-time tool execution cards will render smoothly.
+   - Register a personal account at `/login`.
+   - Your account is automatically seeded with the canonical **Alex Morgan BIO profile** (`https://yourdomain.com/bio`).
+   - Open **Settings** -> **API Keys** (`https://yourdomain.com/settings/keys`) and configure your Meta API key.
+   - Run a web navigation or form-filling task to verify real-time browser actions!
+
+3. **Run Core Security & Billing Test Suites:**
+   ```bash
+   # Run in the repository directory (or inside container via docker exec)
+   node tests/bio.test.js
+   node tests/user-funded-billing.test.js
+   node tests/credentials-crypto.test.js
+   node tests/settings-verification.test.js
+   ```
+

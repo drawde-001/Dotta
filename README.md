@@ -1,6 +1,7 @@
 # Dotta
 
 [![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge)](https://dotta.duckdns.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 [![Demo Video](https://img.shields.io/badge/Demo_Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 [![Model](https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
 [![Inference Partner](https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white)](https://modal.com)
@@ -9,9 +10,7 @@
 🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)  
 📺 **Demo Video:** [https://www.youtube.com/watch?v=Fy-d29LnUJs](https://www.youtube.com/watch?v=Fy-d29LnUJs)
 
-**Dotta is a personal browser agent.**
-
-Dotta is powered by **Meta Muse** (`meta-muse-spark open`) out-of-the-box, featuring an integrated **Assistant-UI** chat shell, an **AG-UI 1.0** event-streaming backend, an isolated execution sandbox, adaptive live browser control, and the **BIO Digital Identity Engine**.
+**Dotta is a personal browser agent powered by Meta Muse, featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.**
 
 ---
 
@@ -325,62 +324,160 @@ Dotta implements a **User-Funded Developer Billing Architecture**: users bring t
 
 ---
 
-## Quickstart
+## 🚀 Quickstart & Reproducible Setup Guide
 
-### 1. Install Dependencies
+Follow this step-by-step guide to run your own independent, complete instance of Dotta. Anyone following these steps will have a fully functioning, private browser agent.
+
+### 1. Prerequisites Checklist
+- **Node.js**: v20 LTS or v22 LTS ([nodejs.org](https://nodejs.org))
+- **Package Manager**: npm 9+
+- **Browser Automation Engine**: Chromium for Playwright
+- **Database**: A free [Supabase](https://supabase.com) project (PostgreSQL + RLS)
+- **Model Credentials**: Your own Meta AI API key (or Modal compute credentials)
+
+---
+
+### 2. Clone & Install Dependencies
 ```bash
+git clone https://github.com/drawde-001/Dotta.git
+cd Dotta
 npm install
 ```
 
-### 2. Configure Environment
-Copy `.env.example` to `.env` and configure your API keys:
+Install the Playwright Chromium browser binary needed for autonomous DOM navigation:
+```bash
+npx playwright install chromium
+```
+
+---
+
+### 3. Initialize Your Supabase Database
+1. Create a free project at [supabase.com](https://supabase.com).
+2. Go to the **SQL Editor** in your Supabase dashboard.
+3. Open [`supabase/schema.sql`](supabase/schema.sql) from this repository, paste the entire contents into the SQL editor, and click **Run**.
+   - This creates all core tables (`users`, `user_profiles`, `user_settings`, `user_sessions`, `conversations`, `user_audit_logs`, `user_uploads`, `user_credentials_secret`, `user_integrations`).
+   - Enables Row Level Security (RLS) with strict user isolation policies and service-role protection for encrypted secrets.
+4. Go to **Project Settings** -> **API** and copy:
+   - **Project URL** (`SUPABASE_URL`)
+   - **Project API Anon Key** (`SUPABASE_ANON_KEY`)
+   - **Project API Service Role Key** (`SUPABASE_SERVICE_ROLE_KEY`)
+
+---
+
+### 4. Configure Environment Variables
+Copy the template configuration:
 ```bash
 cp .env.example .env
 ```
-Ensure `META_MUSE_API_KEY` is populated.
 
-### 3. Run Development Server
-Start the backend and Vite frontend with hot-reload:
+Edit `.env` and fill in the required values:
+```env
+# Server & Security
+PORT=3001
+NODE_ENV=production
+PUBLIC_DOMAIN=localhost
+
+# Generate a strong 32-byte secret: openssl rand -hex 32
+# or: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+SESSION_SECRET=your_long_random_session_secret_here
+
+# Supabase Credentials (from Step 3)
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
+
+# Optional: Default Server Fallback Meta Key (users bring their own in UI)
+META_MUSE_API_KEY=
+DEFAULT_MODEL=muse-spark-open
+```
+
+---
+
+### 5. Build & Launch
+
+#### Option A: Production Build (Recommended)
 ```bash
-# Terminal 1: Backend API & AG-UI stream
+# 1. Build the Vite React Assistant-UI frontend
+npm run build
+
+# 2. Start the production server
+npm run server
+```
+Dotta will be running at [http://localhost:3001](http://localhost:3001).
+
+#### Option B: Development Mode (Hot Reload)
+```bash
+# Terminal 1: Backend API & AG-UI event stream
 npm run server
 
-# Terminal 2: Vite UI shell
+# Terminal 2: Vite frontend with HMR
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) (Vite proxies API calls to the server on port 3001).
 
-### 4. Headless Terminal Execution
-Run Dotta directly in your terminal without a browser:
+#### Option C: 1-Command Docker Deployment (Self-Hosting with SSL)
+For deploying to any Linux server or VM with automated HTTPS:
 ```bash
-npm run cli -- "Explain your available tools and inspect the workspace"
+# Set your domain in .env (e.g., PUBLIC_DOMAIN=yourdomain.com)
+docker compose up -d --build
 ```
+This launches Caddy (automatic Let's Encrypt SSL on ports 80/443) and the Dotta application container with persistent volumes for user profiles, sandboxes, and SSL certificates.
 
-### 5. Run Verification Tests
+---
+
+### 6. First-Run Walkthrough (Your Personal Dotta)
+
+1. **Sign Up**: Navigate to `http://localhost:3001` (or your domain). Click **Sign Up** to create your personal account.
+2. **Automatic BIO Seeding**: Upon registration, Dotta automatically provisions your private workspace and seeds a full personal copy of the **Alex Morgan BIO profile** (`/bio`) along with real dummy sandboxed documents (`seed-photo.jpg`, `seed-cv.pdf`, `seed-degree.pdf`, `seed-voice.wav`, `seed-intro.webm`).
+3. **Configure Your API Key**:
+   - Open **Settings** by clicking the gear icon or visiting `http://localhost:3001/settings`.
+   - On the **API Keys** tab, under **Meta AI Configuration**, enter your personal Meta API key.
+   - Click **Save**. Dotta sends a 1-token probe request to verify the key, encrypts it using application-level **AES-256-GCM**, and securely saves it.
+4. **Start Browsing**:
+   - Click **Home** or visit `/new`.
+   - Send your first message! Dotta dynamically allocates your thread and begins autonomous web tasks on your behalf.
+
+---
+
+### 7. Run Verification Test Suites
+Verify that your local instance matches all security, crypto, and execution invariants:
+
 ```bash
-# Core smoke tests
+# 1. Core Smoke Tests
 npm test
 
-# Full BIO Digital Identity verification suite
+# 2. BIO Digital Identity Engine (45/45 Checks)
 node tests/bio.test.js
 
-# Sandbox & security isolation suite
-node tests/phase1-sandbox.test.js
+# 3. User-Funded Billing Architecture & Hard Gate Suite
+node tests/user-funded-billing.test.js
+
+# 4. AES-256-GCM Crypto, Nonce Uniqueness & Key Rotation
+node tests/credentials-crypto.test.js
+
+# 5. Verification Probes & SSRF Protection Suite
+node tests/settings-verification.test.js
 ```
 
 ---
 
-## Privacy & Access Control
+## 🔒 Privacy & Access Control
 
-Everything a user creates in Dotta (chats, runs, BIO profiles, uploaded files and generated media) belongs to that user alone:
+Everything a user creates in Dotta (chats, runs, BIO profiles, uploaded files, and generated media) belongs to that user alone:
 
-- Every item gets a random, unguessable ID, so links cannot be guessed.
-- Ownership is checked on the server for every request, over every channel the app uses. Someone who is not the owner gets the same "not found" answer as for something that does not exist.
-- Signed-out visitors are sent to the sign-in page and returned to where they were headed after signing in. Nothing from a chat is shown before sign-in is confirmed.
-- Signing out clears locally cached chat data and closes any open live connections.
+- **Random Unguessable IDs**: Every resource receives a cryptographically secure UUID.
+- **Server-Side Ownership Enforcement**: Ownership is strictly validated on the backend for every request. Unauthorized requests return generic 404 responses to prevent resource enumeration.
+- **Zero-Flash Route Guards**: Visiting `/bio`, `/settings`, or `/new` while unauthenticated immediately redirects to `/login?returnTo=...` and returns directly to the target URL after authentication.
+- **Session Purging**: Signing out instantly purges local browser state and revokes session tokens.
 
 ---
 
-## Production Deployment
+## 📜 License
 
-Dotta ships with a `Dockerfile` and `docker-compose.yml` that run the app behind an automatic-HTTPS reverse proxy on any Linux VM or VPS with your own domain. For a step-by-step walkthrough, see [`setup.md`](setup.md).
+Dotta is open-source software licensed under the **[MIT License](LICENSE)**.
+
+```
+Copyright (c) 2026 Edward Obi and Dotta Contributors
+```
+
+You are free to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the software, subject to the conditions in the [LICENSE](LICENSE) file.

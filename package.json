@@ -1,8 +1,8 @@
 {
   "name": "dotta",
   "version": "1.0.0",
-  "description": "Dotta is a personal browser agent",
-  "private": true,
+  "description": "A personal browser agent powered by Meta Muse, featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.",
+  "license": "MIT",
   "homepage": "https://dotta.duckdns.org",
   "type": "module",
   "scripts": {
