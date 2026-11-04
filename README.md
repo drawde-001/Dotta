@@ -1,16 +1,27 @@
-# Dotta
+<p align="center">
+  <a href="https://dotta.duckdns.org">
+    <img src="assets/dotta-orb.png" width="112" height="112" alt="Dotta Orb Logo" />
+  </a>
+</p>
 
-[![Live Deployment](https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge)](https://dotta.duckdns.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Demo Video](https://img.shields.io/badge/Demo_Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://www.youtube.com/watch?v=Fy-d29LnUJs)
-[![Model](https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white)](https://dev.meta.ai)
-[![Inference Partner](https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white)](https://modal.com)
-[![Repository](https://img.shields.io/badge/GitHub-drawde--001%2FDotta-black?style=for-the-badge&logo=github)](https://github.com/drawde-001/Dotta)
+<h1 align="center">Dotta</h1>
 
-🌐 **Live Application:** [https://dotta.duckdns.org](https://dotta.duckdns.org)  
-📺 **Demo Video:** [https://www.youtube.com/watch?v=Fy-d29LnUJs](https://www.youtube.com/watch?v=Fy-d29LnUJs)
+<p align="center">
+  <strong>Dotta is a personal browser agent powered by Meta Muse (<code>muse-spark-open</code> by default), featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.</strong>
+</p>
 
-**Dotta is a personal browser agent powered by Meta Muse (`muse-spark-open` by default), featuring long-horizon execution, dynamic turn budgeting, verifiable browser actions, and the BIO Digital Identity Engine.**
+<p align="center">
+  <a href="https://dotta.duckdns.org"><img src="https://img.shields.io/badge/Live_Site-dotta.duckdns.org-10b981?style=for-the-badge" alt="Live Deployment" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge" alt="License: MIT" /></a>
+  <a href="https://www.youtube.com/watch?v=Fy-d29LnUJs"><img src="https://img.shields.io/badge/Demo_Video-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Demo Video" /></a>
+  <a href="https://dev.meta.ai"><img src="https://img.shields.io/badge/Powered_by-Meta_Muse_Spark_Open-0668E1?style=for-the-badge&logo=meta&logoColor=white" alt="Model" /></a>
+  <a href="https://modal.com"><img src="https://img.shields.io/badge/Inference_Partner-Modal-00D26A?style=for-the-badge&logoColor=white" alt="Inference Partner" /></a>
+  <a href="https://github.com/drawde-001/Dotta"><img src="https://img.shields.io/badge/GitHub-drawde--001%2FDotta-black?style=for-the-badge&logo=github" alt="Repository" /></a>
+</p>
+
+<p align="center">
+  🌐 <strong>Live Application:</strong> <a href="https://dotta.duckdns.org">https://dotta.duckdns.org</a> &nbsp;•&nbsp; 📺 <strong>Demo Video:</strong> <a href="https://www.youtube.com/watch?v=Fy-d29LnUJs">Watch on YouTube</a>
+</p>
 
 ---
 
