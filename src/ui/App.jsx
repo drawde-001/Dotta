@@ -2072,7 +2072,7 @@ export default function App() {
                           </div>
 
                           {/* Mobile only: Composer anchored floating above bottom bezel and soft navigation keys */}
-                          <div className="lg:hidden w-full shrink-0 px-2 pt-2 pb-[max(3rem,calc(env(safe-area-inset-bottom)+1.75rem))]">
+                          <div className="lg:hidden w-full shrink-0 px-2 pt-2 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]">
                             <InputDock
                               heroMode={true}
                               maxWidth="100%"
@@ -2098,17 +2098,18 @@ export default function App() {
                               selectedModel={selectedModel}
                               onSelectModel={setSelectedModel}
                               onReload={handleReload}
+                              onSendMessage={handleSendMessage}
                             />
                           </div>
 
                           {/* Mobile/Tablet Soft Dark Gradient Fade (Layer 2) */}
                           <div
-                            className="pointer-events-none absolute bottom-0 left-0 right-0 h-52 sm:h-56 z-10 lg:hidden bg-gradient-to-t from-[#101013] via-[#101013]/85 to-transparent"
+                            className="pointer-events-none absolute bottom-0 left-0 right-0 h-44 sm:h-48 z-10 lg:hidden bg-gradient-to-t from-[#101013] via-[#101013]/85 to-transparent"
                             aria-hidden="true"
                           />
 
                           {/* Composer Container: Floating on Mobile/Tablet (Layer 3), Docked on Desktop */}
-                          <div className="absolute lg:static bottom-0 left-0 right-0 z-20 pointer-events-none lg:pointer-events-auto px-3 sm:px-4 pb-[max(3rem,calc(env(safe-area-inset-bottom)+1.75rem))] lg:p-3 lg:pb-6 lg:bg-[#101013] lg:border-t lg:border-white/[0.06] border-t-0">
+                          <div className="absolute lg:static bottom-0 left-0 right-0 z-20 pointer-events-none lg:pointer-events-auto px-3 sm:px-4 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] lg:p-3 lg:pb-6 lg:bg-[#101013] lg:border-t lg:border-white/[0.06] border-t-0">
                             <div className="max-w-3xl w-full mx-auto pointer-events-auto">
                               <InputDock
                                 heroMode={false}

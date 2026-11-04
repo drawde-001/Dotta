@@ -89,14 +89,16 @@ export { registerToolComponent, registerDataRenderer };
 
 const ReloadContext = React.createContext(null);
 export const ThreadModelContext = React.createContext('muse-spark-open');
+export const SendMessageContext = React.createContext(null);
 
-export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false, onReload }) {
+export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-spark-open', onSelectModel, showComposer = false, onReload, onSendMessage }) {
   const isEmpty = useAuiState((s) => s.thread.isEmpty);
 
   return (
     <ReloadContext.Provider value={onReload}>
-      <ThreadModelContext.Provider value={selectedModel}>
-        <ThreadPrimitive.Root
+      <SendMessageContext.Provider value={onSendMessage}>
+        <ThreadModelContext.Provider value={selectedModel}>
+          <ThreadPrimitive.Root
         className="flex h-full flex-col bg-transparent text-foreground text-sm"
         style={{
           "--thread-max-width": "46rem",
@@ -113,7 +115,7 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
       >
         <div
           className={cn(
-            "mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4 pt-4 pb-48 sm:pb-52 lg:pb-6",
+            "mx-auto flex w-full max-w-[var(--thread-max-width)] flex-1 flex-col px-4 pt-4 pb-40 sm:pb-44 lg:pb-6",
           )}
         >
 
@@ -150,8 +152,9 @@ export function Thread({ activeInterrupt, onResolveInterrupt, selectedModel = 'm
       </ThreadPrimitive.Viewport>
     </ThreadPrimitive.Root>
       </ThreadModelContext.Provider>
-    </ReloadContext.Provider>
-  );
+    </SendMessageContext.Provider>
+  </ReloadContext.Provider>
+);
 }
 
 function ThreadWelcome() {
@@ -404,7 +407,7 @@ function Composer({ activeInterrupt, onResolveInterrupt, selectedModel = 'muse-s
                 <div
                   className={`aic-glass-popover ${
                     turboMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
-                  } absolute right-0 bottom-[40px] w-[210px] rounded-[18px] p-2.5 z-40`}
+                  } absolute right-[-40px] sm:right-0 bottom-[40px] w-[210px] max-w-[calc(100vw-24px)] rounded-[18px] p-2.5 z-40`}
                 >
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-100 mb-1">
                     <Zap size={13} className="text-amber-400" />
@@ -1259,6 +1262,19 @@ function AssistantMessageBody() {
 }
 
 function AssistantMessage() {
+  const onSendMessage = React.useContext(SendMessageContext);
+  const aui = useAui();
+
+  const handleSuggestionClick = (promptText) => {
+    if (typeof onSendMessage === 'function') {
+      onSendMessage(promptText);
+      return;
+    }
+    if (typeof aui?.thread?.append === 'function') {
+      aui.thread.append(promptText);
+    }
+  };
+
   return (
     <MessagePrimitive.Root
       className="relative mx-auto w-full max-w-[var(--thread-max-width)] px-2 fade-in slide-in-from-bottom-1 animate-in duration-150"
@@ -1296,15 +1312,29 @@ function AssistantMessage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <ThreadPrimitive.Suggestion
             prompt="Tell me more"
-            className="border-foreground/10 hover:border-foreground/25 hover:bg-foreground/[0.03] rounded-md border px-2.5 py-1 text-sm whitespace-nowrap transition-colors ease-in motion-reduce:transition-none"
+            send
+            asChild
           >
-            Tell me more
+            <button
+              type="button"
+              onClick={() => handleSuggestionClick("Tell me more")}
+              className="border-foreground/10 hover:border-foreground/25 hover:bg-foreground/[0.05] active:scale-[0.98] rounded-md border px-2.5 py-1 text-sm whitespace-nowrap transition-all ease-in motion-reduce:transition-none cursor-pointer"
+            >
+              Tell me more
+            </button>
           </ThreadPrimitive.Suggestion>
           <ThreadPrimitive.Suggestion
             prompt="Can you explain differently?"
-            className="border-foreground/10 hover:border-foreground/25 hover:bg-foreground/[0.03] rounded-md border px-2.5 py-1 text-sm whitespace-nowrap transition-colors ease-in motion-reduce:transition-none"
+            send
+            asChild
           >
-            Explain differently
+            <button
+              type="button"
+              onClick={() => handleSuggestionClick("Can you explain differently?")}
+              className="border-foreground/10 hover:border-foreground/25 hover:bg-foreground/[0.05] active:scale-[0.98] rounded-md border px-2.5 py-1 text-sm whitespace-nowrap transition-all ease-in motion-reduce:transition-none cursor-pointer"
+            >
+              Explain differently
+            </button>
           </ThreadPrimitive.Suggestion>
         </div>
       </AuiIf>

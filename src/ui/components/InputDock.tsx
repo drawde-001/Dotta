@@ -2520,7 +2520,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                   onClick={(e) => e.stopPropagation()}
                   className={`aic-glass-popover ${
                     turboMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
-                  } absolute right-0 bottom-[44px] w-[280px] rounded-[20px] p-2 z-30`}
+                  } absolute right-[-76px] sm:right-0 bottom-[44px] w-[280px] max-w-[calc(100vw-24px)] rounded-[20px] p-2 z-30`}
                   role="menu"
                 >
                   <div className="flex flex-col gap-1.5">

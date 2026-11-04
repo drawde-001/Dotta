@@ -86,6 +86,26 @@ export function AuthScreen({ onLoginSuccess }) {
           {/* Subtle Ambient Radial Glow */}
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(600px_400px_at_70%_30%,rgba(255,255,255,0.08),transparent)]" />
 
+          {/* Desktop Brand Header at Top Left within Green Card */}
+          <div className="absolute top-8 left-8 sm:top-10 sm:left-10 lg:top-12 lg:left-12 flex items-center gap-2.5 z-20">
+            <div className="w-8 h-8 rounded-full overflow-hidden shadow-md">
+              <svg viewBox="0 0 128 128" className="w-full h-full">
+                <defs>
+                  <radialGradient id="authGreenOrbGrad" cx="35%" cy="30%" r="75%">
+                    <stop offset="0%" stopColor="#ffffff"/>
+                    <stop offset="40%" stopColor="#e4e4e7"/>
+                    <stop offset="75%" stopColor="#71717a"/>
+                    <stop offset="100%" stopColor="#27272a"/>
+                  </radialGradient>
+                </defs>
+                <circle cx="64" cy="64" r="54" fill="url(#authGreenOrbGrad)" stroke="#18181b" strokeWidth="2"/>
+                <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
+                <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
+              </svg>
+            </div>
+            <span className="text-xl font-bold text-white tracking-tight">Dotta</span>
+          </div>
+
           {/* Content: Title & Subtitle + Step Cards */}
           <div className="relative z-10 w-full max-w-[560px]">
             {/* Title & Subtitle without artificial line breaks, properly scaled on large screens */}

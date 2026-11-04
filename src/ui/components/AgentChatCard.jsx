@@ -91,7 +91,7 @@ export function AgentChatCard({
         )}
       </div>
 
-      <div className={`shrink-0 p-2.5 sm:p-3 ${isMobileSheet ? 'border-t-0 pb-[max(2.5rem,calc(env(safe-area-inset-bottom)+1.25rem))]' : 'border-t border-white/[0.06] pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}>{composer}</div>
+      <div className={`shrink-0 p-2.5 sm:p-3 ${isMobileSheet ? 'border-t-0 pb-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))]' : 'border-t border-white/[0.06] pb-[max(0.75rem,env(safe-area-inset-bottom))]'}`}>{composer}</div>
     </aside>
   );
 }
