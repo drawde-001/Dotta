@@ -13,7 +13,7 @@ import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
 import { AuthScreen } from '@/components/AuthScreen';
 import { SettingsModal } from '@/components/SettingsModal';
-import { ThreadListItems } from '@/components/assistant-ui/elements/thread-list.aui';
+import { ThreadListRoot, ThreadListItems } from '@/components/assistant-ui/elements/thread-list.aui';
 import { getUserId, getCurrentUser, setCurrentUser, clearCurrentUser } from '@/lib/user';
 import { sanitizeChatText } from '../core/levels/redact-text.js';
 import {
@@ -482,10 +482,11 @@ export default function App() {
   }, [isRunning]);
 
   const handleSwitchThread = useCallback(async (targetId) => {
-    if (isRunning || targetId === activeThreadId) return;
+    if (isRunning) return;
     setActiveInterrupt(null);
     setView('home');
     setSettingsOpen(false);
+    if (targetId === activeThreadId) return;
 
     const cached = threadMessagesMapRef.current[targetId];
     if (Array.isArray(cached) && cached.length > 0) {
@@ -1556,7 +1557,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
+    <div className="flex flex-col lg:flex-row h-screen h-[100dvh] w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Left icon rail (Desktop only): Home / BIO are the only clickable tabs */}
       <div className="hidden lg:flex shrink-0">
         <AppRail
@@ -1636,8 +1637,8 @@ export default function App() {
             )}
 
             {/* Canvas */}
-            <div className="min-w-0 flex-1 p-0 lg:py-2 lg:pr-2">
-              <div className="relative flex h-full overflow-hidden rounded-none lg:rounded-[24px] border-0 lg:border border-white/[0.05] bg-[#101013] shadow-none lg:shadow-xl sm:rounded-none lg:sm:rounded-[28px]">
+            <div className="min-w-0 flex-1 p-0 lg:py-2 lg:pr-2 h-full flex flex-col">
+              <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-none lg:rounded-[24px] border-0 lg:border border-white/[0.05] bg-[#101013] shadow-none lg:shadow-xl sm:rounded-none lg:sm:rounded-[28px]">
                 {view === 'bio' ? (
                   <>
                     <div className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
@@ -1668,42 +1669,85 @@ export default function App() {
                 ) : (
                   <>
                     {/* Center: Chat Panel (Hero or Message Thread) */}
-                    <div className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
+                    <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative w-full">
                       {messages.length === 0 ? (
-                        /* Centered Hero View */
-                        <div className="flex-1 flex flex-col items-center justify-center p-6 select-none relative z-10 max-w-2xl mx-auto w-full">
-                          {/* Authentic Dotta Orb Logo (Ref prompt 8) */}
-                          <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-xl">
-                            <svg viewBox="0 0 128 128" className="w-full h-full">
-                              <defs>
-                                <radialGradient id="heroOrbGrad" cx="35%" cy="30%" r="75%">
-                                  <stop offset="0%" stopColor="#ffffff"/>
-                                  <stop offset="40%" stopColor="#e4e4e7"/>
-                                  <stop offset="75%" stopColor="#71717a"/>
-                                  <stop offset="100%" stopColor="#27272a"/>
-                                </radialGradient>
-                                <filter id="heroOrbShadow" x="-20%" y="-20%" width="140%" height="140%">
-                                  <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000000" floodOpacity="0.4"/>
-                                </filter>
-                              </defs>
-                              <circle cx="64" cy="64" r="52" fill="url(#heroOrbGrad)" stroke="#18181b" strokeWidth="2" filter="url(#heroOrbShadow)"/>
-                              <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
-                              <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
-                            </svg>
+                        /* Centered Hero View (Matching Prototype Image 4 on mobile, untouched on desktop) */
+                        <div className="flex-1 flex flex-col justify-between lg:justify-center items-center p-4 lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full h-full">
+                          {/* Center Content */}
+                          <div className="flex-1 lg:flex-initial flex flex-col items-center justify-center text-center my-auto px-2 w-full">
+                            {/* Authentic Dotta Orb Logo (Ref prompt 8 & Image 4) */}
+                            <div className="w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-xl">
+                              <svg viewBox="0 0 128 128" className="w-full h-full">
+                                <defs>
+                                  <radialGradient id="heroOrbGrad" cx="35%" cy="30%" r="75%">
+                                    <stop offset="0%" stopColor="#ffffff"/>
+                                    <stop offset="40%" stopColor="#e4e4e7"/>
+                                    <stop offset="75%" stopColor="#71717a"/>
+                                    <stop offset="100%" stopColor="#27272a"/>
+                                  </radialGradient>
+                                  <filter id="heroOrbShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000000" floodOpacity="0.4"/>
+                                  </filter>
+                                </defs>
+                                <circle cx="64" cy="64" r="52" fill="url(#heroOrbGrad)" stroke="#18181b" strokeWidth="2" filter="url(#heroOrbShadow)"/>
+                                <ellipse cx="46" cy="42" rx="18" ry="12" fill="#ffffff" opacity="0.6" transform="rotate(-28 46 42)"/>
+                                <circle cx="42" cy="38" r="4" fill="#ffffff" opacity="0.8"/>
+                              </svg>
+                            </div>
+
+                            <h1 className="text-3xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
+                              Dotta
+                            </h1>
+                            <p className="text-xs sm:text-base text-zinc-400 max-w-xs sm:max-w-lg mb-6 sm:mb-8 text-center">
+                              {heroSubtitles[subtitleIndex]}
+                            </p>
+
+                            {/* Desktop only: Composer in center */}
+                            <div className="hidden lg:block w-full">
+                              <InputDock
+                                heroMode={true}
+                                maxWidth="596px"
+                                onSendMessage={handleSendMessage}
+                                isWorking={isRunning}
+                                onStopWorking={handleCancel}
+                                selectedModel={selectedModel}
+                                onSelectModel={setSelectedModel}
+                                mode={agentMode}
+                                onChangeMode={setAgentMode}
+                                activeInterrupt={activeInterrupt}
+                                onResolveInterrupt={handleResolveInterrupt}
+                              />
+                            </div>
+
+                            {/* Curated Suggestion Chips */}
+                            <div className="flex flex-wrap items-center justify-center gap-2 mt-2 lg:mt-4 max-w-sm sm:max-w-xl">
+                              {activeQuickActions.map((chip, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => handleSendMessage(chip.label)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
+                                >
+                                  <span className="text-zinc-400">{chip.icon}</span>
+                                  <span>{chip.label}</span>
+                                </button>
+                              ))}
+                              <button
+                                type="button"
+                                onClick={handleShuffleQuickActions}
+                                className="p-1.5 rounded-full border border-white/[0.08] bg-[#141417] lg:bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
+                                title="Shuffle suggestions"
+                              >
+                                <Shuffle size={13} />
+                              </button>
+                            </div>
                           </div>
 
-                          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight text-white mb-2 text-center">
-                            Dotta
-                          </h1>
-                          <p className="text-sm sm:text-base text-zinc-400 max-w-lg mb-8 text-center">
-                            {heroSubtitles[subtitleIndex]}
-                          </p>
-
-                          {/* Exact Chatbox in Hero Mode */}
-                          <div className="w-full">
+                          {/* Mobile only: Composer anchored at bottom of screen (Matching Image 4) */}
+                          <div className="lg:hidden w-full shrink-0 pt-2 pb-1">
                             <InputDock
                               heroMode={true}
-                              maxWidth="596px"
+                              maxWidth="100%"
                               onSendMessage={handleSendMessage}
                               isWorking={isRunning}
                               onStopWorking={handleCancel}
@@ -1715,33 +1759,10 @@ export default function App() {
                               onResolveInterrupt={handleResolveInterrupt}
                             />
                           </div>
-
-                          {/* Curated Suggestion Chips */}
-                          <div className="flex flex-wrap items-center justify-center gap-2 mt-4 max-w-xl">
-                            {activeQuickActions.map((chip, idx) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => handleSendMessage(chip.label)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-300 hover:text-white transition cursor-pointer"
-                              >
-                                <span className="text-zinc-400">{chip.icon}</span>
-                                <span>{chip.label}</span>
-                              </button>
-                            ))}
-                            <button
-                              type="button"
-                              onClick={handleShuffleQuickActions}
-                              className="p-1.5 rounded-full border border-white/[0.08] bg-[#18181c]/80 hover:bg-[#222228] text-zinc-400 hover:text-white transition cursor-pointer"
-                              title="Shuffle suggestions"
-                            >
-                              <Shuffle size={13} />
-                            </button>
-                          </div>
                         </div>
                       ) : (
                         /* Active Message Thread with Bottom Docked InputDock */
-                        <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+                        <div className="flex-1 min-h-0 flex flex-col overflow-hidden relative w-full">
                           <div className="flex-1 min-h-0">
                             <Thread
                               activeInterrupt={activeInterrupt}
@@ -1753,7 +1774,7 @@ export default function App() {
                           </div>
 
                           {/* Bottom Docked Composer */}
-                          <div className="shrink-0 p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
+                          <div className="shrink-0 p-2 sm:p-3 bg-[#101013] border-t border-white/[0.06] max-w-3xl w-full mx-auto">
                             <InputDock
                               heroMode={false}
                               maxWidth="100%"
@@ -1832,14 +1853,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div
-                  className="flex-1 overflow-y-auto px-3 py-1 space-y-1 relative"
-                  onClickCapture={(e) => {
-                    if (e.target.closest('button[data-slot="aui_thread-list-item-trigger"]') || e.target.closest('[data-slot="aui_thread-list-item"]')) {
-                      setMobileDrawerOpen(false);
-                    }
-                  }}
-                >
+                <div className="flex-1 overflow-y-auto px-3 py-1 space-y-1 relative">
                   {drawerSearchOpen && (
                     <div className="px-1 py-1">
                       <input
@@ -1911,7 +1925,21 @@ export default function App() {
                   <div className="h-px bg-white/[0.06] my-2" />
 
                   <div className="px-1 text-xs">
-                    <ThreadListItems searchQuery={drawerSearch} />
+                    <div className="px-2 pb-1 pt-1 text-xs font-medium text-zinc-500">Recents</div>
+                    <ThreadListRoot
+                      onClick={(e) => {
+                        if (
+                          e.target instanceof Element &&
+                          e.target.closest('[data-slot="aui_thread-list-item-trigger"]')
+                        ) {
+                          setView('home');
+                          setSettingsOpen(false);
+                          setMobileDrawerOpen(false);
+                        }
+                      }}
+                    >
+                      <ThreadListItems searchQuery={drawerSearch} />
+                    </ThreadListRoot>
                   </div>
 
                   <div className="h-24" />

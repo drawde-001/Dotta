@@ -1775,22 +1775,50 @@ export const InputDock: React.FC<InputDockProps> = ({
         }
 
         @media (max-width: 1023px) {
+          .aic-box-scope {
+            padding: 0 !important;
+          }
           .aic-composer-card {
             border-radius: 24px !important;
             padding: 12px 14px 10px 14px !important;
+            background: #141418 !important;
+            border: 1px solid rgba(255, 255, 255, 0.09) !important;
           }
           .aic-icon-btn {
-            width: 38px !important;
-            height: 38px !important;
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 9999px !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+            color: #d4d4d8 !important;
           }
-          .aic-decluttered-turbo-btn,
+          .aic-decluttered-turbo-btn {
+            height: 36px !important;
+            border-radius: 9999px !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            padding: 0 10px !important;
+            color: #d4d4d8 !important;
+          }
           .aic-model-trigger-btn {
             height: 36px !important;
+            border-radius: 9999px !important;
+            background: rgba(255, 255, 255, 0.06) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            padding: 0 10px !important;
+            color: #e4e4e7 !important;
           }
           .aic-submit-btn,
           .aic-submit-circle-btn {
-            width: 38px !important;
-            height: 38px !important;
+            width: 36px !important;
+            height: 36px !important;
+            border-radius: 9999px !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35) !important;
+          }
+          .aic-submit-circle-btn svg {
+            stroke: #000000 !important;
+            color: #000000 !important;
           }
         }
       `}</style>
@@ -2004,7 +2032,7 @@ export const InputDock: React.FC<InputDockProps> = ({
               }
             }}
             className={`aic-prompt-input ${isRecording ? 'hidden lg:block' : ''}`}
-            placeholder={isRecording || isTranscribing ? '' : 'What would you like to do today?'}
+            placeholder={isRecording || isTranscribing ? '' : 'Ask Dotta anything or enter a task...'}
             aria-label="Prompt input"
           />
 
@@ -2110,8 +2138,8 @@ export const InputDock: React.FC<InputDockProps> = ({
                 </div>
               </div>
 
-              {/* 2. Mode Settings (Sliders) Icon Button - Greyed out & unclickable for now */}
-              <div className="relative flex-shrink-0">
+              {/* 2. Mode Settings (Sliders) Icon Button - Hidden on mobile/tablet per prototype Image 4 */}
+              <div className="relative flex-shrink-0 hidden lg:block">
                 <button
                   type="button"
                   disabled

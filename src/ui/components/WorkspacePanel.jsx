@@ -266,8 +266,8 @@ export function WorkspacePanel({
           </button>
         </div>
 
-        {/* Right: Window Controls (Maximize / Minimize, Close Panel) */}
-        <div className="flex items-center gap-1 shrink-0 ml-2">
+        {/* Right: Window Controls (Maximize / Minimize, Close Panel - Hidden on mobile/tablet below the sheet close icon) */}
+        <div className="hidden lg:flex items-center gap-1 shrink-0 ml-2">
           <button
             type="button"
             onClick={() => setIsMaximized((prev) => !prev)}
@@ -309,7 +309,7 @@ export function WorkspacePanel({
           >
             <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 text-[13px] font-semibold text-zinc-100">
               <ChevronDown size={14} className="shrink-0 text-zinc-500" />
-              Workspace
+              File tree
             </div>
             <div className="px-2.5 pb-2">
               <div className="flex h-8 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/80 px-2 transition-colors focus-within:border-zinc-600">
