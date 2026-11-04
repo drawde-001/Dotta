@@ -72,7 +72,8 @@ import {
   verifyUserCredentials,
   createUser,
   findUserById,
-  sanitizeUserOutput
+  sanitizeUserOutput,
+  seedOperatorIntegrations
 } from '../src/core/auth/user-store.js';
 import {
   logDbUserSession,
@@ -2069,4 +2070,7 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Dotta Server] Listening on http://0.0.0.0:${PORT}`);
   console.log(`[Dotta Stream] WebSocket active on ws://0.0.0.0:${PORT}/ws`);
   console.log(`[Dotta Engine] Default model configured: ${process.env.DEFAULT_MODEL || 'muse-spark-open'}`);
+  seedOperatorIntegrations().catch((err) => {
+    console.warn('[Dotta Server] Operator integration seeding warning:', err.message);
+  });
 });

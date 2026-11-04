@@ -13,7 +13,8 @@ import {
 } from './content-protocol.js';
 import {
   toStandardChatMessages,
-  toStandardChatTools
+  toStandardChatTools,
+  resolveMuseWireModel
 } from './muse-provider.js';
 import { getApiKey } from '../env.js';
 
@@ -325,14 +326,56 @@ export async function streamModelTurn({
   model = process.env.DEFAULT_MODEL || 'muse-spark-open',
   tools = null,
   generationConfig = {},
-  callbacks = {}
+  callbacks = {},
+  userCredentials = null
 }) {
   const provider = resolveProviderForModel(model);
-  const adapter = getModelAdapter(provider);
+
+  // If user-funded credentials are provided for this run, construct an ephemeral,
+  // user-scoped adapter that does not leak or persist across turns/users.
+  let adapter;
+  if (userCredentials && (userCredentials.metaKey || userCredentials.modal?.tokenId || userCredentials.modal?.apiKey)) {
+    const isModalRun =
+      Boolean(userCredentials.modal?.endpointUrl && (userCredentials.modal?.tokenId || userCredentials.modal?.apiKey)) &&
+      (model === 'muse-spark-open' || String(model).includes('open'));
+
+    if (isModalRun) {
+      const modalCfg = userCredentials.modal;
+      const modalKey = modalCfg.tokenId && modalCfg.tokenSecret
+        ? `${modalCfg.tokenId}.${modalCfg.tokenSecret}`
+        : modalCfg.apiKey || modalCfg.tokenId;
+
+      adapter = new MetaModelAdapter({
+        apiKeyGetter: () => modalKey,
+        baseUrlGetter: () => modalCfg.endpointUrl,
+        defaultModel: 'meta-models/Muse-Spark-Open-816B-A42B',
+        modelResolver: () => 'meta-models/Muse-Spark-Open-816B-A42B',
+        authHeader: (k) => {
+          const h = { Authorization: `Bearer ${k}` };
+          if (modalCfg.tokenId) h['Modal-Key'] = modalCfg.tokenId;
+          if (modalCfg.tokenSecret) h['Modal-Secret'] = modalCfg.tokenSecret;
+          return h;
+        }
+      });
+    } else {
+      const metaKey = userCredentials.metaKey || userCredentials.apiKey;
+      adapter = new MetaModelAdapter({
+        apiKeyGetter: () => metaKey,
+        baseUrlGetter: () =>
+          (process.env.META_MUSE_BASE_URL || process.env.MODEL_API_BASE_URL || 'https://api.meta.ai/v1').replace(/\/+$/, ''),
+        defaultModel: 'muse-spark-open',
+        modelResolver: (m) => resolveMuseWireModel(m),
+        authHeader: (k) => ({ Authorization: `Bearer ${k}` })
+      });
+    }
+  } else {
+    // Fallback adapter for tests or operator mode
+    adapter = getModelAdapter(provider);
+  }
 
   if (!adapter.isConfigured()) {
     throw new Error(
-      `[ModelAdapter] Meta Muse model provider is not configured. Please ensure MODAL_API_KEY, MODAL_PROXY_TOKEN, or META_MUSE_API_KEY is configured in your environment.`
+      `[ModelAdapter] Meta Muse model provider is not configured. Please ensure your Meta API key is configured in Settings -> API Keys.`
     );
   }
 

@@ -467,13 +467,21 @@ export class DottaEngine extends EventEmitter {
         return await killSandboxCommand(toolArgs.id);
 
       case 'segment_image':
-        return await executeSegmentImage(toolArgs, { workspaceRoot, runId, threadId: context.threadId });
+        return await executeSegmentImage(toolArgs, {
+          workspaceRoot,
+          runId,
+          threadId: context.threadId,
+          apiKey: context.userCredentials?.metaKey
+        });
 
       case 'generate_image':
       case 'image_generation':
       case 'create_image':
       case 'edit_image':
-        return await executeGenerateImage(toolArgs, { activeModel: context.model });
+        return await executeGenerateImage(toolArgs, {
+          activeModel: context.model,
+          apiKey: context.userCredentials?.metaKey
+        });
 
       case 'agent_plan':
       case 'create_plan':
@@ -590,6 +598,7 @@ export class DottaEngine extends EventEmitter {
     maxBudgetUsd = 2.0,
     workspaceRoot = null,
     userId = null,
+    userCredentials = null,
     resume = null,
     signal = null,
     sandboxOptions = {}
@@ -1047,6 +1056,7 @@ export class DottaEngine extends EventEmitter {
           model,
           tools: activeTools,
           generationConfig: { effort: dynamicEffort },
+          userCredentials,
           callbacks: {
             onThoughtChunk: (chunk) => {
               turnThought += chunk;
@@ -1443,6 +1453,7 @@ export class DottaEngine extends EventEmitter {
                   threadId,
                   userId,
                   model,
+                  userCredentials,
                   formTask: {
                     userInstruction: instrStr,
                     mode,

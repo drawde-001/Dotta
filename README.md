@@ -299,6 +299,32 @@ Each account gets its own private workspace, chats and BIO data, and nothing is 
 
 ---
 
+## User-Funded Developer Billing (Bring Your Own Key)
+
+Dotta implements a **User-Funded Developer Billing Architecture**: users bring their personal Meta AI API key (and optional Modal compute credentials). AI token and GPU inference costs are billed directly to each user's personal developer account.
+
+### How to Add Your Keys in the UI
+
+1. Open the **Settings** dialog by clicking the gear icon in the lower-left navigation rail.
+2. Navigate to the **API Keys & Compute** tab.
+3. Under **Meta AI Configuration** (Required):
+   - Click **Configure Meta Key** (or **Replace Key**).
+   - Enter your personal Meta API key (e.g., from the Meta developer portal).
+   - Click **Save**. Dotta sends a tiny, 1-token probe request to verify the key and immediately encrypts it using application-level **AES-256-GCM**.
+4. Under **Modal Compute Configuration** (Optional):
+   - Click **Configure Modal**.
+   - Enter your Modal Endpoint URL (`https://...modal.run`), Modal Token ID, and Modal Token Secret.
+   - Click **Save**. Dotta runs a verification check with strict SSRF defenses to ensure serverless vLLM connectivity for open-weight Muse Spark models.
+
+### Cryptographic Security & Hard Gate
+
+* **"No Key, No Charge" Hard Gate**: If an account does not have a verified Meta API key configured, agent execution is blocked with HTTP 403 before any inference is attempted.
+* **Zero Client Secret Exposure**: Secrets are stored in the Supabase `user_credentials_secret` table with Row-Level Security (RLS) configured with **zero policies** for `anon` and `authenticated` roles. Client browsers can never select, insert, update, or delete secrets directly.
+* **AES-256-GCM Encryption**: Payloads are encrypted at the application level with a unique 12-byte random IV per record, authenticated tags, and key rotation support via `key_version`.
+* **Zero Secret Leakage**: Raw API keys are never printed in logs, never returned in API responses (only the masked hint, e.g. `...zsdef`, is displayed), and purged from memory immediately upon turn completion.
+
+---
+
 ## Quickstart
 
 ### 1. Install Dependencies

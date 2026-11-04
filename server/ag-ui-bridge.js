@@ -12,6 +12,8 @@ import {
   isResourceOwnedByOther,
   sendUniformNotFound
 } from '../src/core/auth/access-control.js';
+import { getUserCredentialsSecret } from '../src/core/db/supabase.js';
+import { decryptCredentialsPayload } from '../src/core/auth/crypto.js';
 
 export function writeAgUiEvent(res, event) {
   if (res.writableEnded) return;
@@ -29,6 +31,37 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
     const userId = sanitizeUserId(req.userId);
     if (!userId) {
       return res.status(401).json({ ok: false, error: 'Authentication required' });
+    }
+
+    // User-Funded Billing: Load & Decrypt credentials in-memory per run
+    let userCredentials = null;
+    const metaSecret = await getUserCredentialsSecret(userId, 'meta');
+    const modalSecret = await getUserCredentialsSecret(userId, 'modal');
+
+    if (metaSecret || modalSecret) {
+      try {
+        userCredentials = {
+          metaKey: metaSecret ? decryptCredentialsPayload(metaSecret.encryptedPayload)?.apiKey : null,
+          modal: modalSecret ? decryptCredentialsPayload(modalSecret.encryptedPayload) : null
+        };
+      } catch (err) {
+        console.warn(`[ag-ui-bridge] Failed to decrypt user credentials for ${userId}:`, err.message);
+      }
+    }
+
+    // No key, no charge hard gate: If no Meta key and no Modal credentials, block immediately with HTTP 403
+    if (!userCredentials?.metaKey && !userCredentials?.modal?.tokenId && !userCredentials?.modal?.apiKey) {
+      const isOperatorFallback = Boolean(
+        process.env.ALLOW_OPERATOR_KEY_FALLBACK === 'true' &&
+        (process.env.META_MUSE_API_KEY || process.env.MODEL_API_KEY)
+      );
+      if (!isOperatorFallback) {
+        return res.status(403).json({
+          ok: false,
+          code: 'KEY_REQUIRED',
+          error: 'A Meta API key is required to use Dotta. Please add your Meta API key in Settings -> API Keys.'
+        });
+      }
     }
 
     const body = req.body || {};
@@ -153,7 +186,8 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
         effort,
         resume,
         workspaceRoot,
-        userId
+        userId,
+        userCredentials
       });
 
       if (result.status === 'interrupted' && !interruptEmitted) {
@@ -167,14 +201,19 @@ export function createAgUiHandler({ engine = new DottaEngine() } = {}) {
 
       res.end();
     } catch (err) {
+      const sanitizedMessage = String(err.message || 'Execution error')
+        .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
+        .replace(/sk-[A-Za-z0-9._-]+/gi, '[REDACTED_KEY]');
+
       writeAgUiEvent(res, {
         type: 'RUN_ERROR',
         threadId,
         runId,
-        message: err.message
+        message: sanitizedMessage
       });
       res.end();
     } finally {
+      userCredentials = null; // Purge decrypted secret references immediately upon run completion
       engine.off('event', eventListener);
       onAgentRunEnd();
     }

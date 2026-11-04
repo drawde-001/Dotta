@@ -2,7 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { syncUserToDb } from '../db/supabase.js';
+import {
+  syncUserToDb,
+  saveUserCredentialsSecret,
+  saveUserIntegration,
+  getUserCredentialsSecret
+} from '../db/supabase.js';
+import { encryptCredentialsPayload, maskApiKey } from './crypto.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USERS_FILE = path.resolve(__dirname, '../../data/users.json');
@@ -162,3 +168,85 @@ export function createUser({ email, password, firstName, lastName, name }) {
 
   return sanitizeUserOutput(newUser);
 }
+
+/**
+ * Pre-configures operator & judge integration credentials securely from
+ * backend environment variables (never committed to git or stored in code).
+ */
+export async function seedOperatorIntegrations() {
+  const seeds = [
+    {
+      id: 'user-admin',
+      email: 'eddy@dotta.ai',
+      metaKey:
+        process.env.EDDY_META_API_KEY ||
+        process.env.ADMIN_META_API_KEY ||
+        process.env.META_MUSE_API_KEY ||
+        process.env.MODEL_API_KEY
+    },
+    {
+      id: 'user-reviewer',
+      email: 'judges@dotta.ai',
+      metaKey:
+        process.env.JUDGES_META_API_KEY ||
+        process.env.REVIEWER_META_API_KEY ||
+        process.env.META_MUSE_API_KEY ||
+        process.env.MODEL_API_KEY
+    }
+  ];
+
+  for (const s of seeds) {
+    if (!s.metaKey || !String(s.metaKey).trim()) continue;
+    const cleanKey = String(s.metaKey).trim();
+
+    // Check if secret already exists
+    const existing = await getUserCredentialsSecret(s.id, 'meta');
+    if (!existing) {
+      const encrypted = encryptCredentialsPayload({ apiKey: cleanKey, provider: 'meta' });
+      await saveUserCredentialsSecret({
+        userId: s.id,
+        provider: 'meta',
+        encryptedPayload: encrypted,
+        keyVersion: 1
+      });
+      await saveUserIntegration({
+        userId: s.id,
+        provider: 'meta',
+        status: 'connected',
+        maskedHint: maskApiKey(cleanKey),
+        verifiedAt: new Date().toISOString()
+      });
+    }
+
+    // Modal compute credentials if configured in environment
+    if (
+      process.env.MODAL_PROXY_TOKEN_ID &&
+      process.env.MODAL_PROXY_TOKEN_SECRET &&
+      process.env.MODAL_MUSE_SPARK_URL
+    ) {
+      const existingModal = await getUserCredentialsSecret(s.id, 'modal');
+      if (!existingModal) {
+        const encryptedModal = encryptCredentialsPayload({
+          endpointUrl: process.env.MODAL_MUSE_SPARK_URL,
+          tokenId: process.env.MODAL_PROXY_TOKEN_ID,
+          tokenSecret: process.env.MODAL_PROXY_TOKEN_SECRET,
+          provider: 'modal'
+        });
+        await saveUserCredentialsSecret({
+          userId: s.id,
+          provider: 'modal',
+          encryptedPayload: encryptedModal,
+          keyVersion: 1
+        });
+        await saveUserIntegration({
+          userId: s.id,
+          provider: 'modal',
+          status: 'connected',
+          maskedHint: maskApiKey(process.env.MODAL_PROXY_TOKEN_SECRET),
+          verifiedAt: new Date().toISOString()
+        });
+      }
+    }
+  }
+}
+
