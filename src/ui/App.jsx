@@ -12,6 +12,7 @@ import { AppRail } from '@/components/AppRail';
 import { BioDashboard } from '@/components/BioDashboard';
 import { AgentChatCard } from '@/components/AgentChatCard';
 import { AuthScreen } from '@/components/AuthScreen';
+import { SettingsModal } from '@/components/SettingsModal';
 import { getUserId, getCurrentUser, setCurrentUser, clearCurrentUser } from '@/lib/user';
 import { sanitizeChatText } from '../core/levels/redact-text.js';
 import {
@@ -44,6 +45,7 @@ export default function App() {
   const [currentUser, setLocalCurrentUser] = useState(() => getCurrentUser());
   const [authChecking, setAuthChecking] = useState(true);
   const [notFoundNotice, setNotFoundNotice] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // Check authenticated session on mount (Zero-Flash Route Guard)
   useEffect(() => {
@@ -1394,7 +1396,13 @@ export default function App() {
   return (
     <div className="flex h-screen w-screen bg-[#08080A] text-foreground font-sans overflow-hidden select-none">
       {/* Left icon rail: Home / BIO are the only clickable tabs */}
-      <AppRail view={view} onSelectView={setView} currentUser={currentUser} onLogout={handleLogout} />
+      <AppRail
+        view={view}
+        onSelectView={setView}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       {/* Main Split Body wrapped with AssistantRuntimeProvider */}
       <AssistantRuntimeProvider runtime={runtime}>
@@ -1594,6 +1602,14 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Settings Modal (Account & API Keys) */}
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
     </div>
   );
 }

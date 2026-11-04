@@ -41,7 +41,7 @@ const DECORATIVE = [
   { label: 'More options', Icon: MoreHorizontal }
 ];
 
-export function AppRail({ view, onSelectView, currentUser, onLogout }) {
+export function AppRail({ view, onSelectView, currentUser, onLogout, onOpenSettings }) {
   const tabBase =
     'flex h-[38px] w-[38px] items-center justify-center rounded-xl transition-colors cursor-pointer';
   return (
@@ -85,13 +85,15 @@ export function AppRail({ view, onSelectView, currentUser, onLogout }) {
           <Icon size={18} />
         </span>
       ))}
-      <span
-        aria-hidden="true"
-        title="Settings"
-        className="mt-auto flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl text-zinc-500"
+      <button
+        type="button"
+        onClick={onOpenSettings}
+        title="Settings & API Keys"
+        aria-label="Settings"
+        className="mt-auto flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.06] transition-colors cursor-pointer"
       >
         <Settings size={18} />
-      </span>
+      </button>
       {onLogout && (
         <button
           type="button"

@@ -80,8 +80,24 @@ import {
   recordDbUserUpload,
   listDbUserUploads,
   listDbConversations,
-  getDbConversation
+  getDbConversation,
+  getUserIntegration,
+  listUserIntegrations,
+  saveUserCredentialsSecret,
+  saveUserIntegration,
+  deleteUserCredentials,
+  getUserCredentialsSecret
 } from '../src/core/db/supabase.js';
+import {
+  encryptCredentialsPayload,
+  decryptCredentialsPayload,
+  maskApiKey
+} from '../src/core/auth/crypto.js';
+import {
+  verifyMetaCredentials,
+  verifyModalCredentials
+} from '../src/core/auth/verify-provider.js';
+
 
 dotenv.config();
 
@@ -1158,6 +1174,142 @@ app.post('/api/auth/logout', (req, res) => {
   }
   res.clearCookie(SESSION_COOKIE, { path: '/' });
   return res.json({ ok: true });
+});
+
+// -----------------------------------------------------------------------------
+// User-Funded Billing & Settings Integrations Endpoints
+// -----------------------------------------------------------------------------
+
+const verificationRateLimits = new Map(); // userId -> { count, resetAt }
+function checkVerificationRateLimit(userId) {
+  const now = Date.now();
+  const entry = verificationRateLimits.get(userId) || { count: 0, resetAt: now + 60000 };
+  if (now > entry.resetAt) {
+    entry.count = 0;
+    entry.resetAt = now + 60000;
+  }
+  if (entry.count >= 10) {
+    return false;
+  }
+  entry.count++;
+  verificationRateLimits.set(userId, entry);
+  return true;
+}
+
+app.get('/api/settings/integrations', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  try {
+    const integrations = await listUserIntegrations(req.userId);
+    return res.json({ ok: true, integrations });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/settings/integrations/meta', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  if (!checkVerificationRateLimit(req.userId)) {
+    return res.status(429).json({ ok: false, error: 'Too many verification attempts. Please wait a minute.' });
+  }
+
+  const { apiKey } = req.body || {};
+  if (!apiKey || typeof apiKey !== 'string' || !apiKey.trim()) {
+    return res.status(400).json({ ok: false, error: 'Meta API key is required.' });
+  }
+
+  const cleanKey = apiKey.trim();
+  const verifyRes = await verifyMetaCredentials(cleanKey);
+  if (!verifyRes.ok) {
+    await saveUserIntegration({
+      userId: req.userId,
+      provider: 'meta',
+      status: 'error',
+      maskedHint: null,
+      lastErrorCode: verifyRes.code
+    });
+    return res.status(400).json({ ok: false, code: verifyRes.code, error: verifyRes.error });
+  }
+
+  const encrypted = encryptCredentialsPayload({ apiKey: cleanKey, provider: 'meta' });
+  await saveUserCredentialsSecret({
+    userId: req.userId,
+    provider: 'meta',
+    encryptedPayload: encrypted,
+    keyVersion: 1
+  });
+
+  const masked = maskApiKey(cleanKey);
+  await saveUserIntegration({
+    userId: req.userId,
+    provider: 'meta',
+    status: 'connected',
+    maskedHint: masked,
+    verifiedAt: new Date().toISOString(),
+    lastErrorCode: null
+  });
+
+  return res.json({ ok: true, status: 'connected', maskedHint: masked });
+});
+
+app.post('/api/settings/integrations/modal', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  if (!checkVerificationRateLimit(req.userId)) {
+    return res.status(429).json({ ok: false, error: 'Too many verification attempts. Please wait a minute.' });
+  }
+
+  const { endpointUrl, tokenId, tokenSecret } = req.body || {};
+  const verifyRes = await verifyModalCredentials({ endpointUrl, tokenId, tokenSecret });
+  if (!verifyRes.ok) {
+    await saveUserIntegration({
+      userId: req.userId,
+      provider: 'modal',
+      status: 'error',
+      maskedHint: null,
+      lastErrorCode: verifyRes.code
+    });
+    return res.status(400).json({ ok: false, code: verifyRes.code, error: verifyRes.error });
+  }
+
+  const cleanTokenId = String(tokenId).trim();
+  const cleanTokenSecret = String(tokenSecret).trim();
+  const cleanUrl = verifyRes.safeUrl;
+
+  const encrypted = encryptCredentialsPayload({
+    endpointUrl: cleanUrl,
+    tokenId: cleanTokenId,
+    tokenSecret: cleanTokenSecret,
+    provider: 'modal'
+  });
+
+  await saveUserCredentialsSecret({
+    userId: req.userId,
+    provider: 'modal',
+    encryptedPayload: encrypted,
+    keyVersion: 1
+  });
+
+  const masked = maskApiKey(cleanTokenSecret);
+  await saveUserIntegration({
+    userId: req.userId,
+    provider: 'modal',
+    status: 'connected',
+    maskedHint: masked,
+    verifiedAt: new Date().toISOString(),
+    lastErrorCode: null
+  });
+
+  return res.json({ ok: true, status: 'connected', maskedHint: masked, endpointUrl: cleanUrl });
+});
+
+app.delete('/api/settings/integrations/:provider', async (req, res) => {
+  if (!req.userId) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const provider = String(req.params.provider || '').toLowerCase().trim();
+  if (provider !== 'meta' && provider !== 'modal') {
+    return res.status(400).json({ ok: false, error: 'Invalid provider. Must be "meta" or "modal".' });
+  }
+
+  await deleteUserCredentials(req.userId, provider);
+  return res.json({ ok: true, status: 'not_configured' });
 });
 
 // AG-UI 1.0 Chat endpoint
