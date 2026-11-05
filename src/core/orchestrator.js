@@ -1072,8 +1072,12 @@ export class DottaEngine extends EventEmitter {
           break;
         }
 
+        const promptTools = isPromptTooling
+          ? (baseTools.length > 0 ? baseTools.slice(0, 8) : activeTools.slice(0, 8))
+          : activeTools;
+
         const effectiveSystemInstruction = isPromptTooling
-          ? `${this.systemInstruction}\n\n${buildPromptToolCallingInstruction(activeTools)}`
+          ? `${this.systemInstruction}\n\n${buildPromptToolCallingInstruction(promptTools)}`
           : this.systemInstruction;
 
         let turnThought = '';
@@ -1094,7 +1098,9 @@ export class DottaEngine extends EventEmitter {
             },
             onResponseChunk: (chunk) => {
               turnText += chunk;
-              this.emit('event', { type: 'TEXT_CHUNK', chunk, timestamp: Date.now() });
+              if (!isPromptTooling || (!chunk.includes('<tool_call>') && !turnText.includes('<tool_call>'))) {
+                this.emit('event', { type: 'TEXT_CHUNK', chunk, timestamp: Date.now() });
+              }
             },
             onFunctionCall: (fc) => {
               functionCalls.push(fc);
@@ -1120,10 +1126,13 @@ export class DottaEngine extends EventEmitter {
         let callsToExecute = streamResult.functionCalls || functionCalls;
 
         if (isPromptTooling) {
-          const parsedPrompt = parsePromptToolCall(turnText);
+          const rawToolSource = turnText.includes('<tool_call>')
+            ? turnText
+            : (turnThought.includes('<tool_call>') ? turnThought : turnText);
+          const parsedPrompt = parsePromptToolCall(rawToolSource);
           if (parsedPrompt.isToolCall) {
             if (parsedPrompt.isValid) {
-              const validation = validatePromptToolCall(parsedPrompt.toolCall, activeTools);
+              const validation = validatePromptToolCall(parsedPrompt.toolCall, promptTools);
               if (validation.valid) {
                 callsToExecute = [parsedPrompt.toolCall];
                 promptToolRetryCount = 0;

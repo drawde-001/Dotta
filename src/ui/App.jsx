@@ -213,6 +213,7 @@ export default function App() {
   });
 
   const abortControllerRef = useRef(null);
+  const isSendingRef = useRef(false);
   const wsRef = useRef(null);
   const browserIdleTimerRef = useRef(null);
   const initialThreadIdRef = useRef(typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `thread-${Date.now()}`);
@@ -685,7 +686,8 @@ export default function App() {
       order: att.order || idx + 1
     }));
 
-    if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && isRunning)) return;
+    if ((!userText.trim() && orderedAttachments.length === 0) || (!options.isResume && (isRunning || isSendingRef.current))) return;
+    isSendingRef.current = true;
 
     // Allocate real thread UUID on first message submit and update URL from /new to /chat/:id
     let currentTId = currentThreadIdRef.current;
@@ -1300,6 +1302,7 @@ export default function App() {
         }
         return updated;
       });
+      isSendingRef.current = false;
       setIsRunning(false);
 
       // Persist full conversation messages for active thread tied to user profile
@@ -1966,7 +1969,7 @@ export default function App() {
 
             {/* Canvas */}
             <div className="min-w-0 flex-1 p-0 lg:py-2 lg:pr-2 h-full flex flex-col">
-              <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden rounded-none lg:rounded-[24px] border-0 lg:border border-white/[0.05] bg-[#101013] shadow-none lg:shadow-xl sm:rounded-none lg:sm:rounded-[28px]">
+              <div className="relative flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden rounded-none lg:rounded-[24px] border-0 lg:border border-white/[0.05] bg-[#101013] shadow-none lg:shadow-xl sm:rounded-none lg:sm:rounded-[28px]">
                 {view === 'bio' ? (
                   <>
                     <div className="h-full min-w-0 flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-7">
@@ -2134,7 +2137,7 @@ export default function App() {
 
                 {/* Right: Desktop Workspace Panel (Home view, right edge of canvas) */}
                 {view === 'home' && workspaceMode === 'work' && (
-                  <div className="hidden lg:flex h-full">
+                  <div className="hidden lg:flex h-full shrink-0">
                     <WorkspacePanel
                       threadId={activeThreadId}
                       streamState={streamState}

@@ -90,13 +90,19 @@ export class MetaModelAdapter extends ModelAdapter {
     const messages = toStandardChatMessages(contents, systemInstruction);
     const standardTools = toStandardChatTools(tools);
 
+    const isGlimmer = model === 'muse-glimmer' || String(model).includes('glimmer') || String(wireModel).includes('glimmer');
+
     const payload = {
       model: wireModel,
       messages,
       stream: true,
+      max_tokens: generationConfig.maxOutputTokens || 4096,
       ...(standardTools && standardTools.length > 0 ? { tools: standardTools } : {}),
-      ...(generationConfig.maxOutputTokens ? { max_tokens: generationConfig.maxOutputTokens } : {}),
-      ...(generationConfig.temperature !== undefined ? { temperature: generationConfig.temperature } : {})
+      ...(generationConfig.temperature !== undefined
+        ? { temperature: generationConfig.temperature }
+        : isGlimmer
+        ? { temperature: 0.2 }
+        : {})
     };
 
     const headers = {

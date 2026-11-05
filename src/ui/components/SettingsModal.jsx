@@ -329,21 +329,16 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
                   {/* 1. Meta AI Configuration */}
                   <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
-                          <Key size={16} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">Meta AI Configuration</span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.08] text-zinc-200 border border-white/[0.1] rounded">
+                            Required
+                          </span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-white">Meta AI Configuration</span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.08] text-zinc-200 border border-white/[0.1] rounded">
-                              Required
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-400">
-                            Powers Muse Wonder, Muse Spark, Muse Image, and Vision transcription
-                          </p>
-                        </div>
+                        <p className="text-xs text-zinc-400">
+                          Powers Muse Wonder, Muse Spark, Muse Image, and Vision transcription
+                        </p>
                       </div>
 
                       {/* Status indicator */}
@@ -451,21 +446,16 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
                   {/* 2. Modal Compute Configuration */}
                   <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
-                          <Cpu size={16} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">Modal Compute Configuration</span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06] rounded">
+                            Optional
+                          </span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-white">Modal Compute Configuration</span>
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06] rounded">
-                              Optional
-                            </span>
-                          </div>
-                          <p className="text-xs text-zinc-400">
-                            Serverless GPU compute for Muse Spark Open (816B) vLLM endpoints
-                          </p>
-                        </div>
+                        <p className="text-xs text-zinc-400">
+                          Serverless GPU compute for Muse Spark Open (816B) vLLM endpoints
+                        </p>
                       </div>
 
                       {/* Status indicator */}
@@ -573,27 +563,36 @@ export function SettingsModal({ isOpen, onClose, currentUser, onLogout, initialT
                   {/* CARD 3: NVIDIA NIM (Muse Glimmer) - Placed LAST just below Modal */}
                   <div className="p-4 bg-[#141418] border border-white/[0.06] rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-white/[0.05] text-zinc-200 border border-white/[0.08]">
-                          <Key size={16} />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-white">NVIDIA NIM (Muse Glimmer)</span>
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-white/[0.04] text-zinc-400 border border-white/[0.06] rounded">
+                            Optional
+                          </span>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-white">NVIDIA NIM (Muse Glimmer)</span>
-                            {nvidiaIntegration.status === 'connected' ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                                <CheckCircle2 size={11} /> Connected
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-white/[0.05] text-zinc-400 border border-white/[0.06]">
-                                Not Configured
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-zinc-400">
-                            Bring-Your-Own-Key access for Muse Glimmer (30B) running via NVIDIA NIM.
-                          </p>
-                        </div>
+                        <p className="text-xs text-zinc-400">
+                          Bring-Your-Own-Key access for Muse Glimmer (30B) running via NVIDIA NIM.
+                        </p>
+                      </div>
+
+                      {/* Status indicator */}
+                      <div className="flex items-center gap-2">
+                        {nvidiaIntegration.status === 'connected' ? (
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-200 bg-white/[0.06] border border-white/[0.1] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
+                            Connected
+                          </span>
+                        ) : nvidiaIntegration.status === 'error' ? (
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-red-300 bg-red-500/10 border border-red-500/20 rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                            Error
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-zinc-400 bg-white/[0.02] border border-white/[0.05] rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                            Not Configured
+                          </span>
+                        )}
                       </div>
                     </div>
 

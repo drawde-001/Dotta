@@ -773,8 +773,9 @@ export async function listUserIntegrations(userId) {
 
   const metaIntegration = await getUserIntegration(normUserId, 'meta');
   const modalIntegration = await getUserIntegration(normUserId, 'modal');
+  const nvidiaIntegration = await getUserIntegration(normUserId, 'nvidia');
 
-  return [metaIntegration, modalIntegration];
+  return [metaIntegration, modalIntegration, nvidiaIntegration];
 }
 
 /**

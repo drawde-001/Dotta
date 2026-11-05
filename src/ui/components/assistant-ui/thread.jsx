@@ -1312,7 +1312,6 @@ function AssistantMessage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <ThreadPrimitive.Suggestion
             prompt="Tell me more"
-            send
             asChild
           >
             <button
@@ -1325,7 +1324,6 @@ function AssistantMessage() {
           </ThreadPrimitive.Suggestion>
           <ThreadPrimitive.Suggestion
             prompt="Can you explain differently?"
-            send
             asChild
           >
             <button

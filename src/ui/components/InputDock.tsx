@@ -17,13 +17,14 @@ import {
   Key,
   AlertTriangle,
   X,
+  ArrowLeft,
 } from 'lucide-react';
 import { AskUserInterruptCard } from './AskUserInterruptCard';
 import { ComposerAttachments } from './assistant-ui/elements/attachment.aui';
 import { ComposerVoiceDictation } from './assistant-ui/elements/composer-voice.aui';
 
 export type ComposerMode = 'Plan' | 'Ask' | 'Build';
-export type EffortLevel = 'Low' | 'Medium' | 'High';
+export type EffortLevel = 'Low' | 'Medium' | 'High' | 'Max';
 export type ProviderType = 'muse';
 export type ModelFilterTab = 'fav' | 'all';
 
@@ -68,7 +69,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Default',
     desc: 'Open-weight high-throughput Muse Spark model served serverless via Modal vLLM with native tool calling',
     hasRealApi: true,
@@ -79,7 +80,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Flagship',
     desc: 'Complex multi-file software engineering and long-horizon agentic workflows',
     hasRealApi: true,
@@ -90,7 +91,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Muse',
     desc: 'Tuned for agentic tool loops, browser navigation, and high-throughput coding',
     hasRealApi: true,
@@ -101,7 +102,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'Medium',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Muse',
     desc: 'Previous Muse Spark release with full multimodal audio/image support',
     hasRealApi: true,
@@ -112,7 +113,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'Medium',
     provider: 'muse',
     isFav: true,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'Meta Muse',
     desc: 'Baseline Muse Spark agent model',
     hasRealApi: true,
@@ -123,7 +124,7 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     effort: 'High',
     provider: 'muse',
     isFav: false,
-    efforts: ['Low', 'Medium', 'High'],
+    efforts: ['Low', 'Medium', 'High', 'Max'],
     badge: 'NVIDIA NIM',
     desc: '30B distilled open-weight multimodal model served via NVIDIA NIM inference microservice (BYOK)',
     hasRealApi: true,
@@ -289,6 +290,7 @@ export const InputDock: React.FC<InputDockProps> = ({
   );
   const [hoveredModelId, setHoveredModelId] = useState<string | null>(null);
   const [modelMenuPointerReady, setModelMenuPointerReady] = useState<boolean>(false);
+  const [mobileModelView, setMobileModelView] = useState<'models' | 'effort'>('models');
   const [plusMenuOpen, setPlusMenuOpen] = useState<boolean>(false);
 
   const [stagedAttachments, setStagedAttachments] = useState<StagedAttachment[]>([]);
@@ -523,6 +525,7 @@ export const InputDock: React.FC<InputDockProps> = ({
     const nextOpen = !modelMenuOpen;
     setModelMenuOpen(nextOpen);
     if (nextOpen) {
+      setMobileModelView('models');
       setModelFilterTab('fav');
       setHoveredModelId(null);
       setModelMenuPointerReady(false);
@@ -2152,7 +2155,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                 {/* Model Selector Popover Menu */}
                 <div
                   onClick={(e) => e.stopPropagation()}
-                  className={`aic-glass-popover ${
+                  className={`aic-glass-popover hidden sm:block ${
                     modelMenuOpen ? 'aic-popover-visible' : 'aic-popover-hidden'
                   } absolute left-0 bottom-0 w-[256px] rounded-[20px] p-2 z-30`}
                 >
@@ -2445,7 +2448,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                   </div>
                 </div>
 
-                {/* Floating Effort Submenu (Appears on model hover & tracks vertically) */}
+                {/* Floating Effort Submenu (Appears on model hover & tracks vertically on Desktop) */}
                 <div
                   onClick={(e) => e.stopPropagation()}
                   onMouseEnter={() => {
@@ -2457,7 +2460,7 @@ export const InputDock: React.FC<InputDockProps> = ({
                     scheduleHideEffortSubmenu();
                   }}
                   style={{ bottom: `${effortBottomOffsetPx}px` }}
-                  className={`aic-glass-popover aic-effort-submenu-bridge ${
+                  className={`aic-glass-popover aic-effort-submenu-bridge hidden sm:block ${
                     isEffortMenuVisible ? 'aic-popover-visible' : 'aic-popover-hidden'
                   } absolute left-[266px] w-[148px] rounded-[18px] p-2 z-30`}
                 >
@@ -2483,6 +2486,161 @@ export const InputDock: React.FC<InputDockProps> = ({
                     })}
                   </div>
                 </div>
+
+                {/* Mobile Model & Effort Bottom Sheet (Dedicated mobile view matching Eddy's references) */}
+                {modelMenuOpen && (
+                  <div
+                    className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm sm:hidden animate-in fade-in duration-150"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setModelMenuOpen(false);
+                      setMobileModelView('models');
+                    }}
+                  >
+                    <div
+                      className="w-full max-h-[85vh] bg-[#141416] border-t border-white/[0.08] rounded-t-[28px] p-4 pb-8 overflow-y-auto animate-in slide-in-from-bottom duration-200 shadow-2xl"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {mobileModelView === 'models' ? (
+                        <div className="flex flex-col gap-3">
+                          {/* Top Header with ✕ and centered title */}
+                          <div className="relative flex items-center justify-between pb-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setModelMenuOpen(false);
+                                setMobileModelView('models');
+                              }}
+                              className="p-1.5 text-zinc-400 hover:text-white rounded-full bg-white/[0.05] active:scale-95 transition-transform cursor-pointer"
+                              aria-label="Close"
+                            >
+                              <X size={18} />
+                            </button>
+                            <h2 className="text-[17px] font-semibold text-white tracking-tight absolute left-1/2 -translate-x-1/2">
+                              Select model
+                            </h2>
+                            <div className="w-8" />
+                          </div>
+
+                          {/* Models Grouped List */}
+                          <div className="bg-[#1c1c1f] rounded-2xl border border-white/[0.06] divide-y divide-white/[0.06] overflow-hidden mt-1">
+                            {models.map((m) => {
+                              const isSelected = !autoMode && m.id === activeModelId;
+                              const isAvailable = m.hasRealApi !== false;
+                              return (
+                                <div
+                                  key={m.id}
+                                  onClick={() => {
+                                    if (!isAvailable) return;
+                                    setActiveModelId(m.id);
+                                    onSelectModel(m.id);
+                                    setAutoMode(false);
+                                  }}
+                                  className={`p-3.5 transition-colors cursor-pointer ${
+                                    isSelected ? 'bg-white/[0.06]' : 'active:bg-white/[0.03]'
+                                  } ${!isAvailable ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[15px] font-medium text-white">
+                                        {m.name}
+                                      </span>
+                                      {m.badge && (
+                                        <span className="px-2 py-0.5 text-[11px] font-medium bg-blue-500/15 text-blue-400 rounded-md border border-blue-500/20">
+                                          {m.badge}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {isSelected && (
+                                      <span className="text-white">
+                                        <CheckmarkIcon />
+                                      </span>
+                                    )}
+                                  </div>
+                                  {m.desc && (
+                                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                                      {m.desc}
+                                    </p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Effort Row */}
+                          <div
+                            onClick={() => setMobileModelView('effort')}
+                            className="bg-[#1c1c1f] rounded-2xl p-4 flex items-center justify-between border border-white/[0.06] active:bg-white/[0.04] cursor-pointer mt-1"
+                          >
+                            <span className="text-[15px] font-medium text-white">Effort</span>
+                            <div className="flex items-center gap-1.5 text-sm text-zinc-400">
+                              <span>{activeModel.effort}</span>
+                              <ChevronRight size={16} className="text-zinc-500" />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Effort Sub-view */
+                        <div className="flex flex-col gap-3">
+                          {/* Top Header with ← and centered Effort title */}
+                          <div className="relative flex items-center justify-between pb-1 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setMobileModelView('models')}
+                              className="p-1.5 text-zinc-400 hover:text-white rounded-full bg-white/[0.05] active:scale-95 transition-transform cursor-pointer"
+                              aria-label="Back to models"
+                            >
+                              <ArrowLeft size={18} />
+                            </button>
+                            <h2 className="text-[17px] font-semibold text-white tracking-tight absolute left-1/2 -translate-x-1/2">
+                              Effort
+                            </h2>
+                            <div className="w-8" />
+                          </div>
+
+                          {/* Effort Grouped Options */}
+                          <div className="bg-[#1c1c1f] rounded-2xl border border-white/[0.06] divide-y divide-white/[0.06] overflow-hidden mt-1">
+                            {(['Low', 'Medium', 'High', 'Max'] as EffortLevel[]).map((level) => {
+                              const isSelected = activeModel.effort === level;
+                              return (
+                                <div
+                                  key={level}
+                                  onClick={() => {
+                                    setModels((prev) =>
+                                      prev.map((m) =>
+                                        m.id === activeModelId ? { ...m, effort: level } : m
+                                      )
+                                    );
+                                    setMobileModelView('models');
+                                  }}
+                                  className={`p-3.5 flex items-center justify-between cursor-pointer transition-colors ${
+                                    isSelected ? 'bg-white/[0.06]' : 'active:bg-white/[0.03]'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[15px] font-medium text-white">
+                                      {level}
+                                    </span>
+                                    {level === 'Low' && (
+                                      <span className="px-2 py-0.5 text-[11px] font-medium bg-white/[0.08] text-zinc-300 rounded-md border border-white/[0.08]">
+                                        Recommended
+                                      </span>
+                                    )}
+                                  </div>
+                                  {isSelected && (
+                                    <span className="text-white">
+                                      <CheckmarkIcon />
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -224,7 +224,7 @@ export function WorkspacePanel({
       className={`h-full flex flex-col bg-[#141417] border-l border-white/[0.06] text-zinc-200 font-sans transition-all duration-200 z-20 overflow-hidden ${
         isMaximized
           ? 'w-full absolute inset-0 z-50'
-          : 'w-full md:w-[560px] lg:w-[680px] xl:w-[760px] shrink-0'
+          : 'w-full lg:w-[480px] xl:w-[620px] 2xl:w-[740px] lg:max-w-[55%] shrink-0'
       }`}
     >
       {/* Top Tab Bar ("Button Cards" on the right workspace side) */}

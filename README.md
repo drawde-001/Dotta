@@ -59,10 +59,14 @@ Tested on three different public practice forms (a checkout, a job application a
 The same agent behaves differently depending on the BIO Read switch.
 
 **BIO Read off**  
-![Dotta with BIO Read off](assets/bio_access_off.gif)
+<p align="center">
+  <img src="assets/bio_access_off.gif" width="100%" alt="Dotta with BIO Read off" />
+</p>
 
 **BIO Read on, then a successful demo job application**  
-![Dotta with BIO Read on, applying to a demo job](assets/bio_access_on.gif)
+<p align="center">
+  <img src="assets/bio_access_on.gif" width="100%" alt="Dotta with BIO Read on, applying to a demo job" />
+</p>
 
 All data in these recordings is fake, and the job application is a public demo form.
 

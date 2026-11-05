@@ -72,16 +72,20 @@ You have access to the following real-world execution tools to fulfill user requ
 ${toolDescriptions}
 
 [STRICT TOOL CALLING MANDATE & FORMAT]
-To use any tool, you MUST adhere to the following strict rules:
-1. Output EXACTLY ONE block in this fixed XML tag format and NOTHING ELSE:
+When you need to call a tool, output EXACTLY ONE block in this fixed XML tag format:
 ${GLIMMER_TOOL_TAG_START}{"name": "<tool_name>", "args": {<arguments>}}${GLIMMER_TOOL_TAG_END}
 
-2. The "name" must match one of the available tools listed above.
-3. The "args" must be a valid JSON object matching the tool's parameters schema.
-4. DO NOT write explanations, thoughts, or comments before or after the ${GLIMMER_TOOL_TAG_START}...${GLIMMER_TOOL_TAG_END} block.
-5. DO NOT wrap the block in markdown code fences (\`\`\` or \`\`\`json). Output the raw tags directly.
-6. Only propose ONE tool call per turn.
-7. If you do NOT need a tool or have finished executing, output your answer as regular conversational text with NO ${GLIMMER_TOOL_TAG_START} tags.
+Example:
+User: "Search for the latest news on Meta AI"
+Assistant:
+${GLIMMER_TOOL_TAG_START}{"name": "web_search", "args": {"query": "Meta AI latest news"}}${GLIMMER_TOOL_TAG_END}
+
+Rules:
+1. The "name" must match one of the available tools listed above.
+2. The "args" must be a valid JSON object matching the tool's parameters schema.
+3. DO NOT wrap the block in markdown code fences (\`\`\` or \`\`\`json). Output the raw tags directly.
+4. Only propose ONE tool call per turn.
+5. If you do NOT need a tool or have finished executing, output your answer as regular conversational text with NO ${GLIMMER_TOOL_TAG_START} tags.
 `.trim();
 }
 
