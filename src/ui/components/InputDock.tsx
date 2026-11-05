@@ -125,7 +125,6 @@ export const AVAILABLE_MODELS: ModelOption[] = [
     provider: 'muse',
     isFav: false,
     efforts: ['Low', 'Medium', 'High', 'Max'],
-    badge: 'NVIDIA NIM',
     desc: '30B distilled open-weight multimodal model served via NVIDIA NIM inference microservice (BYOK)',
     hasRealApi: true,
   },

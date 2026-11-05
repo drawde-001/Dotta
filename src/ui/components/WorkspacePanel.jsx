@@ -221,10 +221,10 @@ export function WorkspacePanel({
 
   return (
     <aside
-      className={`h-full flex flex-col bg-[#141417] border-l border-white/[0.06] text-zinc-200 font-sans transition-all duration-200 z-20 overflow-hidden ${
+      className={`h-full w-full flex-1 min-w-0 flex flex-col bg-[#141417] border-l border-white/[0.06] text-zinc-200 font-sans transition-all duration-200 z-20 overflow-hidden ${
         isMaximized
-          ? 'w-full absolute inset-0 z-50'
-          : 'w-full lg:w-[480px] xl:w-[620px] 2xl:w-[740px] lg:max-w-[55%] shrink-0'
+          ? 'absolute inset-0 z-50 rounded-none lg:rounded-[24px]'
+          : ''
       }`}
     >
       {/* Top Tab Bar ("Button Cards" on the right workspace side) */}

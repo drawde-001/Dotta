@@ -2000,7 +2000,11 @@ export default function App() {
                 ) : (
                   <>
                     {/* Center: Chat Panel (Hero or Message Thread) */}
-                    <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden relative w-full">
+                    <div className={`min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden relative ${
+                      workspaceMode === 'work'
+                        ? 'w-full lg:w-[420px] xl:w-[460px] 2xl:w-[520px] lg:shrink-0'
+                        : 'flex-1 w-full'
+                    }`}>
                       {messages.length === 0 ? (
                         /* Centered Hero View (Matching Prototype Image 4 on mobile, untouched on desktop) */
                         <div className="flex-1 min-h-0 flex flex-col justify-between lg:justify-center items-center px-3 sm:px-4 pt-1 sm:pt-4 pb-0 lg:p-6 select-none relative z-10 max-w-2xl mx-auto w-full h-full overflow-y-auto lg:overflow-visible">
@@ -2137,7 +2141,7 @@ export default function App() {
 
                 {/* Right: Desktop Workspace Panel (Home view, right edge of canvas) */}
                 {view === 'home' && workspaceMode === 'work' && (
-                  <div className="hidden lg:flex h-full shrink-0">
+                  <div className="hidden lg:flex flex-1 min-w-0 h-full w-full">
                     <WorkspacePanel
                       threadId={activeThreadId}
                       streamState={streamState}
