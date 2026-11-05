@@ -2002,7 +2002,7 @@ export default function App() {
                     {/* Center: Chat Panel (Hero or Message Thread) */}
                     <div className={`min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden relative ${
                       workspaceMode === 'work'
-                        ? 'w-full lg:w-[46%] xl:w-[45%] 2xl:w-[44%] lg:shrink-0'
+                        ? 'w-full lg:w-[48%] lg:shrink-0'
                         : 'flex-1 w-full'
                     }`}>
                       {messages.length === 0 ? (
