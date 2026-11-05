@@ -492,7 +492,7 @@ export function BioDashboard() {
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
         {/* Left column: profile */}
-        <div className="flex flex-col gap-4 lg:col-span-5">
+        <div className="flex flex-col gap-4 lg:col-span-5 2xl:col-span-4">
           <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.04] bg-[#141417] p-3.5 shadow-md">
             <div className="flex items-center justify-between gap-2">
               <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -1096,9 +1096,9 @@ export function BioDashboard() {
         {/* Right column */}
         <div
           ref={rightGroupRef}
-          className="flex flex-col gap-6 self-start lg:sticky lg:col-span-7 lg:grid lg:grid-cols-12"
+          className="flex flex-col gap-6 self-start lg:sticky lg:col-span-7 2xl:col-span-8 2xl:grid 2xl:grid-cols-12 2xl:items-start"
         >
-          <div className="flex flex-col gap-6 lg:col-span-7">
+          <div className="flex flex-col gap-6 2xl:col-span-7">
             <section aria-label="Profile strength" className="flex flex-col gap-4 rounded-3xl border border-white/[0.04] bg-[#141417] p-6 shadow-xl">
               <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
                 <h2 className="text-sm font-semibold tracking-tight text-white">Profile strength</h2>
@@ -1208,7 +1208,7 @@ export function BioDashboard() {
             </section>
           </div>
 
-          <div className="flex flex-col gap-6 lg:col-span-5">
+          <div className="flex flex-col gap-6 2xl:col-span-5">
             <section aria-label="Recent agent activity" className="flex flex-col gap-4 rounded-3xl border border-white/[0.04] bg-[#141417] p-5 shadow-xl">
               <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
                 <h2 className="text-sm font-semibold tracking-tight text-white">Recent agent activity</h2>

@@ -68,7 +68,7 @@ The same agent behaves differently depending on the BIO Read switch.
   <img src="assets/bio_access_on.gif" width="100%" alt="Dotta with BIO Read on, applying to a demo job" />
 </p>
 
-All data in these recordings is fake, and the job application is a public demo form.
+All data in these recordings are for demonstration purposes only, not real data, and the job application is a public demo form.
 
 ---
 

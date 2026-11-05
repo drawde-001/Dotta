@@ -881,8 +881,8 @@ export default function App() {
             const assistantErrMessage = {
               id: `err-${Date.now()}`,
               role: 'assistant',
-              content: '',
-              status: 'error',
+              content: [{ type: 'text', text: '' }],
+              runStatus: 'error',
               error: 'KEY_REQUIRED: A Meta API key is required to process audio attachments. Please configure your key in Settings -> Account.',
               timestamp: Date.now()
             };
@@ -900,8 +900,8 @@ export default function App() {
           const assistantErrMessage = {
             id: `err-${Date.now()}`,
             role: 'assistant',
-            content: '',
-            status: 'error',
+            content: [{ type: 'text', text: '' }],
+            runStatus: 'error',
             error: errData.error || 'RATE_LIMITED: Meta API rate limit reached on audio processing. Please wait a moment.',
             timestamp: Date.now()
           };
@@ -1758,19 +1758,41 @@ export default function App() {
         };
       });
 
+      const resolvedRole = msg.role === 'user' ? 'user' : (msg.role === 'system' ? 'system' : 'assistant');
+      const isAssistant = resolvedRole === 'assistant';
+      const isUser = resolvedRole === 'user';
+
+      let messageStatus = undefined;
+      if (isAssistant) {
+        if (msg.runStatus === 'error' || msg.status === 'error') {
+          messageStatus = {
+            type: 'incomplete',
+            reason: 'error',
+            error: msg.error || 'The model and all failover endpoints failed to respond.'
+          };
+        } else if (msg.runStatus === 'requires-action') {
+          messageStatus = {
+            type: 'requires-action',
+            reason: 'tool-call'
+          };
+        } else if (msg.runStatus === 'running') {
+          messageStatus = {
+            type: 'running'
+          };
+        } else if (msg.runStatus === 'complete') {
+          messageStatus = {
+            type: 'complete'
+          };
+        }
+      }
+
       return {
-        id: msg.id,
-        role: msg.role,
+        id: msg.id || `msg-${Date.now()}`,
+        role: resolvedRole,
         parentId: msg.parentId,
         content: sanitizedContent,
-        attachments: msg.attachments || [],
-        status: msg.runStatus === 'error'
-          ? {
-              type: 'incomplete',
-              reason: 'error',
-              error: msg.error || 'The model and all failover endpoints failed to respond.'
-            }
-          : undefined,
+        ...(isUser && Array.isArray(msg.attachments) && msg.attachments.length > 0 ? { attachments: msg.attachments } : {}),
+        ...(isAssistant && messageStatus ? { status: messageStatus } : {}),
         metadata: {
           custom: {
             runStartedAt: msg.runStartedAt,
